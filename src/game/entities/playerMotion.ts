@@ -4,6 +4,7 @@ import type { CollisionGrid, Vec2 } from '../world/grid';
 export interface MoveInput { up: boolean; down: boolean; left: boolean; right: boolean }
 export interface Aabb { hw: number; hh: number } // 중심 기준 half-extents(px)
 
+// 모서리 4점 샘플링은 박스 크기 ≤ 타일 크기(32px)이고 솔리드가 타일 단위일 때만 유효하다
 function boxCollides(x: number, y: number, box: Aabb, grid: CollisionGrid): boolean {
   const tl = grid.isSolidAtWorld(x - box.hw, y - box.hh);
   const tr = grid.isSolidAtWorld(x + box.hw - 1, y - box.hh);
@@ -15,6 +16,7 @@ function boxCollides(x: number, y: number, box: Aabb, grid: CollisionGrid): bool
 /**
  * 프레임당 이동. 축 분리 처리로 벽에 막힌 축만 취소되고 나머지 축은 진행(슬라이드).
  * 1px 단위 스윕으로 터널링을 방지하고, 잔여 소수분은 마지막에 적용해 속도를 보존한다.
+ * 로컬 플레이어 전용 — 원격 플레이어는 이 함수가 아니라 위치 보간으로 움직인다 (Phase 2).
  */
 export function stepPlayer(pos: Vec2, input: MoveInput, dtMs: number, grid: CollisionGrid, box: Aabb): Vec2 {
   let dx = (input.right ? 1 : 0) - (input.left ? 1 : 0);
@@ -48,6 +50,7 @@ function moveAxis(x: number, y: number, delta: number, axis: 'x' | 'y', box: Aab
     moved += 1;
   }
   // 잔여 소수분 적용 — 정수 스텝만 쓰면 프레임레이트에 따라 속도가 왜곡된다
+  // (잔여분이 충돌하면 1px 미만의 이동을 버린다 — 터널링 방지를 우선한 의도된 트레이드오프)
   const rem = total - moved;
   if (rem > 0 && !collides(v + step * rem)) v += step * rem;
   return v;

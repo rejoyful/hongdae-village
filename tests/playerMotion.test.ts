@@ -41,4 +41,14 @@ describe('stepPlayer', () => {
     const next = stepPlayer({ x: 100, y: 100 }, { ...idle, right: true }, 16, open, BOX);
     expect(next.x).toBeCloseTo(100 + PLAYER_SPEED * 0.016, 5);
   });
+
+  it('벽 안에서 시작하면 제자리에 머문다 (무한루프·예외 없음)', () => {
+    const inWall = { x: 5 * 32 + 16, y: 100 }; // 벽 타일 내부
+    expect(stepPlayer(inWall, { ...idle, right: true }, 16, walled, BOX)).toEqual(inWall);
+  });
+
+  it('초대형 dt에서도 터널링하지 않는다 (탭 백그라운드 복귀)', () => {
+    const next = stepPlayer({ x: 100, y: 100 }, { ...idle, right: true }, 5000, walled, BOX);
+    expect(next.x + BOX.hw).toBeLessThanOrEqual(160);
+  });
 });
