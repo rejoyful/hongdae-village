@@ -313,7 +313,7 @@ import { ZONES, buildCollision, SPAWN_TILE } from '../src/game/world/mapData';
 import { MAP_W, MAP_H } from '../src/game/config';
 
 describe('시즌1 블록아웃', () => {
-  it('스펙 §2의 6개 구역이 모두 존재한다', () => {
+  it('스펙 §2의 7개 구역이 모두 존재한다', () => {
     const names = ZONES.map((z) => z.name);
     for (const required of ['경의선 숲길', '주택 골목 (서)', '주택 골목 (동)', '메인 스트리트', '포차 골목', '홍대입구역 9번 출구', '벽화 골목']) {
       expect(names).toContain(required);
@@ -490,7 +490,7 @@ function boxCollides(x: number, y: number, box: Aabb, grid: CollisionGrid): bool
 
 /**
  * 프레임당 이동. 축 분리 처리로 벽에 막힌 축만 취소되고 나머지 축은 진행(슬라이드).
- * 충돌 시 해당 축은 1px 단위로 벽에 최대한 붙인다.
+ * 1px 단위 스윕으로 터널링을 방지하고, 잔여 소수분은 마지막에 적용해 속도를 보존한다.
  */
 export function stepPlayer(pos: Vec2, input: MoveInput, dtMs: number, grid: CollisionGrid, box: Aabb): Vec2 {
   let dx = (input.right ? 1 : 0) - (input.left ? 1 : 0);
@@ -511,14 +511,21 @@ export function stepPlayer(pos: Vec2, input: MoveInput, dtMs: number, grid: Coll
 function moveAxis(x: number, y: number, delta: number, axis: 'x' | 'y', box: Aabb, grid: CollisionGrid): number {
   const cur = axis === 'x' ? x : y;
   if (delta === 0) return cur;
-  const target = cur + delta;
   const collides = (v: number) =>
     axis === 'x' ? boxCollides(v, y, box, grid) : boxCollides(x, v, box, grid);
-  if (!collides(target)) return target;
-  // 벽에 1px씩 접근
+  // 1px 스윕: 큰 dt(탭 백그라운드 복귀 등)에도 벽을 통과하지 않는다
   const step = Math.sign(delta);
+  const total = Math.abs(delta);
   let v = cur;
-  while (!collides(v + step) && Math.abs(v - cur) < Math.abs(delta)) v += step;
+  let moved = 0;
+  while (total - moved >= 1) {
+    if (collides(v + step)) return v;
+    v += step;
+    moved += 1;
+  }
+  // 잔여 소수분 적용 — 정수 스텝만 쓰면 프레임레이트에 따라 속도가 왜곡된다
+  const rem = total - moved;
+  if (rem > 0 && !collides(v + step * rem)) v += step * rem;
   return v;
 }
 ```
@@ -820,6 +827,11 @@ Run: `gh run watch --exit-status` (또는 `gh run list --limit 1`)
 Expected: CI `check` 잡 성공
 
 ---
+
+## 정정 이력
+
+- **2026-07-08 (Task 4 실행 중)**: 최초 플랜의 `moveAxis`(타겟 우선 검사 + 실패 시 1px 접근)는 이동량이 벽 두께보다 클 때 터널링하는 버그가 있어 플랜 자체 테스트를 통과하지 못했다. 또한 단순 정수 1px 스윕은 소수 이동량을 과이동시켜 속도가 프레임레이트 의존적이 된다. 위 코드는 "1px 스윕(터널링 방지) + 잔여 소수분 적용(속도 보존)"으로 정정된 최종본이다.
+- **2026-07-08 (Task 3 실행 중)**: mapData 테스트 이름의 "6개 구역"은 오기 — 스펙 §2대로 7개 구역이 맞다 (수정 반영됨).
 
 ## Self-Review 결과
 
