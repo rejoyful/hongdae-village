@@ -31,4 +31,32 @@ describe('시즌1 블록아웃', () => {
     expect(grid.isSolid(40, 0)).toBe(true);
     expect(grid.isSolid(40, MAP_H - 1)).toBe(true);
   });
+
+  it('스폰에서 모든 존의 열린 타일에 도달할 수 있다 (BFS 연결성)', () => {
+    const grid = buildCollision();
+    const visited = new Set<number>();
+    const queue = [SPAWN_TILE.ty * MAP_W + SPAWN_TILE.tx];
+    visited.add(queue[0]!);
+    while (queue.length > 0) {
+      const cur = queue.shift()!;
+      const cx = cur % MAP_W, cy = Math.floor(cur / MAP_W);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const nx = cx + dx, ny = cy + dy;
+        const key = ny * MAP_W + nx;
+        if (!visited.has(key) && !grid.isSolid(nx, ny)) {
+          visited.add(key);
+          queue.push(key);
+        }
+      }
+    }
+    for (const z of ZONES) {
+      let reachable = 0;
+      for (let ty = z.rect.y; ty < z.rect.y + z.rect.h; ty++) {
+        for (let tx = z.rect.x; tx < z.rect.x + z.rect.w; tx++) {
+          if (!grid.isSolid(tx, ty) && visited.has(ty * MAP_W + tx)) reachable++;
+        }
+      }
+      expect(reachable, `${z.name} 도달 불가`).toBeGreaterThan(0);
+    }
+  });
 });
