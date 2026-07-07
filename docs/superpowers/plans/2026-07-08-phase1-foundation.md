@@ -313,7 +313,7 @@ import { ZONES, buildCollision, SPAWN_TILE } from '../src/game/world/mapData';
 import { MAP_W, MAP_H } from '../src/game/config';
 
 describe('시즌1 블록아웃', () => {
-  it('스펙 §2의 6개 구역이 모두 존재한다', () => {
+  it('스펙 §2의 7개 구역이 모두 존재한다', () => {
     const names = ZONES.map((z) => z.name);
     for (const required of ['경의선 숲길', '주택 골목 (서)', '주택 골목 (동)', '메인 스트리트', '포차 골목', '홍대입구역 9번 출구', '벽화 골목']) {
       expect(names).toContain(required);
@@ -461,6 +461,11 @@ describe('stepPlayer', () => {
     expect(next.x + BOX.hw).toBeLessThanOrEqual(160); // x는 벽에 막힘
     expect(next.y).toBeGreaterThan(100);              // y로는 진행
   });
+
+  it('소수 이동량도 정확히 반영된다 (프레임레이트 독립)', () => {
+    const next = stepPlayer({ x: 100, y: 100 }, { ...idle, right: true }, 16, open, BOX);
+    expect(next.x).toBeCloseTo(100 + PLAYER_SPEED * 0.016, 5);
+  });
 });
 ```
 
@@ -490,7 +495,7 @@ function boxCollides(x: number, y: number, box: Aabb, grid: CollisionGrid): bool
 
 /**
  * 프레임당 이동. 축 분리 처리로 벽에 막힌 축만 취소되고 나머지 축은 진행(슬라이드).
- * 충돌 시 해당 축은 1px 단위로 벽에 최대한 붙인다.
+ * 1px 단위 스윕으로 터널링을 방지하고, 잔여 소수분은 마지막에 적용해 속도를 보존한다.
  */
 export function stepPlayer(pos: Vec2, input: MoveInput, dtMs: number, grid: CollisionGrid, box: Aabb): Vec2 {
   let dx = (input.right ? 1 : 0) - (input.left ? 1 : 0);
@@ -511,14 +516,21 @@ export function stepPlayer(pos: Vec2, input: MoveInput, dtMs: number, grid: Coll
 function moveAxis(x: number, y: number, delta: number, axis: 'x' | 'y', box: Aabb, grid: CollisionGrid): number {
   const cur = axis === 'x' ? x : y;
   if (delta === 0) return cur;
-  const target = cur + delta;
   const collides = (v: number) =>
     axis === 'x' ? boxCollides(v, y, box, grid) : boxCollides(x, v, box, grid);
-  if (!collides(target)) return target;
-  // 벽에 1px씩 접근
+  // 1px 스윕: 큰 dt(탭 백그라운드 복귀 등)에도 벽을 통과하지 않는다
   const step = Math.sign(delta);
+  const total = Math.abs(delta);
   let v = cur;
-  while (!collides(v + step) && Math.abs(v - cur) < Math.abs(delta)) v += step;
+  let moved = 0;
+  while (total - moved >= 1) {
+    if (collides(v + step)) return v;
+    v += step;
+    moved += 1;
+  }
+  // 잔여 소수분 적용 — 정수 스텝만 쓰면 프레임레이트에 따라 속도가 왜곡된다
+  const rem = total - moved;
+  if (rem > 0 && !collides(v + step * rem)) v += step * rem;
   return v;
 }
 ```
@@ -526,7 +538,7 @@ function moveAxis(x: number, y: number, delta: number, axis: 'x' | 'y', box: Aab
 - [ ] **Step 4: 테스트 통과 확인**
 
 Run: `npm test -- tests/playerMotion.test.ts`
-Expected: PASS (5 tests)
+Expected: PASS (6 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -552,15 +564,20 @@ import { screenToTile } from '../src/game/input/pointer';
 
 describe('screenToTile', () => {
   it('줌 1, 스크롤 0이면 화면 좌표 그대로 타일 계산한다', () => {
-    expect(screenToTile(33, 65, { scrollX: 0, scrollY: 0, zoom: 1 })).toEqual({ tx: 1, ty: 2 });
+    expect(screenToTile(33, 65, { scrollX: 0, scrollY: 0, zoom: 1, width: 640, height: 480 })).toEqual({ tx: 1, ty: 2 });
   });
 
   it('카메라 스크롤을 보정한다', () => {
-    expect(screenToTile(0, 0, { scrollX: 320, scrollY: 64, zoom: 1 })).toEqual({ tx: 10, ty: 2 });
+    expect(screenToTile(0, 0, { scrollX: 320, scrollY: 64, zoom: 1, width: 640, height: 480 })).toEqual({ tx: 10, ty: 2 });
   });
 
-  it('줌을 보정한다 (줌 2에서 화면 64px = 월드 32px)', () => {
-    expect(screenToTile(64, 64, { scrollX: 0, scrollY: 0, zoom: 2 })).toEqual({ tx: 1, ty: 1 });
+  it('줌은 뷰포트 중심 기준으로 보정한다 (Phaser 카메라 시맨틱)', () => {
+    // zoom 2, 640×480: world = screen/2 + (뷰포트/2)(1-1/2) → x: 32+160=192(tx 6), y: 32+120=152(ty 4)
+    expect(screenToTile(64, 64, { scrollX: 0, scrollY: 0, zoom: 2, width: 640, height: 480 })).toEqual({ tx: 6, ty: 4 });
+  });
+
+  it('줌 1에서는 중심 보정 항이 사라진다 (뷰포트 크기 무관)', () => {
+    expect(screenToTile(64, 64, { scrollX: 0, scrollY: 0, zoom: 1, width: 999, height: 777 })).toEqual({ tx: 2, ty: 2 });
   });
 });
 ```
@@ -576,12 +593,17 @@ Expected: FAIL — `Cannot find module '../src/game/input/pointer'`
 // src/game/input/pointer.ts
 import { worldToTile } from '../world/grid';
 
-export interface CameraView { scrollX: number; scrollY: number; zoom: number }
+/** Phaser 3 카메라 뷰 상태. 줌이 뷰포트 중심 기준이라 width/height가 필요하다. */
+export interface CameraView { scrollX: number; scrollY: number; zoom: number; width: number; height: number }
 
-/** 화면(캔버스) 좌표 → 월드 → 타일 좌표. 클릭 상호작용·배치의 공용 진입점. */
+/**
+ * 화면(캔버스) 좌표 → 월드 → 타일 좌표. 클릭 상호작용·배치의 공용 진입점.
+ * Phaser는 뷰포트 중심을 기준으로 줌하므로 (뷰포트/2)(1-1/zoom) 항을 보정한다
+ * — Camera.getWorldPoint의 무회전·기본 원점(0.5) 케이스와 동일한 역변환.
+ */
 export function screenToTile(screenX: number, screenY: number, cam: CameraView): { tx: number; ty: number } {
-  const worldX = cam.scrollX + screenX / cam.zoom;
-  const worldY = cam.scrollY + screenY / cam.zoom;
+  const worldX = cam.scrollX + (cam.width / 2) * (1 - 1 / cam.zoom) + screenX / cam.zoom;
+  const worldY = cam.scrollY + (cam.height / 2) * (1 - 1 / cam.zoom) + screenY / cam.zoom;
   return worldToTile(worldX, worldY);
 }
 ```
@@ -589,7 +611,7 @@ export function screenToTile(screenX: number, screenY: number, cam: CameraView):
 - [ ] **Step 4: 테스트 통과 확인**
 
 Run: `npm test -- tests/pointer.test.ts`
-Expected: PASS (3 tests)
+Expected: PASS (4 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -660,7 +682,10 @@ export class StreetScene extends Phaser.Scene {
     };
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       const cam = this.cameras.main;
-      const { tx, ty } = screenToTile(p.x, p.y, { scrollX: cam.scrollX, scrollY: cam.scrollY, zoom: cam.zoom });
+      const { tx, ty } = screenToTile(p.x, p.y, {
+        scrollX: cam.scrollX, scrollY: cam.scrollY, zoom: cam.zoom,
+        width: cam.width, height: cam.height,
+      });
       const w = tileToWorld(tx, ty);
       this.marker.setPosition(w.x, w.y).setVisible(true);
     });
@@ -820,6 +845,13 @@ Run: `gh run watch --exit-status` (또는 `gh run list --limit 1`)
 Expected: CI `check` 잡 성공
 
 ---
+
+## 정정 이력
+
+- **2026-07-08 (Task 5 실행 중)**: 최초 플랜의 `screenToTile` 공식(`world = scroll + screen/zoom`)은 zoom=1에서만 유효 — Phaser 3 카메라는 뷰포트 중심 기준으로 줌하므로 `(뷰포트/2)(1-1/zoom)` 보정 항이 필요하다 (Camera.getWorldPoint 역변환). ZOOM=2인 본 게임에서는 모든 클릭이 고정 오프셋만큼 어긋나는 버그였다. `CameraView`에 width/height를 추가하고 공식을 정정했다 (위 코드가 최종본).
+
+- **2026-07-08 (Task 4 실행 중)**: 최초 플랜의 `moveAxis`(타겟 우선 검사 + 실패 시 1px 접근)는 이동량이 벽 두께보다 클 때 터널링하는 버그가 있어 플랜 자체 테스트를 통과하지 못했다. 또한 단순 정수 1px 스윕은 소수 이동량을 과이동시켜 속도가 프레임레이트 의존적이 된다. 위 코드는 "1px 스윕(터널링 방지) + 잔여 소수분 적용(속도 보존)"으로 정정된 최종본이다.
+- **2026-07-08 (Task 3 실행 중)**: mapData 테스트 이름의 "6개 구역"은 오기 — 스펙 §2대로 7개 구역이 맞다 (수정 반영됨).
 
 ## Self-Review 결과
 
