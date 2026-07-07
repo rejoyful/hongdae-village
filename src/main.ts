@@ -12,4 +12,9 @@ export function createGame(parent: string): Phaser.Game {
   });
 }
 
-createGame('game');
+const game = createGame('game');
+
+// 개발 모드 전용 디버그 훅 (콘솔·자동화 검증에서 게임 상태 접근용)
+if (import.meta.env.DEV) {
+  (window as unknown as { __game?: Phaser.Game }).__game = game;
+}
