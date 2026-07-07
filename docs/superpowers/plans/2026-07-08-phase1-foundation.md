@@ -461,6 +461,11 @@ describe('stepPlayer', () => {
     expect(next.x + BOX.hw).toBeLessThanOrEqual(160); // x는 벽에 막힘
     expect(next.y).toBeGreaterThan(100);              // y로는 진행
   });
+
+  it('소수 이동량도 정확히 반영된다 (프레임레이트 독립)', () => {
+    const next = stepPlayer({ x: 100, y: 100 }, { ...idle, right: true }, 16, open, BOX);
+    expect(next.x).toBeCloseTo(100 + PLAYER_SPEED * 0.016, 5);
+  });
 });
 ```
 
@@ -533,7 +538,7 @@ function moveAxis(x: number, y: number, delta: number, axis: 'x' | 'y', box: Aab
 - [ ] **Step 4: 테스트 통과 확인**
 
 Run: `npm test -- tests/playerMotion.test.ts`
-Expected: PASS (5 tests)
+Expected: PASS (6 tests)
 
 - [ ] **Step 5: Commit**
 
