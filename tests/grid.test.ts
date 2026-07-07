@@ -37,4 +37,16 @@ describe('CollisionGrid', () => {
     expect(grid.isSolidAtWorld(2 * 32 + 1, 2 * 32 + 1)).toBe(true);
     expect(grid.isSolidAtWorld(0, 0)).toBe(false);
   });
+
+  it('경계에 걸친 사각형은 맵 안쪽 부분만 솔리드가 된다', () => {
+    const g = CollisionGrid.fromRects(10, 8, [{ x: -2, y: 0, w: 4, h: 2 }]);
+    expect(g.isSolid(0, 0)).toBe(true);
+    expect(g.isSolid(1, 1)).toBe(true);
+    expect(g.isSolid(2, 0)).toBe(false);
+  });
+
+  it('음수 월드 좌표는 솔리드로 판정된다', () => {
+    const g = CollisionGrid.fromRects(10, 8, []);
+    expect(g.isSolidAtWorld(-1, -1)).toBe(true);
+  });
 });
