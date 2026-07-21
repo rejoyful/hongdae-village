@@ -8,6 +8,9 @@ import { canPlace, footprint, sizeOf, type Placed, type Rot } from '../entities/
 import { screenToTile } from '../input/pointer';
 import { CATALOG_BY_ID } from '../../items/catalog';
 import { HOUSE_DOORS } from '../world/mapData';
+import { makeRoomBackground, ensureFurniture } from '../art/roomArt';
+import { ensureCharacter } from '../art/characterArt';
+import { safeColor } from './StreetScene';
 import type { NetworkAdapter, PeerState } from '../../net/NetworkAdapter';
 import { InventoryBar } from '../../ui/inventoryBar';
 import {
@@ -24,8 +27,9 @@ interface RoomData {
 
 export class RoomScene extends Phaser.Scene {
   private grid!: CollisionGrid;
-  private player!: Phaser.GameObjects.Rectangle;
+  private player!: Phaser.GameObjects.Sprite;
   private keys!: Record<'W' | 'A' | 'S' | 'D', Phaser.Input.Keyboard.Key>;
+  private facing: 0 | 1 | 2 | 3 = 3;
 
   private roomId = 1;
   private isOwner = false;
@@ -34,7 +38,7 @@ export class RoomScene extends Phaser.Scene {
   private sb: SupabaseClient | null = null;
 
   private placed: Placed[] = [];
-  private placedGfx = new Map<string, Phaser.GameObjects.Container>();
+  private placedGfx = new Map<string, Phaser.GameObjects.Image>();
   private inv: InventoryBar | null = null;
   private counts = new Map<string, number>();
   private ghost: Phaser.GameObjects.Rectangle | null = null;
@@ -60,12 +64,12 @@ export class RoomScene extends Phaser.Scene {
 
   create(): void {
     this.grid = buildRoomCollision();
-    this.drawRoom();
+    this.add.image(0, 0, makeRoomBackground(this)).setOrigin(0).setDepth(0);
 
     const spawn = tileToWorld(ROOM_SPAWN.tx, ROOM_SPAWN.ty);
-    this.player = this.add.rectangle(
-      spawn.x + TILE / 2, spawn.y + TILE / 2, 16, 22, parseInt(this.peer.color, 16),
-    ).setDepth(10);
+    const charKey = ensureCharacter(this, safeColor(this.peer.color));
+    this.player = this.add.sprite(spawn.x + TILE / 2, spawn.y + TILE / 2, charKey, 6).setDepth(10);
+    this.facing = 3; // 문으로 들어와 위를 보는 상태
 
     const kb = this.input.keyboard!;
     this.keys = {
@@ -105,6 +109,22 @@ export class RoomScene extends Phaser.Scene {
       { x: this.player.x, y: this.player.y }, input, delta, this.grid, { hw: 8, hh: 11 },
     );
     this.player.setPosition(next.x, next.y);
+
+    // 방향·걷기 애니메이션
+    if (input.down) this.facing = 0;
+    else if (input.right) this.facing = 1;
+    else if (input.left) this.facing = 2;
+    else if (input.up) this.facing = 3;
+    const moving = input.up || input.down || input.left || input.right;
+    const animKey = `char-${safeColor(this.peer.color)}-walk-${this.facing}`;
+    if (moving) {
+      if (this.player.anims.currentAnim?.key !== animKey || !this.player.anims.isPlaying) {
+        this.player.play(animKey);
+      }
+    } else if (this.player.anims.isPlaying) {
+      this.player.stop();
+      this.player.setFrame(this.facing * 2);
+    }
 
     // 문 타일에 서면 거리로 퇴장 — 들어온 집 문 앞으로 복귀
     const { tx, ty } = worldToTile(next.x, next.y);
@@ -146,18 +166,6 @@ export class RoomScene extends Phaser.Scene {
 
   // --- 렌더 ---
 
-  private drawRoom(): void {
-    for (let ty = 0; ty < ROOM_H; ty++) {
-      for (let tx = 0; tx < ROOM_W; tx++) {
-        const p = tileToWorld(tx, ty);
-        const isWall = this.grid.isSolid(tx, ty);
-        const isDoor = tx === ROOM_DOOR.tx && ty === ROOM_DOOR.ty;
-        const color = isDoor ? 0x8a5a3a : isWall ? 0x3a3128 : ((tx + ty) % 2 ? 0x94795e : 0x8a6f56);
-        this.add.rectangle(p.x, p.y, TILE, TILE, color).setOrigin(0);
-      }
-    }
-  }
-
   private redrawPlacements(): void {
     for (const c of this.placedGfx.values()) c.destroy();
     this.placedGfx.clear();
@@ -165,14 +173,11 @@ export class RoomScene extends Phaser.Scene {
   }
 
   private drawPlaced(p: Placed): void {
-    const def = CATALOG_BY_ID.get(p.itemId);
-    const size = sizeOf(p.itemId, p.rot);
-    if (!def || !size) return;
+    if (!CATALOG_BY_ID.has(p.itemId)) return;
+    const key = ensureFurniture(this, p.itemId, p.rot);
     const w = tileToWorld(p.tx, p.ty);
-    const rect = this.add.rectangle(0, 0, size.w * TILE - 4, size.h * TILE - 4, parseInt(def.color, 16))
-      .setOrigin(0).setStrokeStyle(1, 0x241f1a);
-    const c = this.add.container(w.x + 2, w.y + 2, [rect]).setDepth(5);
-    this.placedGfx.set(p.id, c);
+    const img = this.add.image(w.x, w.y, key).setOrigin(0).setDepth(5);
+    this.placedGfx.set(p.id, img);
   }
 
   // --- 꾸미기 (주인 전용) ---
