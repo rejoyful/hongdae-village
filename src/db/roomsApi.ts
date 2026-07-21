@@ -18,12 +18,11 @@ export async function claimRoom(sb: SupabaseClient, roomId: number, uid: string)
   return !error && (data?.length ?? 0) > 0;
 }
 
-/** 첫 입주 시 시작 가구 1회 지급 */
+/** 시작 가구(웰컴 박스) 지급 — 없는 아이템만 채우므로 여러 번 불러도 안전, 세트가 늘면 부족분만 추가 */
 export async function grantStarterOnce(sb: SupabaseClient, uid: string): Promise<void> {
-  const { data } = await sb.from('inventory').select('item_id').eq('user_id', uid).limit(1);
-  if (data && data.length > 0) return;
-  await sb.from('inventory').insert(
+  await sb.from('inventory').upsert(
     STARTER_ITEMS.map((s) => ({ user_id: uid, item_id: s.itemId, qty: s.qty })),
+    { onConflict: 'user_id,item_id', ignoreDuplicates: true },
   );
 }
 

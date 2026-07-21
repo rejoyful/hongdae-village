@@ -44,9 +44,17 @@
 }
 .hv-inv {
   position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
-  display: flex; gap: 6px; max-width: 90vw; overflow-x: auto; z-index: 10;
+  display: flex; flex-direction: column; gap: 6px; max-width: 90vw; z-index: 10;
   padding: 8px; background: rgba(26, 23, 19, 0.88); border-radius: 12px;
 }
+.hv-inv-tabs { display: flex; gap: 4px; }
+.hv-inv-tabs button {
+  padding: 5px 12px; border-radius: 6px; border: 1px solid transparent;
+  background: transparent; color: #f2e8dc; opacity: 0.6;
+  font: 12px system-ui, sans-serif; cursor: pointer;
+}
+.hv-inv-tabs button.sel { opacity: 1; background: #3a2f24; border-color: #4a3f35; }
+.hv-inv-items { display: flex; gap: 6px; overflow-x: auto; max-width: 84vw; padding-bottom: 2px; }
 .hv-inv button {
   display: flex; align-items: center; gap: 6px; white-space: nowrap;
   padding: 8px 10px; border-radius: 8px; border: 1px solid #4a3f35;
