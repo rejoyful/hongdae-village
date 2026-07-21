@@ -11,6 +11,7 @@ import { CATALOG_BY_ID } from '../../items/catalog';
 import { HOUSE_DOORS } from '../world/mapData';
 import { makeRoomBackground, ensureFurniture } from '../art/roomArt';
 import { ROOM_MATERIALS, FURNITURE_ASSETS, furnitureAssetKey } from '../art/assetManifest';
+import { TouchControls, isTouchDevice } from '../../ui/touchControls';
 import { ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
 import type { NetworkAdapter, PeerState } from '../../net/NetworkAdapter';
 import { InventoryBar } from '../../ui/inventoryBar';
@@ -48,6 +49,7 @@ export class RoomScene extends Phaser.Scene {
   private ghostTile = { tx: 2, ty: 2 };
   private unsubscribe: (() => void) | null = null;
   private hint: HTMLDivElement | null = null;
+  private touch: TouchControls | null = null;
   private localSeq = 0;
 
   constructor() { super('room'); }
@@ -100,9 +102,16 @@ export class RoomScene extends Phaser.Scene {
     };
 
     const cam = this.cameras.main;
-    cam.setZoom(ZOOM);
+    cam.setZoom(window.innerWidth < 700 ? 1.4 : ZOOM);
     // bounds를 걸면 방(뷰포트보다 작음)이 좌상단에 고정되므로 중앙 정렬만 사용
     cam.centerOn((ROOM_W * TILE) / 2, (ROOM_H * TILE) / 2);
+
+    if (isTouchDevice()) {
+      this.touch = new TouchControls([
+        { emoji: '🔄', label: '가구 회전', onTap: () => this.rotateGhost() },
+        { emoji: '↩️', label: '선택 해제', onTap: () => this.inv?.clearSelection() },
+      ]);
+    }
 
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.onPointerMove(p));
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.onPointerDown(p));
@@ -121,9 +130,12 @@ export class RoomScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    const t = this.touch?.getInput();
     const input: MoveInput = {
-      up: this.keys.W.isDown, down: this.keys.S.isDown,
-      left: this.keys.A.isDown, right: this.keys.D.isDown,
+      up: this.keys.W.isDown || !!t?.up,
+      down: this.keys.S.isDown || !!t?.down,
+      left: this.keys.A.isDown || !!t?.left,
+      right: this.keys.D.isDown || !!t?.right,
     };
     const next = stepPlayer(
       { x: this.player.x, y: this.player.y }, input, delta, this.grid, { hw: 8, hh: 11 },
@@ -323,6 +335,8 @@ export class RoomScene extends Phaser.Scene {
   private teardown(): void {
     this.unsubscribe?.();
     this.unsubscribe = null;
+    this.touch?.destroy();
+    this.touch = null;
     this.inv?.destroy();
     this.inv = null;
     this.ghost = null;

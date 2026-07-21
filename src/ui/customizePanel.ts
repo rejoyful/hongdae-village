@@ -16,8 +16,8 @@ export class CustomizePanel {
       onChange: (a: Appearance) => void;
       onSave: (a: Appearance) => void;
       onToggle: (open: boolean) => void;
-      /** 계정 지키기 — 이메일 연결. 에러 메시지 또는 null(성공) 반환 */
-      onLinkEmail?: (email: string) => Promise<string | null>;
+      /** 계정 지키기 — 아이디·코드 부여(익명→영구 전환). 에러 메시지 또는 null(성공) 반환 */
+      onLinkId?: (id: string, code: string) => Promise<string | null>;
     },
   ) {
     this.a = { ...initial };
@@ -83,12 +83,13 @@ export class CustomizePanel {
           <button class="save">저장</button>
           <button class="cancel">닫기</button>
         </div>
-        ${this.opts.onLinkEmail ? `
+        ${this.opts.onLinkId ? `
         <div class="hv-custom-account">
-          <p>💾 계정 지키기 — 이메일을 연결하면 다른 기기·브라우저에서도 이어집니다</p>
+          <p>💾 계정 지키기 — 아이디·코드를 만들면 다른 기기에서도 이 캐릭터로 로그인!</p>
           <div class="row">
-            <input type="email" placeholder="이메일 주소" />
-            <button class="link">연결</button>
+            <input class="acc-id" type="text" maxlength="16" placeholder="아이디" autocapitalize="none" />
+            <input class="acc-code" type="password" maxlength="32" placeholder="코드 6자+" />
+            <button class="link">만들기</button>
           </div>
           <p class="acc-note"></p>
         </div>` : ''}
@@ -103,21 +104,20 @@ export class CustomizePanel {
     this.root.querySelector('.cancel')!.addEventListener('click', () => this.close());
 
     const linkBtn = this.root.querySelector<HTMLButtonElement>('.hv-custom-account .link');
-    if (linkBtn && this.opts.onLinkEmail) {
+    if (linkBtn && this.opts.onLinkId) {
       linkBtn.addEventListener('click', () => {
-        const emailInput = this.root.querySelector<HTMLInputElement>('.hv-custom-account input')!;
+        const idInput = this.root.querySelector<HTMLInputElement>('.acc-id')!;
+        const codeInput = this.root.querySelector<HTMLInputElement>('.acc-code')!;
         const noteEl = this.root.querySelector<HTMLParagraphElement>('.acc-note')!;
-        const email = emailInput.value.trim();
-        if (!email.includes('@')) { noteEl.textContent = '이메일 주소를 확인해주세요'; return; }
-        noteEl.textContent = '확인 메일 보내는 중…';
-        void this.opts.onLinkEmail!(email).then((err) => {
+        noteEl.textContent = '만드는 중…';
+        void this.opts.onLinkId!(idInput.value, codeInput.value).then((err) => {
           noteEl.textContent = err
-            ? `연결 실패: ${err}`
-            : '확인 메일을 보냈어요! 메일 속 링크를 누르면 연결 완료 ✉️';
+            ? `실패: ${err}`
+            : '완료! 이제 어느 기기에서든 이 아이디·코드로 로그인하면 돼요 ✅';
         });
       });
-      this.root.querySelector<HTMLInputElement>('.hv-custom-account input')!
-        .addEventListener('keydown', (e) => e.stopPropagation());
+      this.root.querySelectorAll<HTMLInputElement>('.hv-custom-account input')
+        .forEach((i) => i.addEventListener('keydown', (e) => e.stopPropagation()));
     }
   }
 

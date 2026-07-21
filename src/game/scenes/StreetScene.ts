@@ -20,7 +20,8 @@ import { BUILDING_TEXTURES } from '../art/assetManifest';
 import { ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
 import { DEFAULT_APPEARANCE, type Appearance } from '../art/appearance';
 import { CustomizePanel } from '../../ui/customizePanel';
-import { saveAppearance, linkEmail } from '../../ui/loginPanel';
+import { saveAppearance, linkIdCode } from '../../ui/loginPanel';
+import { TouchControls, isTouchDevice } from '../../ui/touchControls';
 import { fetchRooms, claimRoom, grantStarterOnce, type RoomInfo } from '../../db/roomsApi';
 import { tileToWorld, worldToTile, type CollisionGrid } from '../world/grid';
 import { stepPlayer, type MoveInput } from '../entities/playerMotion';
@@ -70,6 +71,7 @@ export class StreetScene extends Phaser.Scene {
   private shop: ShopPanel | null = null;
   private cafe: CafePanel | null = null;
   private busking: BuskingPanel | null = null;
+  private touch: TouchControls | null = null;
   private omok: OmokPanel | null = null;
   private quests: QuestPanel | null = null;
   private npcs: NpcCrowd | null = null;
@@ -163,9 +165,9 @@ export class StreetScene extends Phaser.Scene {
       this.marker.setPosition(w.x, w.y).setVisible(true);
     });
 
-    // 카메라 — 로컬 플레이어만 팔로우
+    // 카메라 — 로컬 플레이어만 팔로우 (좁은 화면은 줌을 낮춰 시야 확보)
     const cam = this.cameras.main;
-    cam.setZoom(ZOOM);
+    cam.setZoom(window.innerWidth < 700 ? 1.5 : ZOOM);
     cam.setBounds(0, 0, MAP_W * TILE, MAP_H * TILE);
     cam.startFollow(this.player, true, 0.12, 0.12);
 
@@ -177,11 +179,14 @@ export class StreetScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     const chatOpen = this.chat?.isOpen ?? false;
+    const t = this.touch?.getInput();
     const input: MoveInput = chatOpen
       ? { up: false, down: false, left: false, right: false }
       : {
-          up: this.keys.W.isDown, down: this.keys.S.isDown,
-          left: this.keys.A.isDown, right: this.keys.D.isDown,
+          up: this.keys.W.isDown || !!t?.up,
+          down: this.keys.S.isDown || !!t?.down,
+          left: this.keys.A.isDown || !!t?.left,
+          right: this.keys.D.isDown || !!t?.right,
         };
     const next = stepPlayer(
       { x: this.player.x, y: this.player.y }, input, delta, this.grid, { hw: 8, hh: 11 },
@@ -387,7 +392,7 @@ export class StreetScene extends Phaser.Scene {
       onChange: (a) => this.applyAppearance(a, false),
       onSave: (a) => this.applyAppearance(a, true),
       onToggle: (open) => this.setGameKeysEnabled(!open),
-      onLinkEmail: this.sb ? (email) => linkEmail(this.sb!, email) : undefined,
+      onLinkId: this.sb ? (id, code) => linkIdCode(this.sb!, id, code) : undefined,
     });
 
     const kb = this.input.keyboard!;
@@ -448,9 +453,20 @@ export class StreetScene extends Phaser.Scene {
     document.body.appendChild(this.coinsEl);
     void this.initCoins();
 
+    // 모바일 터치 컨트롤
+    if (isTouchDevice()) {
+      this.touch = new TouchControls([
+        { emoji: '💬', label: '채팅', onTap: () => { if (!this.chat!.isOpen) this.chat!.open(); } },
+        { emoji: '😊', label: '이모트', onTap: () => { if (!this.chat!.isOpen) this.emotes!.toggle(); } },
+        { emoji: '👕', label: '꾸미기', onTap: () => { if (!this.customize!.isOpen) this.customize!.open(this.peer.appearance); } },
+      ]);
+    }
+
     this.hint = document.createElement('div');
     this.hint.className = 'hv-hint';
-    this.hint.textContent = 'WASD 이동 · Enter 채팅 · E 이모트 · C 꾸미기 · 가구점=상점 · 카페=알바';
+    this.hint.textContent = isTouchDevice()
+      ? '패드로 이동 · 문을 밟으면 입장'
+      : 'WASD 이동 · Enter 채팅 · E 이모트 · C 꾸미기 · 가구점=상점 · 카페=알바';
     document.body.appendChild(this.hint);
   }
 
@@ -638,6 +654,7 @@ export class StreetScene extends Phaser.Scene {
     this.omok?.destroy();
     this.quests?.destroy();
     this.npcs?.destroy();
+    this.touch?.destroy();
     this.coinsEl?.remove();
     this.hint?.remove();
   }
