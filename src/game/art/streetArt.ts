@@ -4,6 +4,7 @@ import { ZONES, SOLID_RECTS, HOUSE_DOORS } from '../world/mapData';
 import type { Rect } from '../world/grid';
 import { PAL } from './palette';
 import { makeTexture, seeded, type Px } from './pixelCanvas';
+import { ASSET_BY_SOLID_INDEX } from './assetManifest';
 
 const T = TILE;
 
@@ -128,17 +129,17 @@ export function makeDoorTexture(scene: Phaser.Scene): string {
   return key;
 }
 
-/** 상점 간판 (텍스트는 Phaser Text로 얹는다) */
+/** 상점 간판 — AI 자산에 간판이 포함된 건물은 오버레이 생략 */
 export function drawShops(scene: Phaser.Scene): void {
   const shops = [
-    { name: '살림 가구', rect: SOLID_RECTS[14]! },
-    { name: '카페 모퉁이', rect: SOLID_RECTS[15]! },
-    { name: '편의점 24', rect: SOLID_RECTS[16]! },
-    { name: '잡화점', rect: SOLID_RECTS[17]! },
+    { name: '살림 가구', index: 14 }, { name: '카페 모퉁이', index: 15 },
+    { name: '편의점 24', index: 16 }, { name: '잡화점', index: 17 },
   ];
   for (const s of shops) {
-    const x = s.rect.x * T, y = s.rect.y * T;
-    const w = s.rect.w * T;
+    const asset = ASSET_BY_SOLID_INDEX.get(s.index);
+    if (asset && asset.hasOwnSign && scene.textures.exists(asset.key)) continue;
+    const rect = SOLID_RECTS[s.index]!;
+    const x = rect.x * T, y = rect.y * T, w = rect.w * T;
     scene.add.rectangle(x + 6, y + 8, w - 12, 14, PAL.signBg).setOrigin(0).setDepth(3);
     scene.add.text(x + w / 2, y + 15, s.name, {
       fontSize: '9px', color: '#f2d8a8', fontStyle: 'bold',
@@ -191,7 +192,11 @@ export function buildStreetArt(scene: Phaser.Scene, mapW: number, mapH: number):
   scene.add.image(0, 0, makeStreetGround(scene, mapW, mapH)).setOrigin(0).setDepth(0);
   SOLID_RECTS.forEach((r, i) => {
     if (i < 4) return; // 테두리 벽 스킵 (지도 밖)
-    const key = makeBuilding(scene, r, i);
+    // AI 아트 자산이 로드돼 있으면 우선 사용, 없으면 프로시저럴 폴백
+    const asset = ASSET_BY_SOLID_INDEX.get(i);
+    const key = asset && scene.textures.exists(asset.key)
+      ? asset.key
+      : makeBuilding(scene, r, i);
     scene.add.image(r.x * T, r.y * T, key).setOrigin(0).setDepth(1);
   });
   const doorKey = makeDoorTexture(scene);
