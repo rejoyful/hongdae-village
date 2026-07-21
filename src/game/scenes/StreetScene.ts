@@ -1,7 +1,14 @@
 import Phaser from 'phaser';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { TILE, ZOOM, MAP_W, MAP_H } from '../config';
-import { ZONES, SPAWN_TILE, HOUSE_DOORS, SHOP_DOORS, CAFE_DOORS, BUSKING_SPOT, buildCollision } from '../world/mapData';
+import {
+  ZONES, SPAWN_TILE, HOUSE_DOORS, SHOP_DOORS, CAFE_DOORS,
+  BUSKING_SPOT, OMOK_SPOT, BOARD_SPOT, buildCollision,
+} from '../world/mapData';
+import { NpcCrowd } from '../entities/npcAmbient';
+import { OmokPanel } from '../../ui/omokPanel';
+import { QuestPanel } from '../../ui/questPanel';
+import { DAILY_QUESTS } from '../quests';
 import { ShopPanel } from '../../ui/shopPanel';
 import { CafePanel } from '../../ui/cafePanel';
 import { BuskingPanel } from '../../ui/buskingPanel';
@@ -63,8 +70,14 @@ export class StreetScene extends Phaser.Scene {
   private shop: ShopPanel | null = null;
   private cafe: CafePanel | null = null;
   private busking: BuskingPanel | null = null;
+  private omok: OmokPanel | null = null;
+  private quests: QuestPanel | null = null;
+  private npcs: NpcCrowd | null = null;
   private tintOverlay: Phaser.GameObjects.Rectangle | null = null;
   private onBuskingTile = false;
+  private onOmokTile = false;
+  private onBoardTile = false;
+  private forestMs = 0;
   private coinsEl: HTMLDivElement | null = null;
   private coins = 0;
   private charKey = '';
@@ -204,8 +217,32 @@ export class StreetScene extends Phaser.Scene {
         const onBusking = tile.tx === BUSKING_SPOT.tx && tile.ty === BUSKING_SPOT.ty;
         if (onBusking && !this.onBuskingTile && this.busking && !this.busking.isOpen) this.busking.open();
         this.onBuskingTile = onBusking;
+        const onOmok = tile.tx === OMOK_SPOT.tx && tile.ty === OMOK_SPOT.ty;
+        if (onOmok && !this.onOmokTile && this.omok && !this.omok.isOpen) this.omok.open();
+        this.onOmokTile = onOmok;
+        const onBoard = tile.tx === BOARD_SPOT.tx && tile.ty === BOARD_SPOT.ty;
+        if (onBoard && !this.onBoardTile && this.quests && !this.quests.isOpen) {
+          this.quests.open(this.questProgress());
+        }
+        this.onBoardTile = onBoard;
       }
     }
+
+    // 숲길 산책 퀘스트 (초 단위 누적)
+    {
+      const forest = ZONES[0]!.rect;
+      const t = worldToTile(next.x, next.y);
+      if (t.tx >= forest.x && t.tx < forest.x + forest.w && t.ty >= forest.y && t.ty < forest.y + forest.h) {
+        this.forestMs += delta;
+        if (this.forestMs >= 1000) {
+          this.forestMs -= 1000;
+          this.incQuest('q_forest');
+        }
+      }
+    }
+
+    // NPC 무리
+    this.npcs?.update(delta);
 
     // 위치 브로드캐스트 (POS_HZ 스로틀)
     const now = this.time.now;
@@ -343,6 +380,7 @@ export class StreetScene extends Phaser.Scene {
     this.emotes = new EmoteWheel((k: EmoteKind) => {
       this.showBubble(this.player, EMOTE_EMOJI[k]);
       this.adapter?.sendEmote({ k });
+      this.incQuest('q_emote');
     });
 
     this.customize = new CustomizePanel(this.peer.appearance, {
@@ -373,10 +411,28 @@ export class StreetScene extends Phaser.Scene {
       onComplete: () => void this.handleBuskingComplete(),
     });
 
-    // 버스킹 스팟 표시
-    const bs = tileToWorld(BUSKING_SPOT.tx, BUSKING_SPOT.ty);
-    this.add.text(bs.x + TILE / 2, bs.y + TILE / 2, '🎸', { fontSize: '14px' })
-      .setOrigin(0.5).setDepth(2).setAlpha(0.9);
+    this.omok = new OmokPanel({
+      onToggle: (open) => this.setGameKeysEnabled(!open),
+      onWin: () => void this.handleOmokWin(),
+    });
+    this.quests = new QuestPanel({
+      online: !!this.sb,
+      onToggle: (open) => this.setGameKeysEnabled(!open),
+      onClaim: (questId) => void this.handleQuestClaim(questId),
+    });
+
+    // 활동 스팟 표시
+    const spot = (t: { tx: number; ty: number }, emoji: string) => {
+      const w = tileToWorld(t.tx, t.ty);
+      this.add.text(w.x + TILE / 2, w.y + TILE / 2, emoji, { fontSize: '14px' })
+        .setOrigin(0.5).setDepth(2).setAlpha(0.9);
+    };
+    spot(BUSKING_SPOT, '🎸');
+    spot(OMOK_SPOT, '⚫');
+    spot(BOARD_SPOT, '📋');
+
+    // 마을을 걸어다니는 행인들 (스펙 §2 NPC 앰비언트)
+    this.npcs = new NpcCrowd(this, this.grid, (sprite, text) => this.showBubble(sprite, text));
 
     // 실시간 시간대 틴트 (서울 기준, 1분마다 갱신 — 스펙 §2)
     this.tintOverlay = this.add.rectangle(0, 0, MAP_W * TILE, MAP_H * TILE, 0x000000, 0)
@@ -451,11 +507,55 @@ export class StreetScene extends Phaser.Scene {
     this.tintOverlay?.setFillStyle(phase.color, phase.alpha);
   }
 
+  // --- 퀘스트 진행 (game.registry — 씬 전환에도 유지) ---
+
+  private incQuest(key: string, by = 1): void {
+    this.registry.set(key, ((this.registry.get(key) as number | undefined) ?? 0) + by);
+    this.quests?.refresh(this.questProgress());
+  }
+
+  private questProgress(): Map<string, number> {
+    const map = new Map<string, number>();
+    for (const q of DAILY_QUESTS) {
+      map.set(q.registryKey, (this.registry.get(q.registryKey) as number | undefined) ?? 0);
+    }
+    return map;
+  }
+
+  private async handleQuestClaim(questId: string): Promise<void> {
+    if (!this.sb) return;
+    const { data } = await this.sb.rpc('earn_activity', { p_kind: questId });
+    if (typeof data === 'number' && data >= 0) {
+      this.setCoins(data);
+      this.quests?.markClaimed(questId);
+      this.showBubble(this.player, '퀘스트 보상 +40 🪙');
+    } else if (data === -3) {
+      this.quests?.markClaimed(questId); // 오늘 이미 수령
+    } else {
+      this.showBubble(this.player, '보상 수령에 실패했어요');
+    }
+  }
+
+  private async handleOmokWin(): Promise<void> {
+    if (!this.sb) {
+      this.showBubble(this.player, '오목 승리! (오프라인 — 보상은 접속 후에)');
+      return;
+    }
+    const { data } = await this.sb.rpc('earn_activity', { p_kind: 'omok' });
+    if (typeof data === 'number' && data >= 0) {
+      this.setCoins(data);
+      this.showBubble(this.player, '오목 승리! +50 🪙');
+    } else if (data === -3) {
+      this.showBubble(this.player, '즐거운 대국! (보상은 하루 3번)');
+    }
+  }
+
   private async handleBuskingComplete(): Promise<void> {
     if (!this.sb) {
       this.showBubble(this.player, '멋진 연주! (오프라인 — 보상은 접속 후에)');
       return;
     }
+    this.incQuest('q_busking');
     const { data } = await this.sb.rpc('earn_activity', { p_kind: 'busking' });
     if (typeof data === 'number' && data >= 0) {
       this.setCoins(data);
@@ -468,6 +568,7 @@ export class StreetScene extends Phaser.Scene {
   }
 
   private async handleCafeComplete(): Promise<void> {
+    this.incQuest('q_cafe');
     if (!this.sb) {
       this.showBubble(this.player, '알바 완료! (오프라인 — 보상은 접속 후에)');
       return;
@@ -533,6 +634,9 @@ export class StreetScene extends Phaser.Scene {
     this.shop?.destroy();
     this.cafe?.destroy();
     this.busking?.destroy();
+    this.omok?.destroy();
+    this.quests?.destroy();
+    this.npcs?.destroy();
     this.coinsEl?.remove();
     this.hint?.remove();
   }

@@ -279,6 +279,9 @@ export class RoomScene extends Phaser.Scene {
     if ((this.counts.get(itemId) ?? 0) <= 0) return;
     if (!canPlace(this.placed, itemId, tx, ty, rot)) return;
 
+    // 오늘의 인테리어 퀘스트 진행
+    this.registry.set('q_place', ((this.registry.get('q_place') as number | undefined) ?? 0) + 1);
+
     // 낙관적 반영 → 서버 실패 시 롤백 (스펙 §7)
     const localId = `local-${++this.localSeq}`;
     const optimistic: Placed = { id: localId, itemId, tx, ty, rot };
