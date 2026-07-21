@@ -470,3 +470,93 @@
   .map-frame, .wood-frame { max-height: 88vh; }
   .dex-list { max-height: 46vh; }
 }
+
+/* ── 설정 확장 (슬라이더·토글) ── */
+.hv-hud-settings .set-row {
+  display: flex; align-items: center; gap: 10px; margin: 7px 0; font-size: 12px; font-weight: 800;
+}
+.hv-hud-settings .set-row span { width: 44px; }
+.hv-hud-settings .set-row input[type=range] {
+  flex: 1; accent-color: #e8a83c; height: 20px;
+}
+.hv-hud-settings .set-row button {
+  flex: 1; padding: 7px 0; border-radius: 8px; border: 2px solid #6e4522;
+  background: linear-gradient(#8ec8e8, #5aa8d8); color: #fff; font-weight: 900; cursor: pointer;
+  box-shadow: 0 2px 0 #4a2e14;
+}
+.hv-hud-settings .set-row button.on { background: linear-gradient(#f2c25c, #e8a83c); color: #5a3a10; }
+.hv-hud-settings .ver { margin: 10px 0 0; text-align: right; font-size: 10px; font-weight: 800; opacity: .55; }
+.hv-hud-top-right {
+  position: absolute; right: 14px; top: 12px; display: flex; flex-direction: column;
+  align-items: flex-end; gap: 6px; pointer-events: none;
+}
+.hv-hud-top-right .hv-hud-coins { position: static; }
+.hv-hud-clock {
+  background: linear-gradient(#e7bd7f, #d9a45b); color: #4a2e14;
+  font: 800 11px system-ui, sans-serif; padding: 4px 10px; border-radius: 999px;
+  border: 2px solid #6e4522; box-shadow: 0 0 0 2px #f2dcae inset, 0 2px 0 #5c3a1c;
+}
+
+/* ── 랭킹 패널 ── */
+.rank-frame { width: min(420px, 94vw); }
+.rank-page { padding: 12px; }
+.rank-caption { margin: 0; text-align: center; font-size: 12px; font-weight: 800; color: #8a6a3c; }
+.rank-total {
+  margin: 6px auto 8px; text-align: center; font-size: 30px; font-weight: 900; color: #7a5220;
+  background: #fff8e4; border: 2px solid #c89058; border-radius: 12px; padding: 8px 0;
+}
+.rank-desc { margin: 0 0 10px; text-align: center; font-size: 11px; color: #8a6a3c; line-height: 1.5; }
+.rank-sub { margin: 10px 2px 6px; font-size: 12px; font-weight: 900; color: #7a5220; }
+.rank-detail .rank-row {
+  display: flex; align-items: center; gap: 8px; padding: 6px 10px; margin-bottom: 4px;
+  background: #e0c088; border: 1px solid #c89058; border-radius: 8px; font-size: 12px; color: #4a2e14;
+}
+.rank-detail .rank-row span { flex: 1; font-weight: 700; }
+.rank-detail .rank-row i {
+  font-style: normal; font-size: 11px; font-weight: 800; color: #fff;
+  background: #a87e48; border-radius: 6px; padding: 1px 8px;
+}
+.rank-detail .rank-row b { min-width: 56px; text-align: right; font-weight: 900; }
+.rank-detail .rank-row.head { background: #d9b478; font-weight: 900; }
+.rank-list { display: flex; flex-direction: column; gap: 4px; }
+.rank-item {
+  display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+  background: #f2e2b8; border: 1px solid #c89058; border-radius: 8px; font-size: 12px; color: #4a2e14;
+}
+.rank-item .rk { width: 26px; text-align: center; font-weight: 900; }
+.rank-item .nm { flex: 1; font-weight: 800; }
+.rank-item.me { background: #ffe9a8; outline: 2px solid #e8a83c; }
+.rank-loading { text-align: center; font-size: 12px; color: #8a6a3c; padding: 12px 0; }
+
+/* ── 주민 패널 ── */
+.res-frame { width: min(400px, 94vw); }
+.res-list { padding: 10px; max-height: 56vh; }
+.res-row {
+  display: flex; align-items: center; gap: 10px; padding: 7px 10px; margin-bottom: 7px;
+  background: #f6ecd0; border: 2px solid #c89058; border-radius: 999px;
+}
+.res-row img, .res-row i {
+  width: 40px; height: 46px; flex: none; image-rendering: pixelated;
+  object-fit: cover; object-position: top;
+}
+.res-row.unmet img { filter: brightness(0) opacity(.55); }
+.res-info { flex: 1; min-width: 0; }
+.res-info b { display: block; font-size: 13px; color: #4a2e14; margin-bottom: 3px; }
+.res-info b span { font-size: 11px; font-weight: 700; color: #8a6a3c; }
+.res-bar {
+  position: relative; height: 16px; background: #4a3620; border-radius: 999px; overflow: hidden;
+}
+.res-bar em {
+  position: absolute; inset: 0 auto 0 0; background: linear-gradient(#f2a25c, #e8823c);
+  border-radius: 999px; transition: width .3s;
+}
+.res-bar label {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  font-size: 9px; font-weight: 900; color: #fff2d8;
+}
+.res-bar strong { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 10px; color: #ffe9b8; }
+.res-tip { margin: 0; text-align: center; font-size: 11px; font-weight: 800; color: #fff2d8; }
+@media (max-width: 700px) {
+  .hv-hud-clock { font-size: 10px; }
+  .res-list { max-height: 48vh; }
+}

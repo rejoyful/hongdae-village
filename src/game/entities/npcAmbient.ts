@@ -95,9 +95,14 @@ export class NpcCrowd {
         if (!t) { n.waitUntil = now + 2000; continue; }
         const w = tileToWorld(t.tx, t.ty);
         n.target = { x: w.x + TILE / 2, y: w.y + TILE / 2 };
-        // 출발하며 가끔 혼잣말
+        // 출발하며 가끔 혼잣말 + 아기자기한 제자리 폴짝
         if (this.rnd() < 0.22) {
           this.onBubble(n.sprite, NPC_MENTS[Math.floor(this.rnd() * NPC_MENTS.length)]!);
+          const baseY = n.sprite.y;
+          this.scene.tweens.add({
+            targets: n.sprite, y: baseY - 5, duration: 150, yoyo: true,
+            ease: 'Quad.easeOut', onComplete: () => n.sprite.setY(baseY),
+          });
         }
       }
 
