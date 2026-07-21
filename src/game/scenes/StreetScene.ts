@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { TILE, ZOOM, MAP_W, MAP_H } from '../config';
 import { ZONES, SPAWN_TILE, HOUSE_DOORS, buildCollision } from '../world/mapData';
 import { buildStreetArt } from '../art/streetArt';
+import { BUILDING_ASSETS } from '../art/assetManifest';
 import { ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
 import { DEFAULT_APPEARANCE, type Appearance } from '../art/appearance';
 import { CustomizePanel } from '../../ui/customizePanel';
@@ -63,6 +64,16 @@ export class StreetScene extends Phaser.Scene {
   private entering = false;
 
   constructor() { super('street'); }
+
+  preload(): void {
+    // AI 아트 자산 — 404여도 게임은 프로시저럴 폴백으로 계속
+    for (const a of BUILDING_ASSETS) {
+      if (!this.textures.exists(a.key)) this.load.image(a.key, a.url);
+    }
+    this.load.on('loaderror', (file: { key: string }) => {
+      console.warn('[홍대마을] 자산 로드 실패(프로시저럴 폴백):', file.key);
+    });
+  }
 
   init(data: Partial<StreetData>): void {
     this.peer = data.peer
