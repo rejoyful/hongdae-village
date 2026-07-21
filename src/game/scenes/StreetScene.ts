@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { TILE, ZOOM, MAP_W, MAP_H } from '../config';
-import { ZONES, SOLID_RECTS, SPAWN_TILE, HOUSE_DOORS, buildCollision } from '../world/mapData';
+import { ZONES, SPAWN_TILE, HOUSE_DOORS, buildCollision } from '../world/mapData';
+import { buildStreetArt } from '../art/streetArt';
+import { ensureCharacter } from '../art/characterArt';
 import { fetchRooms, claimRoom, grantStarterOnce, type RoomInfo } from '../../db/roomsApi';
 import { tileToWorld, worldToTile, type CollisionGrid } from '../world/grid';
 import { stepPlayer, type MoveInput } from '../entities/playerMotion';
@@ -20,12 +22,19 @@ interface StreetData {
 }
 
 interface Remote {
-  rect: Phaser.GameObjects.Rectangle;
+  sprite: Phaser.GameObjects.Sprite;
   label: Phaser.GameObjects.Text;
   track: RemoteTrack;
+  color: string;
+  lastF: 0 | 1 | 2 | 3;
 }
 
-interface Bubble { c: Phaser.GameObjects.Container; owner: Phaser.GameObjects.Rectangle; until: number }
+interface Bubble { c: Phaser.GameObjects.Container; owner: Phaser.GameObjects.Sprite; until: number }
+
+/** 프로필 색이 손상됐어도 캐릭터는 뜨게 */
+export function safeColor(color: string): string {
+  return /^[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : 'e8c9a0';
+}
 
 const WASD = [
   Phaser.Input.Keyboard.KeyCodes.W, Phaser.Input.Keyboard.KeyCodes.A,
@@ -34,7 +43,7 @@ const WASD = [
 
 export class StreetScene extends Phaser.Scene {
   private grid!: CollisionGrid;
-  private player!: Phaser.GameObjects.Rectangle;
+  private player!: Phaser.GameObjects.Sprite;
   private playerLabel!: Phaser.GameObjects.Text;
   private keys!: Record<'W' | 'A' | 'S' | 'D', Phaser.Input.Keyboard.Key>;
   private marker!: Phaser.GameObjects.Rectangle;
@@ -68,38 +77,30 @@ export class StreetScene extends Phaser.Scene {
   create(): void {
     this.grid = buildCollision();
 
-    // 존 배경 블록
+    // 거리 아트 (바닥·건물·문·간판·소품)
+    buildStreetArt(this, MAP_W, MAP_H);
     for (const z of ZONES) {
       const p = tileToWorld(z.rect.x, z.rect.y);
-      this.add.rectangle(p.x, p.y, z.rect.w * TILE, z.rect.h * TILE, z.color).setOrigin(0);
-      this.add.text(p.x + 6, p.y + 6, z.name, { fontSize: '10px', color: '#ffffff' }).setAlpha(0.55);
+      this.add.text(p.x + 8, p.y + 8, z.name, { fontSize: '10px', color: '#ffffff' })
+        .setAlpha(0.35).setDepth(3);
     }
-    // 건물(충돌) 블록
-    for (const r of SOLID_RECTS) {
-      const p = tileToWorld(r.x, r.y);
-      this.add.rectangle(p.x, p.y, r.w * TILE, r.h * TILE, 0x241f1a).setOrigin(0);
-    }
-
-    // 개인 공간 문 (클릭 → 입주/입장)
     for (const d of HOUSE_DOORS) {
       const p = tileToWorld(d.tx, d.ty);
-      this.add.rectangle(p.x + 4, p.y + 2, TILE - 8, TILE - 4, 0x8a5a3a).setOrigin(0);
-      this.add.text(p.x + TILE / 2, p.y + TILE / 2, String(d.roomId), {
-        fontSize: '9px', color: '#f2e8dc',
-      }).setOrigin(0.5).setAlpha(0.8);
+      this.add.text(p.x + TILE / 2, p.y - 5, String(d.roomId), {
+        fontSize: '8px', color: '#f2d8a8',
+      }).setOrigin(0.5).setAlpha(0.9).setDepth(3);
     }
     if (this.sb) void fetchRooms(this.sb).then((r) => { this.rooms = r; });
 
     // 클릭 마커
     this.marker = this.add.rectangle(0, 0, TILE, TILE).setOrigin(0)
-      .setStrokeStyle(2, 0xf2d8a8).setVisible(false);
+      .setStrokeStyle(2, 0xf2d8a8).setVisible(false).setDepth(4);
 
-    // 로컬 플레이어 (placeholder 사각형 — Phase 5에서 스프라이트 교체)
+    // 로컬 플레이어 (프로시저럴 캐릭터 스프라이트, 셔츠 = 프로필 색)
     const spawn = tileToWorld(this.spawnTile.tx, this.spawnTile.ty);
-    this.player = this.add.rectangle(
-      spawn.x + TILE / 2, spawn.y + TILE / 2, 16, 22, parseInt(this.peer.color, 16),
-    );
-    this.playerLabel = this.makeNameLabel(this.peer.nickname);
+    const charKey = ensureCharacter(this, safeColor(this.peer.color));
+    this.player = this.add.sprite(spawn.x + TILE / 2, spawn.y + TILE / 2, charKey, 0).setDepth(10);
+    this.playerLabel = this.makeNameLabel(this.peer.nickname).setDepth(11);
 
     // 입력
     const kb = this.input.keyboard!;
@@ -147,6 +148,18 @@ export class StreetScene extends Phaser.Scene {
     this.player.setPosition(next.x, next.y);
     this.updateFacing(input);
 
+    // 걷기 애니메이션
+    const moving = input.up || input.down || input.left || input.right;
+    const animKey = `char-${safeColor(this.peer.color)}-walk-${this.facing}`;
+    if (moving) {
+      if (this.player.anims.currentAnim?.key !== animKey || !this.player.anims.isPlaying) {
+        this.player.play(animKey);
+      }
+    } else if (this.player.anims.isPlaying) {
+      this.player.stop();
+      this.player.setFrame(this.facing * 2);
+    }
+
     // 문 타일을 밟으면 입장 (클릭 없이 걸어서 들어가기)
     if (!this.entering) {
       const tile = worldToTile(next.x, next.y);
@@ -161,13 +174,21 @@ export class StreetScene extends Phaser.Scene {
       this.adapter.sendPos({ x: Math.round(next.x), y: Math.round(next.y), f: this.facing });
     }
 
-    // 원격 플레이어 보간
+    // 원격 플레이어 보간 + 걷기 애니메이션
     const renderT = Date.now() - INTERP_DELAY_MS;
     for (const r of this.remotes.values()) {
       const p = r.track.sample(renderT);
       if (p) {
-        r.rect.setPosition(p.x, p.y);
+        const moved = Math.abs(p.x - r.sprite.x) + Math.abs(p.y - r.sprite.y) > 0.4;
+        r.sprite.setPosition(p.x, p.y);
         r.label.setPosition(p.x, p.y - 18);
+        const ak = `char-${r.color}-walk-${r.lastF}`;
+        if (moved) {
+          if (r.sprite.anims.currentAnim?.key !== ak || !r.sprite.anims.isPlaying) r.sprite.play(ak);
+        } else if (r.sprite.anims.isPlaying) {
+          r.sprite.stop();
+          r.sprite.setFrame(r.lastF * 2);
+        }
       }
     }
 
@@ -213,14 +234,19 @@ export class StreetScene extends Phaser.Scene {
     a.clearListeners(); // 씬 재진입 시 콜백 중복 방지
     a.onPeerJoin((peer) => this.addRemote(peer));
     a.onPeerLeave((id) => this.removeRemote(id));
-    a.onPos((id, m, at) => this.remotes.get(id)?.track.push({ t: at, x: m.x, y: m.y }));
+    a.onPos((id, m, at) => {
+      const r = this.remotes.get(id);
+      if (!r) return;
+      r.track.push({ t: at, x: m.x, y: m.y });
+      r.lastF = m.f;
+    });
     a.onChat((id, m) => {
       const r = this.remotes.get(id);
-      if (r) this.showBubble(r.rect, m.t);
+      if (r) this.showBubble(r.sprite, m.t);
     });
     a.onEmote((id, m) => {
       const r = this.remotes.get(id);
-      if (r) this.showBubble(r.rect, EMOTE_EMOJI[m.k]);
+      if (r) this.showBubble(r.sprite, EMOTE_EMOJI[m.k]);
     });
     void a.connect(this.peer);
   }
@@ -228,17 +254,21 @@ export class StreetScene extends Phaser.Scene {
   private addRemote(peer: PeerState): void {
     if (this.remotes.has(peer.userId)) return;
     const spawn = tileToWorld(SPAWN_TILE.tx, SPAWN_TILE.ty);
-    const parsed = parseInt(peer.color, 16);
-    const color = Number.isNaN(parsed) ? 0xe8c9a0 : parsed;
-    const rect = this.add.rectangle(spawn.x + TILE / 2, spawn.y + TILE / 2, 16, 22, color);
-    const label = this.makeNameLabel(peer.nickname);
-    this.remotes.set(peer.userId, { rect, label, track: new RemoteTrack() });
+    const color = safeColor(peer.color);
+    const key = ensureCharacter(this, color);
+    const sprite = this.add.sprite(spawn.x + TILE / 2, spawn.y + TILE / 2, key, 0).setDepth(10);
+    const label = this.makeNameLabel(peer.nickname).setDepth(11);
+    this.remotes.set(peer.userId, { sprite, label, track: new RemoteTrack(), color, lastF: 0 });
   }
 
   private removeRemote(userId: string): void {
     const r = this.remotes.get(userId);
     if (!r) return;
-    r.rect.destroy();
+    this.bubbles = this.bubbles.filter((b) => {
+      if (b.owner === r.sprite) { b.c.destroy(); return false; }
+      return true;
+    });
+    r.sprite.destroy();
     r.label.destroy();
     this.remotes.delete(userId);
   }
@@ -292,7 +322,7 @@ export class StreetScene extends Phaser.Scene {
     }).setOrigin(0.5, 1);
   }
 
-  private showBubble(owner: Phaser.GameObjects.Rectangle, text: string): void {
+  private showBubble(owner: Phaser.GameObjects.Sprite, text: string): void {
     // 같은 주인의 기존 말풍선은 교체
     this.bubbles = this.bubbles.filter((b) => {
       if (b.owner === owner) { b.c.destroy(); return false; }
@@ -303,7 +333,7 @@ export class StreetScene extends Phaser.Scene {
     }).setOrigin(0.5);
     const bounds = t.getBounds();
     const bg = this.add.rectangle(0, 0, bounds.width + 12, bounds.height + 8, 0xf2e8dc).setOrigin(0.5);
-    const c = this.add.container(owner.x, owner.y - 32, [bg, t]);
+    const c = this.add.container(owner.x, owner.y - 32, [bg, t]).setDepth(12);
     this.bubbles.push({ c, owner, until: this.time.now + 4000 });
   }
 
