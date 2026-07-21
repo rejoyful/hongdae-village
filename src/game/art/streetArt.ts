@@ -4,7 +4,7 @@ import { ZONES, SOLID_RECTS, HOUSE_DOORS } from '../world/mapData';
 import type { Rect } from '../world/grid';
 import { PAL } from './palette';
 import { makeTexture, seeded, type Px } from './pixelCanvas';
-import { ASSET_BY_SOLID_INDEX } from './assetManifest';
+import { BUILDING_PLACEMENT } from './assetManifest';
 
 const T = TILE;
 
@@ -136,8 +136,9 @@ export function drawShops(scene: Phaser.Scene): void {
     { name: '편의점 24', index: 16 }, { name: '잡화점', index: 17 },
   ];
   for (const s of shops) {
-    const asset = ASSET_BY_SOLID_INDEX.get(s.index);
-    if (asset && asset.hasOwnSign && scene.textures.exists(asset.key)) continue;
+    const assetKey = BUILDING_PLACEMENT.get(s.index);
+    if (assetKey && scene.textures.exists(assetKey)) continue; // AI 자산엔 간판 포함
+
     const rect = SOLID_RECTS[s.index]!;
     const x = rect.x * T, y = rect.y * T, w = rect.w * T;
     scene.add.rectangle(x + 6, y + 8, w - 12, 14, PAL.signBg).setOrigin(0).setDepth(3);
@@ -193,11 +194,16 @@ export function buildStreetArt(scene: Phaser.Scene, mapW: number, mapH: number):
   SOLID_RECTS.forEach((r, i) => {
     if (i < 4) return; // 테두리 벽 스킵 (지도 밖)
     // AI 아트 자산이 로드돼 있으면 우선 사용, 없으면 프로시저럴 폴백
-    const asset = ASSET_BY_SOLID_INDEX.get(i);
-    const key = asset && scene.textures.exists(asset.key)
-      ? asset.key
+    const assetKey = BUILDING_PLACEMENT.get(i);
+    const key = assetKey && scene.textures.exists(assetKey)
+      ? assetKey
       : makeBuilding(scene, r, i);
     scene.add.image(r.x * T, r.y * T, key).setOrigin(0).setDepth(1);
+    // AI 자산 크기가 풋프린트와 다르면 맞춰 늘린다 (안전망)
+    if (assetKey && scene.textures.exists(assetKey)) {
+      const img = scene.children.list[scene.children.list.length - 1] as Phaser.GameObjects.Image;
+      img.setDisplaySize(r.w * T, r.h * T);
+    }
   });
   const doorKey = makeDoorTexture(scene);
   for (const d of HOUSE_DOORS) {
