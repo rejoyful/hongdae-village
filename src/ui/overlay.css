@@ -80,6 +80,7 @@
   background: transparent; color: #f2e8dc; opacity: .6; font-size: 12px; cursor: pointer;
 }
 .hv-shop-mode button.sel { opacity: 1; background: #3a2f24; }
+.hv-omok, .hv-quest,
 .hv-busking,
 .hv-cafe {
   position: fixed; inset: 0; z-index: 18;
@@ -108,6 +109,38 @@
   background: #322b24; color: #f2e8dc; font-size: 14px; cursor: pointer;
 }
 .hv-cafe-btns button:active { background: #3a2f24; }
+.hv-omok-card {
+  background: #241f1a; color: #f2e8dc; border: 1px solid #4a3f35;
+  border-radius: 14px; padding: 14px 16px;
+}
+.hv-omok-board {
+  display: grid; gap: 1px; background: #8a6f52; padding: 6px; border-radius: 8px;
+  margin: 12px 0 6px;
+}
+.hv-omok-board button {
+  width: 26px; height: 26px; border: 0; background: #b89a6e; cursor: pointer; border-radius: 2px;
+  position: relative;
+}
+.hv-omok-board button:hover:not(:disabled) { background: #c8aa7c; }
+.hv-omok-board button.b::after, .hv-omok-board button.w::after {
+  content: ''; position: absolute; inset: 3px; border-radius: 50%;
+}
+.hv-omok-board button.b::after { background: #2a2420; box-shadow: inset 2px 2px 3px #5c5650; }
+.hv-omok-board button.w::after { background: #f0ead8; box-shadow: inset -2px -2px 3px #b0a898; }
+.hv-quest-rows { padding: 8px 12px 12px; }
+.hv-quest-rows .row {
+  display: flex; align-items: center; gap: 10px; padding: 10px 6px;
+  border-bottom: 1px solid #322b24; font-size: 13px;
+}
+.hv-quest-rows .row.done { background: rgba(232, 168, 124, 0.06); }
+.hv-quest-rows .info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.hv-quest-rows .info span { font-size: 12px; opacity: .65; }
+.hv-quest-rows .prog { color: #f2d8a8; font-size: 12px; min-width: 48px; text-align: right; }
+.hv-quest-rows button {
+  padding: 6px 12px; border: 0; border-radius: 6px; background: #e8a87c;
+  color: #241f1a; font-weight: 700; font-size: 12px; cursor: pointer;
+}
+.hv-quest-rows button:disabled { opacity: .35; cursor: default; }
 .hv-shop-tabs { display: flex; gap: 4px; padding: 0 12px 8px; }
 .hv-shop-tabs button {
   padding: 5px 10px; border-radius: 6px; border: 1px solid transparent;

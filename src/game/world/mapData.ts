@@ -60,6 +60,12 @@ export const CAFE_DOORS: Array<{ tx: number; ty: number }> = [
 /** 버스킹 스팟 — 메인 스트리트 보도, 밟으면 버스킹 (스펙 §2·§3) */
 export const BUSKING_SPOT = { tx: 40, ty: 30 };
 
+/** 공원 오목판 — 숲길 벤치 옆 (스펙 §3 재미 요소) */
+export const OMOK_SPOT = { tx: 24, ty: 5 };
+
+/** 마을 게시판 — 역 광장 (스펙 §2, 오늘의 퀘스트) */
+export const BOARD_SPOT = { tx: 36, ty: 44 };
+
 export function buildCollision(): CollisionGrid {
   // 문 타일은 건물에서 뚫어 걸어 들어갈 수 있게 한다 (밟으면 입장)
   return CollisionGrid.fromRects(MAP_W, MAP_H, SOLID_RECTS, [...HOUSE_DOORS, ...SHOP_DOORS, ...CAFE_DOORS]);
