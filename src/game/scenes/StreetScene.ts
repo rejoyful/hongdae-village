@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { TILE, ZOOM, MAP_W, MAP_H } from '../config';
 import { ZONES, SPAWN_TILE, HOUSE_DOORS, buildCollision } from '../world/mapData';
 import { buildStreetArt } from '../art/streetArt';
-import { BUILDING_ASSETS } from '../art/assetManifest';
+import { BUILDING_TEXTURES } from '../art/assetManifest';
 import { ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
 import { DEFAULT_APPEARANCE, type Appearance } from '../art/appearance';
 import { CustomizePanel } from '../../ui/customizePanel';
@@ -67,7 +67,7 @@ export class StreetScene extends Phaser.Scene {
 
   preload(): void {
     // AI 아트 자산 — 404여도 게임은 프로시저럴 폴백으로 계속
-    for (const a of BUILDING_ASSETS) {
+    for (const a of BUILDING_TEXTURES) {
       if (!this.textures.exists(a.key)) this.load.image(a.key, a.url);
     }
     this.load.on('loaderror', (file: { key: string }) => {
