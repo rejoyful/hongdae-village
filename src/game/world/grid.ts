@@ -19,7 +19,12 @@ export class CollisionGrid {
     private readonly solid: Uint8Array,
   ) {}
 
-  static fromRects(width: number, height: number, rects: Rect[]): CollisionGrid {
+  static fromRects(
+    width: number,
+    height: number,
+    rects: Rect[],
+    holes: Array<{ tx: number; ty: number }> = [],
+  ): CollisionGrid {
     const solid = new Uint8Array(width * height);
     for (const r of rects) {
       for (let ty = r.y; ty < r.y + r.h; ty++) {
@@ -27,6 +32,10 @@ export class CollisionGrid {
           if (tx >= 0 && tx < width && ty >= 0 && ty < height) solid[ty * width + tx] = 1;
         }
       }
+    }
+    // 구멍(문 등)은 채운 뒤 뚫는다
+    for (const h of holes) {
+      if (h.tx >= 0 && h.tx < width && h.ty >= 0 && h.ty < height) solid[h.ty * width + h.tx] = 0;
     }
     return new CollisionGrid(width, height, solid);
   }

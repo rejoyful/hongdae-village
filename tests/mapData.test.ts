@@ -24,6 +24,16 @@ describe('시즌1 블록아웃', () => {
     expect(grid.isSolid(SPAWN_TILE.tx, SPAWN_TILE.ty)).toBe(false);
   });
 
+  it('모든 집 문 타일은 걸어 들어갈 수 있다 (건물에서 뚫림)', async () => {
+    const { HOUSE_DOORS } = await import('../src/game/world/mapData');
+    const grid = buildCollision();
+    expect(HOUSE_DOORS).toHaveLength(10);
+    for (const d of HOUSE_DOORS) {
+      expect(grid.isSolid(d.tx, d.ty), `문 ${d.roomId} 막힘`).toBe(false);
+      expect(grid.isSolid(d.tx, d.ty + 1), `문 ${d.roomId} 앞 막힘`).toBe(false);
+    }
+  });
+
   it('맵 테두리는 벽이다', () => {
     const grid = buildCollision();
     expect(grid.isSolid(0, 30)).toBe(true);

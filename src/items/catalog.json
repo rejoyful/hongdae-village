@@ -1,0 +1,18 @@
+[
+  { "id": "bed_basic",     "name": "포근한 침대",     "category": "furniture", "w": 2, "h": 3, "color": "c8a8d8" },
+  { "id": "desk_wood",     "name": "원목 책상",       "category": "furniture", "w": 2, "h": 1, "color": "a8875f" },
+  { "id": "chair_wood",    "name": "원목 의자",       "category": "furniture", "w": 1, "h": 1, "color": "8f7350" },
+  { "id": "sofa_coral",    "name": "코랄 소파",       "category": "furniture", "w": 2, "h": 1, "color": "d88a7c" },
+  { "id": "rug_cream",     "name": "크림 러그",       "category": "deco",      "w": 3, "h": 2, "color": "e8d5a8" },
+  { "id": "plant_pot",     "name": "몬스테라 화분",   "category": "deco",      "w": 1, "h": 1, "color": "6e9e6e" },
+  { "id": "bookshelf",     "name": "책장",            "category": "furniture", "w": 1, "h": 2, "color": "7d5f46" },
+  { "id": "tea_table",     "name": "티테이블",        "category": "furniture", "w": 1, "h": 1, "color": "b89a6e" },
+  { "id": "lamp_stand",    "name": "스탠드 조명",     "category": "deco",      "w": 1, "h": 1, "color": "f2d8a8" },
+  { "id": "drawer",        "name": "수납장",          "category": "furniture", "w": 1, "h": 2, "color": "9c7d57" },
+  { "id": "fish_tank",     "name": "어항",            "category": "deco",      "w": 1, "h": 1, "color": "88c8d8" },
+  { "id": "cushion",       "name": "방석",            "category": "deco",      "w": 1, "h": 1, "color": "e0a8b8" },
+  { "id": "guitar",        "name": "어쿠스틱 기타",   "category": "deco",      "w": 1, "h": 1, "color": "b06858" },
+  { "id": "coffee_maker",  "name": "커피머신",        "category": "deco",      "w": 1, "h": 1, "color": "5c5650" },
+  { "id": "cat_tower",     "name": "고양이 타워",     "category": "furniture", "w": 1, "h": 2, "color": "d8c090" },
+  { "id": "dry_rack",      "name": "빨래 건조대",     "category": "furniture", "w": 2, "h": 1, "color": "a8b8c8" }
+]
