@@ -307,10 +307,16 @@
 /* ── 게임형 HUD (레퍼런스 UI) ── */
 .hv-hud { position: fixed; inset: 0; pointer-events: none; z-index: 12; font-family: system-ui, sans-serif; }
 .hv-hud-hearts {
-  position: absolute; left: 14px; top: 12px; display: flex; gap: 2px;
-  font-size: 22px; filter: drop-shadow(0 2px 0 rgba(0,0,0,.35));
+  position: absolute; left: 14px; top: 12px; display: flex; gap: 3px;
+  filter: drop-shadow(0 2px 0 rgba(0,0,0,.35));
 }
-.hv-hud-hearts .off { opacity: .45; }
+.hv-hud-hearts img { width: 26px; height: 26px; image-rendering: pixelated; }
+.hv-hud-hearts img.off { opacity: .5; }
+.hv-hud-hearts img.bump { animation: hv-heart-bump .5s cubic-bezier(.34,1.56,.64,1); }
+@keyframes hv-heart-bump {
+  0% { transform: scale(.3); } 60% { transform: scale(1.35); } 100% { transform: scale(1); }
+}
+.hv-hud-coins img { width: 18px; height: 18px; image-rendering: pixelated; vertical-align: -3px; }
 .hv-hud-coins {
   position: absolute; right: 14px; top: 12px; pointer-events: auto;
   background: linear-gradient(#e7bd7f, #d9a45b); color: #4a2e14;
@@ -332,7 +338,7 @@
   user-select: none; -webkit-user-select: none; touch-action: manipulation;
 }
 .hv-hud-bar button:active { transform: translateY(2px); box-shadow: 0 1px 0 #5c3a1c; }
-.hv-hud-bar .ico { font-size: 20px; line-height: 1; }
+.hv-hud-bar .ico { width: 24px; height: 24px; image-rendering: pixelated; }
 .hv-hud-bar .lbl { font-size: 9px; font-weight: 800; color: #4a2e14; }
 .hv-hud-settings {
   position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
@@ -365,6 +371,7 @@
   background: rgba(15, 12, 10, 0.55); font-family: system-ui, sans-serif;
 }
 .wood-frame {
+  animation: hv-pop .26s cubic-bezier(.34,1.56,.64,1);
   position: relative; display: flex; flex-direction: column; gap: 8px;
   width: min(440px, 94vw); max-height: 84vh; padding: 14px;
   background: linear-gradient(#b07a46, #96613a); border: 3px solid #5c3a1c;
@@ -460,15 +467,24 @@
 .hv-chat { bottom: 96px; }
 .hv-hint { bottom: 96px; }
 @media (max-width: 700px) {
-  .hv-hud-bar { bottom: 6px; gap: 4px; padding: 5px 6px; }
-  .hv-hud-bar button { width: 44px; min-width: 44px; }
-  .hv-hud-bar .ico { font-size: 17px; }
-  .hv-hud-hearts { font-size: 18px; }
-  .hv-dpad { bottom: 110px; }
-  .hv-chat { bottom: 88px; }
-  .hv-emotes { bottom: 240px; }
+  .hv-hud-bar {
+    bottom: 6px; display: grid; grid-template-columns: repeat(5, 1fr);
+    gap: 5px; padding: 6px 7px; width: 94vw; box-sizing: border-box; overflow: visible;
+  }
+  .hv-hud-bar button { width: auto; min-width: 0; padding: 6px 0 4px; }
+  .hv-hud-bar .ico { width: 22px; height: 22px; }
+  .hv-hud-bar .lbl { font-size: 10px; }
+  .hv-hud-hearts img { width: 22px; height: 22px; }
+  .hv-chat { bottom: 130px; }
+  .hv-emotes { bottom: 250px; }
   .map-frame, .wood-frame { max-height: 88vh; }
   .dex-list { max-height: 46vh; }
+  .wood-head h2 { font-size: 15px; }
+  .dex-list .row, .rank-item, .rank-detail .rank-row { font-size: 13px; }
+  .res-info b { font-size: 14px; }
+  .hv-hud-settings .set-row { font-size: 13px; }
+  .bag-name { font-size: 13px; }
+  .rank-desc, .res-tip, .rank-caption { font-size: 12px; }
 }
 
 /* ── 설정 확장 (슬라이더·토글) ── */
@@ -559,4 +575,20 @@
 @media (max-width: 700px) {
   .hv-hud-clock { font-size: 10px; }
   .res-list { max-height: 48vh; }
+}
+
+/* ── 패널 뿅 등장 + 가상 조이스틱 ── */
+@keyframes hv-pop { from { transform: scale(.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.hv-stick { position: fixed; inset: 0; pointer-events: none; z-index: 9; }
+.hv-stick-base {
+  position: absolute; width: 96px; height: 96px; transform: translate(-50%, -50%);
+  border-radius: 50%; border: 3px solid rgba(92, 58, 28, .75);
+  background: rgba(230, 189, 127, .28);
+  box-shadow: 0 0 0 2px rgba(242, 220, 174, .35) inset;
+}
+.hv-stick-knob {
+  position: absolute; left: 50%; top: 50%; width: 44px; height: 44px;
+  transform: translate(-50%, -50%); border-radius: 50%;
+  background: linear-gradient(#e7bd7f, #d9a45b); border: 3px solid #5c3a1c;
+  box-shadow: 0 3px 0 rgba(74, 46, 20, .6), 0 0 0 2px #f2dcae inset;
 }

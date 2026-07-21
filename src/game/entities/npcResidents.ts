@@ -1,5 +1,5 @@
 import type Phaser from 'phaser';
-import { TILE } from '../config';
+import { TILE, TEXT_RES } from '../config';
 import { tileToWorld } from '../world/grid';
 import { ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
 import {
@@ -37,8 +37,9 @@ export class ResidentNpcs {
       const sprite = scene.add.sprite(w.x + TILE / 2, w.y + TILE / 2, key, 0)
         .setOrigin(0.5, 0.66).setDepth(9);
       const label = scene.add.text(sprite.x, sprite.y - 26, def.name, {
-        fontSize: '8px', color: '#ffe9b8', backgroundColor: '#3a2a18', padding: { x: 3, y: 1 },
-      }).setOrigin(0.5, 1).setDepth(11);
+        fontSize: '9px', color: '#fff2d8', backgroundColor: '#7a5220',
+        padding: { x: 4, y: 2 }, resolution: TEXT_RES,
+      }).setOrigin(0.5, 1).setDepth(11).setAlpha(0.95);
       // 각자 리듬이 다른 제자리 폴짝 (아기자기 대기 모션)
       scene.tweens.add({
         targets: sprite, y: sprite.y - 3,

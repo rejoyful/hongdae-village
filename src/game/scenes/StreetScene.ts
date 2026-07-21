@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { TILE, ZOOM, MAP_W, MAP_H } from '../config';
+import { TILE, ZOOM, MAP_W, MAP_H, TEXT_RES } from '../config';
 import {
   ZONES, SPAWN_TILE, HOUSE_DOORS, SHOP_DOORS, CAFE_DOORS, INTERIOR_DOORS,
   BUSKING_SPOT, OMOK_SPOT, BOARD_SPOT, buildCollision,
@@ -142,13 +142,14 @@ export class StreetScene extends Phaser.Scene {
     buildStreetArt(this, MAP_W, MAP_H);
     for (const z of ZONES) {
       const p = tileToWorld(z.rect.x, z.rect.y);
-      this.add.text(p.x + 8, p.y + 8, z.name, { fontSize: '10px', color: '#ffffff' })
-        .setAlpha(0.35).setDepth(3);
+      this.add.text(p.x + 8, p.y + 8, z.name, {
+        fontSize: '11px', color: '#ffffff', resolution: TEXT_RES,
+      }).setAlpha(0.45).setDepth(3);
     }
     for (const d of HOUSE_DOORS) {
       const p = tileToWorld(d.tx, d.ty);
       this.add.text(p.x + TILE / 2, p.y - 5, String(d.roomId), {
-        fontSize: '8px', color: '#f2d8a8',
+        fontSize: '9px', color: '#f2d8a8', resolution: TEXT_RES,
       }).setOrigin(0.5).setAlpha(0.9).setDepth(3);
     }
     if (this.sb) void fetchRooms(this.sb).then((r) => { this.rooms = r; });
@@ -540,7 +541,7 @@ export class StreetScene extends Phaser.Scene {
     void this.initCoins();
 
     // 모바일 터치 컨트롤 — D-패드만 (액션은 HUD 바로 통합)
-    if (isTouchDevice()) this.touch = new TouchControls([]);
+    if (isTouchDevice()) this.touch = new TouchControls();
 
     this.hint = document.createElement('div');
     this.hint.className = 'hv-hint';
@@ -786,8 +787,9 @@ export class StreetScene extends Phaser.Scene {
 
   private makeNameLabel(name: string): Phaser.GameObjects.Text {
     return this.add.text(0, 0, name, {
-      fontSize: '9px', color: '#f2e8dc', backgroundColor: '#241f1a', padding: { x: 3, y: 1 },
-    }).setOrigin(0.5, 1);
+      fontSize: '10px', color: '#4a2e14', backgroundColor: '#f6ecd0',
+      padding: { x: 4, y: 2 }, resolution: TEXT_RES,
+    }).setOrigin(0.5, 1).setAlpha(0.95);
   }
 
   private showBubble(owner: Phaser.GameObjects.Sprite, text: string): void {
@@ -797,11 +799,20 @@ export class StreetScene extends Phaser.Scene {
       return true;
     });
     const t = this.add.text(0, 0, text, {
-      fontSize: '10px', color: '#241f1a', wordWrap: { width: 140 }, align: 'center',
+      fontSize: '11px', color: '#4a2e14', wordWrap: { width: 150 }, align: 'center',
+      resolution: TEXT_RES,
     }).setOrigin(0.5);
     const bounds = t.getBounds();
-    const bg = this.add.rectangle(0, 0, bounds.width + 12, bounds.height + 8, 0xf2e8dc).setOrigin(0.5);
+    const w = bounds.width + 16, h = bounds.height + 10;
+    const bg = this.add.graphics();
+    bg.fillStyle(0x4a2c12, 1).fillRoundedRect(-w / 2 - 1.5, -h / 2 - 1.5, w + 3, h + 3, 8);
+    bg.fillStyle(0xfff8e4, 1).fillRoundedRect(-w / 2, -h / 2, w, h, 7);
+    bg.fillStyle(0x4a2c12, 1).fillTriangle(-4, h / 2 + 4.5, 5, h / 2 + 4.5, 0.5, h / 2 - 2);
+    bg.fillStyle(0xfff8e4, 1).fillTriangle(-2.5, h / 2 + 3, 3.5, h / 2 + 3, 0.5, h / 2 - 2);
     const c = this.add.container(owner.x, owner.y - 32, [bg, t]).setDepth(20);
+    // 뿅 하고 등장
+    c.setScale(0.6);
+    this.tweens.add({ targets: c, scale: 1, duration: 160, ease: 'Back.easeOut' });
     this.bubbles.push({ c, owner, until: this.time.now + 4000 });
   }
 
