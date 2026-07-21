@@ -34,21 +34,35 @@ export class NpcCrowd {
     private readonly scene: Phaser.Scene,
     private readonly grid: CollisionGrid,
     private readonly onBubble: (sprite: Phaser.GameObjects.Sprite, text: string) => void,
-    count = 28,
+    count = 70,
     seed = 20260721,
   ) {
     this.rnd = seeded(seed);
     for (let i = 0; i < count; i++) this.spawn(i);
   }
 
+  /** 실제 홍대처럼 광장·메인 스트리트에 인파가 몰리게 스폰 가중치 */
+  private denseZone(): { x: number; y: number; w: number; h: number } | null {
+    const r = this.rnd();
+    if (r < 0.4) return { x: 28, y: 37, w: 24, h: 18 };  // 역 광장
+    if (r < 0.7) return { x: 1, y: 28, w: 78, h: 8 };    // 메인 스트리트
+    if (r < 0.82) return { x: 1, y: 1, w: 78, h: 8 };    // 숲길
+    return null; // 나머지는 마을 전체
+  }
+
   private randomWalkableTile(nearTx?: number, nearTy?: number, radius = 10): { tx: number; ty: number } | null {
+    const zone = nearTx === undefined ? this.denseZone() : null;
     for (let tries = 0; tries < 40; tries++) {
-      const tx = nearTx === undefined
-        ? 1 + Math.floor(this.rnd() * (this.grid.width - 2))
-        : Math.max(1, Math.min(this.grid.width - 2, nearTx + Math.floor((this.rnd() - 0.5) * radius * 2)));
-      const ty = nearTy === undefined
-        ? 1 + Math.floor(this.rnd() * (this.grid.height - 2))
-        : Math.max(1, Math.min(this.grid.height - 2, nearTy + Math.floor((this.rnd() - 0.5) * radius * 2)));
+      const tx = nearTx !== undefined
+        ? Math.max(1, Math.min(this.grid.width - 2, nearTx + Math.floor((this.rnd() - 0.5) * radius * 2)))
+        : zone
+          ? zone.x + Math.floor(this.rnd() * zone.w)
+          : 1 + Math.floor(this.rnd() * (this.grid.width - 2));
+      const ty = nearTy !== undefined
+        ? Math.max(1, Math.min(this.grid.height - 2, nearTy + Math.floor((this.rnd() - 0.5) * radius * 2)))
+        : zone
+          ? zone.y + Math.floor(this.rnd() * zone.h)
+          : 1 + Math.floor(this.rnd() * (this.grid.height - 2));
       if (!this.grid.isSolid(tx, ty)) return { tx, ty };
     }
     return null;

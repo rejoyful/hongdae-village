@@ -181,11 +181,129 @@ export function drawStreetProps(scene: Phaser.Scene): void {
   for (let i = 0; i < 4; i++) {
     scene.add.image((forest.x + 6 + i * 18) * T, (forest.y + Math.floor(forest.h / 2) + 1) * T + 8, 'bench').setDepth(2);
   }
-  // 메인 스트리트 가로등
+  // 메인 스트리트 가로등 (북측 상가 신설로 차도 가장자리로 이동)
   const street = ZONES.find((z) => z.name.includes('메인 스트리트'))!.rect;
   for (let i = 0; i < 8; i++) {
-    scene.add.image((street.x + 4 + i * 9) * T, street.y * T + 10, 'lamp').setOrigin(0.5, 0).setDepth(2);
+    scene.add.image((street.x + 4 + i * 9) * T, (street.y + 5) * T + 6, 'lamp').setOrigin(0.5, 0).setDepth(2);
   }
+}
+
+/** 실제 홍대 감성 소품 밀도 패스 — 프로시저럴 + AI 소품 배치 */
+export function drawHongdaeProps(scene: Phaser.Scene): void {
+  const rnd = seeded(31547);
+
+  // ── 프로시저럴 소품 텍스처 ──
+  makeTexture(scene, 'pole', 10, T * 2 + 12, (d) => {  // 전봇대
+    d.rect(4, 0, 3, T * 2 + 12, 0x5c5044);
+    d.rect(0, 6, 10, 2, 0x5c5044);
+    d.rect(1, 12, 8, 2, 0x5c5044);
+    d.rect(3, 2, 5, 3, 0x8a8a72, 0.8); // 변압기
+  });
+  makeTexture(scene, 'aframe', 20, 22, (d) => {        // 입간판
+    d.rect(2, 2, 16, 16, 0xf0e8d8);
+    d.rect(3, 3, 14, 3, 0xd88a7c);
+    d.rect(4, 8, 12, 1, 0x5c5650); d.rect(4, 11, 10, 1, 0x5c5650); d.rect(4, 14, 12, 1, 0x5c5650);
+    d.rect(1, 18, 4, 4, 0x8a7d6e); d.rect(15, 18, 4, 4, 0x8a7d6e);
+  });
+  makeTexture(scene, 'trash', 16, 18, (d) => {         // 분리수거함
+    d.rect(0, 2, 7, 14, 0x5aa668); d.rect(9, 2, 7, 14, 0x6a8ac8);
+    d.rect(1, 0, 5, 3, 0x37663f); d.rect(10, 0, 5, 3, 0x3f5686);
+    d.rect(2, 6, 3, 4, 0x2e3a2e, 0.6); d.rect(11, 6, 3, 4, 0x2e3346, 0.6);
+  });
+  makeTexture(scene, 'kick', 20, 14, (d) => {          // 공유 킥보드
+    d.rect(2, 11, 4, 3, 0x2e2620); d.rect(14, 11, 4, 3, 0x2e2620);
+    d.rect(3, 9, 14, 2, 0x7cc47f);
+    d.rect(15, 1, 2, 9, 0x7cc47f); d.rect(12, 1, 6, 2, 0x4a7a4e);
+  });
+  makeTexture(scene, 'bikerack', 46, 18, (d) => {      // 따릉이 거치대
+    d.rect(0, 14, 46, 2, 0x8a8a92);
+    for (let i = 0; i < 3; i++) {
+      const x = 2 + i * 15;
+      d.rect(x + 1, 8, 10, 2, 0x4aa06a);
+      d.rect(x, 4, 2, 8, 0x4aa06a); d.rect(x + 10, 4, 2, 8, 0x4aa06a);
+      d.rect(x - 1, 10, 4, 4, 0x2e2620); d.rect(x + 9, 10, 4, 4, 0x2e2620);
+    }
+  });
+  makeTexture(scene, 'parasol', 30, 30, (d) => {       // 파라솔 테이블
+    d.rect(4, 4, 22, 10, 0xd88a7c);
+    d.rect(6, 2, 18, 4, 0xe8a89a);
+    d.rect(14, 14, 2, 8, 0x5c5044);
+    d.rect(8, 20, 14, 6, 0xb89a6e);
+  });
+  makeTexture(scene, 'busstop', 54, 30, (d) => {       // 버스정류장
+    d.rect(0, 0, 54, 4, 0x37424a);
+    d.rect(2, 4, 3, 24, 0x5c6870); d.rect(49, 4, 3, 24, 0x5c6870);
+    d.rect(6, 6, 42, 14, 0xa8c8d8, 0.45);
+    d.rect(8, 22, 38, 4, 0x8a959c);
+    d.rect(20, 1, 14, 2, 0x7cc47f);
+  });
+  makeTexture(scene, 'cat', 14, 10, (d) => {           // 길고양이
+    d.rect(2, 3, 9, 6, 0x8a7454);
+    d.rect(9, 1, 4, 5, 0x8a7454);
+    d.rect(9, 0, 1, 2, 0x8a7454); d.rect(12, 0, 1, 2, 0x8a7454);
+    d.rect(0, 4, 3, 2, 0x8a7454);
+    d.rect(10, 3, 1, 1, 0x2e2620);
+    d.rect(3, 4, 6, 2, 0xf0e8d8, 0.6); // 배 얼룩
+  });
+  makeTexture(scene, 'vent', 40, 24, (d) => {          // 지하철 환풍구
+    d.rect(0, 0, 40, 24, 0x6e6a64);
+    for (let i = 2; i < 38; i += 4) d.rect(i, 2, 2, 20, 0x4a463c);
+  });
+  makeTexture(scene, 'hydrant', 12, 16, (d) => {       // 소화전
+    d.rect(3, 4, 6, 10, 0xc45c50);
+    d.rect(2, 2, 8, 3, 0xc45c50); d.rect(4, 0, 4, 3, 0xa04438);
+    d.rect(0, 7, 3, 3, 0xa04438); d.rect(9, 7, 3, 3, 0xa04438);
+    d.rect(2, 14, 8, 2, 0x8a3a30);
+  });
+
+  const img = (key: string, tx: number, ty: number, oy = 1) =>
+    scene.add.image(tx * T + T / 2, ty * T + T, key).setOrigin(0.5, oy).setDepth(2);
+
+  // ── 배치: 광장·거리를 빽빽하게 ──
+  // 전봇대 + 전선 (골목 라인)
+  const poleXs = [3, 18, 33, 55, 70];
+  for (const px2 of poleXs) img('pole', px2, 26);
+  const wire = scene.add.graphics().setDepth(2);
+  wire.lineStyle(1, 0x2e2620, 0.6);
+  for (let i = 0; i < poleXs.length - 1; i++) {
+    const x1 = poleXs[i]! * T + T / 2, x2 = poleXs[i + 1]! * T + T / 2;
+    const y = 25 * T + 6;
+    wire.beginPath();
+    wire.moveTo(x1, y);
+    // 살짝 늘어진 전선
+    wire.lineTo((x1 + x2) / 2, y + 6);
+    wire.lineTo(x2, y);
+    wire.strokePath();
+  }
+  // 광장: 환풍구·소화전·쓰레기통·킥보드 무리
+  img('vent', 31, 40); img('vent', 47, 40);
+  img('hydrant', 29, 44);
+  img('trash', 34, 38); img('trash', 45, 51);
+  for (let i = 0; i < 4; i++) img('kick', 42 + i, 53);
+  // 따릉이 거치대 (역 앞)
+  img('bikerack', 33, 53);
+  // 버스정류장 (차도 북측)
+  img('busstop', 68, 31, 1);
+  // 카페 앞 파라솔
+  img('parasol', 26, 36); img('parasol', 30, 36);
+  // 입간판들 (상점 앞)
+  img('aframe', 10, 36); img('aframe', 50, 36); img('aframe', 66, 36);
+  // 길고양이 3마리 (숲길·골목·포차)
+  img('cat', 22, 7); img('cat', 52, 22); img('cat', 6, 41);
+  // 포차골목 쓰레기통·입간판
+  img('trash', 18, 44); img('aframe', 12, 47);
+
+  // ── AI 소품 (있으면 배치) ──
+  const aiImg = (key: string, tx: number, ty: number, wT: number, hT: number) => {
+    if (!scene.textures.exists(key)) return;
+    scene.add.image(tx * T, ty * T, key).setOrigin(0, 1).setDisplaySize(wT * T, hT * T).setDepth(2);
+  };
+  aiImg('prop-cart', 8, 46, 2, 2);    // 붕어빵 포차 (포차골목)
+  aiImg('prop-cart', 45, 44, 2, 2);   // 광장에도 한 대
+  aiImg('prop-arcade', 63, 37, 3, 2); // 인형뽑기+네컷 (잡화점 옆)
+  aiImg('prop-mural', 59, 41, 8, 3);  // 벽화골목 그래피티
+  aiImg('prop-mural', 68, 45, 8, 3);
+  void rnd;
 }
 
 /** 거리 전체 아트 배치 (씬 create에서 1회 호출) */
@@ -211,4 +329,5 @@ export function buildStreetArt(scene: Phaser.Scene, mapW: number, mapH: number):
   }
   drawShops(scene);
   drawStreetProps(scene);
+  drawHongdaeProps(scene);
 }
