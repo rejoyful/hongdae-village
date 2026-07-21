@@ -80,6 +80,7 @@
   background: transparent; color: #f2e8dc; opacity: .6; font-size: 12px; cursor: pointer;
 }
 .hv-shop-mode button.sel { opacity: 1; background: #3a2f24; }
+.hv-busking,
 .hv-cafe {
   position: fixed; inset: 0; z-index: 18;
   display: flex; align-items: center; justify-content: center;

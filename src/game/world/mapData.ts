@@ -57,6 +57,9 @@ export const CAFE_DOORS: Array<{ tx: number; ty: number }> = [
   { tx: 28, ty: 35 },
 ];
 
+/** 버스킹 스팟 — 메인 스트리트 보도, 밟으면 버스킹 (스펙 §2·§3) */
+export const BUSKING_SPOT = { tx: 40, ty: 30 };
+
 export function buildCollision(): CollisionGrid {
   // 문 타일은 건물에서 뚫어 걸어 들어갈 수 있게 한다 (밟으면 입장)
   return CollisionGrid.fromRects(MAP_W, MAP_H, SOLID_RECTS, [...HOUSE_DOORS, ...SHOP_DOORS, ...CAFE_DOORS]);

@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { TILE, ZOOM, MAP_W, MAP_H } from '../config';
-import { ZONES, SPAWN_TILE, HOUSE_DOORS, SHOP_DOORS, CAFE_DOORS, buildCollision } from '../world/mapData';
+import { ZONES, SPAWN_TILE, HOUSE_DOORS, SHOP_DOORS, CAFE_DOORS, BUSKING_SPOT, buildCollision } from '../world/mapData';
 import { ShopPanel } from '../../ui/shopPanel';
 import { CafePanel } from '../../ui/cafePanel';
+import { BuskingPanel } from '../../ui/buskingPanel';
+import { phaseForHour, seoulHour } from '../world/timeOfDay';
 import { fetchCoins, claimDaily, buyItem, sellItem } from '../../db/economyApi';
 import { fetchInventory } from '../../db/roomsApi';
 import { buildStreetArt } from '../art/streetArt';
@@ -60,6 +62,9 @@ export class StreetScene extends Phaser.Scene {
   private customize: CustomizePanel | null = null;
   private shop: ShopPanel | null = null;
   private cafe: CafePanel | null = null;
+  private busking: BuskingPanel | null = null;
+  private tintOverlay: Phaser.GameObjects.Rectangle | null = null;
+  private onBuskingTile = false;
   private coinsEl: HTMLDivElement | null = null;
   private coins = 0;
   private charKey = '';
@@ -196,6 +201,9 @@ export class StreetScene extends Phaser.Scene {
         const onCafe = CAFE_DOORS.some((d) => d.tx === tile.tx && d.ty === tile.ty);
         if (onCafe && !this.onCafeTile && this.cafe && !this.cafe.isOpen) this.cafe.open();
         this.onCafeTile = onCafe;
+        const onBusking = tile.tx === BUSKING_SPOT.tx && tile.ty === BUSKING_SPOT.ty;
+        if (onBusking && !this.onBuskingTile && this.busking && !this.busking.isOpen) this.busking.open();
+        this.onBuskingTile = onBusking;
       }
     }
 
@@ -360,6 +368,21 @@ export class StreetScene extends Phaser.Scene {
       onToggle: (open) => this.setGameKeysEnabled(!open),
       onComplete: () => void this.handleCafeComplete(),
     });
+    this.busking = new BuskingPanel({
+      onToggle: (open) => this.setGameKeysEnabled(!open),
+      onComplete: () => void this.handleBuskingComplete(),
+    });
+
+    // 버스킹 스팟 표시
+    const bs = tileToWorld(BUSKING_SPOT.tx, BUSKING_SPOT.ty);
+    this.add.text(bs.x + TILE / 2, bs.y + TILE / 2, '🎸', { fontSize: '14px' })
+      .setOrigin(0.5).setDepth(2).setAlpha(0.9);
+
+    // 실시간 시간대 틴트 (서울 기준, 1분마다 갱신 — 스펙 §2)
+    this.tintOverlay = this.add.rectangle(0, 0, MAP_W * TILE, MAP_H * TILE, 0x000000, 0)
+      .setOrigin(0).setDepth(13);
+    this.applyTimeOfDay();
+    this.time.addEvent({ delay: 60_000, loop: true, callback: () => this.applyTimeOfDay() });
 
     // 코인 HUD + 출석 보상
     this.coinsEl = document.createElement('div');
@@ -423,6 +446,27 @@ export class StreetScene extends Phaser.Scene {
     this.shop?.setCounts(this.shopCounts);
   }
 
+  private applyTimeOfDay(): void {
+    const phase = phaseForHour(seoulHour());
+    this.tintOverlay?.setFillStyle(phase.color, phase.alpha);
+  }
+
+  private async handleBuskingComplete(): Promise<void> {
+    if (!this.sb) {
+      this.showBubble(this.player, '멋진 연주! (오프라인 — 보상은 접속 후에)');
+      return;
+    }
+    const { data } = await this.sb.rpc('earn_activity', { p_kind: 'busking' });
+    if (typeof data === 'number' && data >= 0) {
+      this.setCoins(data);
+      this.showBubble(this.player, '관객들의 박수! +30 🪙');
+    } else if (data === -3) {
+      this.showBubble(this.player, '오늘 버스킹은 여기까지! (하루 10번)');
+    } else {
+      this.showBubble(this.player, '보상 지급에 실패했어요');
+    }
+  }
+
   private async handleCafeComplete(): Promise<void> {
     if (!this.sb) {
       this.showBubble(this.player, '알바 완료! (오프라인 — 보상은 접속 후에)');
@@ -477,7 +521,7 @@ export class StreetScene extends Phaser.Scene {
     }).setOrigin(0.5);
     const bounds = t.getBounds();
     const bg = this.add.rectangle(0, 0, bounds.width + 12, bounds.height + 8, 0xf2e8dc).setOrigin(0.5);
-    const c = this.add.container(owner.x, owner.y - 32, [bg, t]).setDepth(12);
+    const c = this.add.container(owner.x, owner.y - 32, [bg, t]).setDepth(20);
     this.bubbles.push({ c, owner, until: this.time.now + 4000 });
   }
 
@@ -488,6 +532,7 @@ export class StreetScene extends Phaser.Scene {
     this.customize?.destroy();
     this.shop?.destroy();
     this.cafe?.destroy();
+    this.busking?.destroy();
     this.coinsEl?.remove();
     this.hint?.remove();
   }
