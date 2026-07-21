@@ -48,5 +48,6 @@ export const HOUSE_DOORS: Array<{ roomId: number; tx: number; ty: number }> = [
 ];
 
 export function buildCollision(): CollisionGrid {
-  return CollisionGrid.fromRects(MAP_W, MAP_H, SOLID_RECTS);
+  // 문 타일은 건물에서 뚫어 걸어 들어갈 수 있게 한다 (밟으면 입장)
+  return CollisionGrid.fromRects(MAP_W, MAP_H, SOLID_RECTS, HOUSE_DOORS);
 }

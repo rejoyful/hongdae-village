@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { TILE, ZOOM, MAP_W, MAP_H } from '../config';
 import { ZONES, SOLID_RECTS, SPAWN_TILE, HOUSE_DOORS, buildCollision } from '../world/mapData';
 import { fetchRooms, claimRoom, grantStarterOnce, type RoomInfo } from '../../db/roomsApi';
-import { tileToWorld, type CollisionGrid } from '../world/grid';
+import { tileToWorld, worldToTile, type CollisionGrid } from '../world/grid';
 import { stepPlayer, type MoveInput } from '../entities/playerMotion';
 import { RemoteTrack } from '../entities/remoteMotion';
 import { screenToTile } from '../input/pointer';
@@ -12,7 +12,12 @@ import type { NetworkAdapter, PeerState } from '../../net/NetworkAdapter';
 import { ChatInput } from '../../ui/chatInput';
 import { EmoteWheel, EMOTE_EMOJI } from '../../ui/emoteWheel';
 
-interface StreetData { peer: PeerState; adapter: NetworkAdapter | null }
+interface StreetData {
+  peer: PeerState;
+  adapter: NetworkAdapter | null;
+  /** 방에서 나올 때 등 특정 위치로 스폰 (기본: 역 광장) */
+  spawnTile?: { tx: number; ty: number };
+}
 
 interface Remote {
   rect: Phaser.GameObjects.Rectangle;
@@ -45,6 +50,8 @@ export class StreetScene extends Phaser.Scene {
   private facing: 0 | 1 | 2 | 3 = 0;
   private sb: SupabaseClient | null = null;
   private rooms: RoomInfo[] = [];
+  private spawnTile = SPAWN_TILE;
+  private entering = false;
 
   constructor() { super('street'); }
 
@@ -54,6 +61,8 @@ export class StreetScene extends Phaser.Scene {
     this.sb = (this.registry.get('sb') as SupabaseClient | undefined) ?? null;
     this.remotes = new Map();
     this.bubbles = [];
+    this.spawnTile = data.spawnTile ?? SPAWN_TILE;
+    this.entering = false;
   }
 
   create(): void {
@@ -86,7 +95,7 @@ export class StreetScene extends Phaser.Scene {
       .setStrokeStyle(2, 0xf2d8a8).setVisible(false);
 
     // 로컬 플레이어 (placeholder 사각형 — Phase 5에서 스프라이트 교체)
-    const spawn = tileToWorld(SPAWN_TILE.tx, SPAWN_TILE.ty);
+    const spawn = tileToWorld(this.spawnTile.tx, this.spawnTile.ty);
     this.player = this.add.rectangle(
       spawn.x + TILE / 2, spawn.y + TILE / 2, 16, 22, parseInt(this.peer.color, 16),
     );
@@ -138,6 +147,13 @@ export class StreetScene extends Phaser.Scene {
     this.player.setPosition(next.x, next.y);
     this.updateFacing(input);
 
+    // 문 타일을 밟으면 입장 (클릭 없이 걸어서 들어가기)
+    if (!this.entering) {
+      const tile = worldToTile(next.x, next.y);
+      const door = HOUSE_DOORS.find((d) => d.tx === tile.tx && d.ty === tile.ty);
+      if (door) void this.enterDoor(door.roomId);
+    }
+
     // 위치 브로드캐스트 (POS_HZ 스로틀)
     const now = this.time.now;
     if (this.adapter && now - this.lastSentAt >= 1000 / POS_HZ) {
@@ -164,15 +180,17 @@ export class StreetScene extends Phaser.Scene {
     });
   }
 
-  /** 문 클릭: 빈 방이면 선착순 입주(+시작 가구), 내 방이면 꾸미기, 남의 방이면 구경 */
+  /** 문 진입(밟기/클릭): 빈 방이면 선착순 입주(+시작 가구), 내 방이면 꾸미기, 남의 방이면 구경 */
   private async enterDoor(roomId: number): Promise<void> {
+    if (this.entering) return;
+    this.entering = true;
     let isOwner = false;
     if (!this.sb) {
       isOwner = true; // 오프라인: 모든 방을 주인 모드로 (로컬 전용)
     } else {
       this.rooms = await fetchRooms(this.sb);
       const room = this.rooms.find((r) => r.id === roomId);
-      if (!room) return;
+      if (!room) { this.entering = false; return; }
       if (room.ownerId === this.peer.userId) {
         isOwner = true;
       } else if (room.ownerId === null) {
@@ -181,6 +199,7 @@ export class StreetScene extends Phaser.Scene {
           await grantStarterOnce(this.sb, this.peer.userId);
           isOwner = true;
         } else {
+          this.entering = false;
           return this.enterDoor(roomId); // 레이스에서 밀림 → 최신 상태로 재시도(방문 모드)
         }
       }

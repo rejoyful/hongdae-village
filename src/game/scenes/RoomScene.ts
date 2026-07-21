@@ -7,6 +7,7 @@ import { stepPlayer, type MoveInput } from '../entities/playerMotion';
 import { canPlace, footprint, sizeOf, type Placed, type Rot } from '../entities/placement';
 import { screenToTile } from '../input/pointer';
 import { CATALOG_BY_ID } from '../../items/catalog';
+import { HOUSE_DOORS } from '../world/mapData';
 import type { NetworkAdapter, PeerState } from '../../net/NetworkAdapter';
 import { InventoryBar } from '../../ui/inventoryBar';
 import {
@@ -105,10 +106,12 @@ export class RoomScene extends Phaser.Scene {
     );
     this.player.setPosition(next.x, next.y);
 
-    // 문 타일에 서면 거리로 퇴장
+    // 문 타일에 서면 거리로 퇴장 — 들어온 집 문 앞으로 복귀
     const { tx, ty } = worldToTile(next.x, next.y);
     if (tx === ROOM_DOOR.tx && ty === ROOM_DOOR.ty) {
-      this.scene.start('street', { peer: this.peer, adapter: this.adapter });
+      const door = HOUSE_DOORS.find((d) => d.roomId === this.roomId);
+      const spawnTile = door ? { tx: door.tx, ty: door.ty + 1 } : undefined;
+      this.scene.start('street', { peer: this.peer, adapter: this.adapter, spawnTile });
     }
   }
 
