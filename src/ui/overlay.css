@@ -5,6 +5,56 @@
   background: rgba(15, 12, 10, 0.82);
   font-family: system-ui, sans-serif;
 }
+/* ── 타이틀 스크린 (게임 시작 화면) ── */
+.hv-title-screen {
+  flex-direction: column; gap: 6px;
+  background:
+    radial-gradient(ellipse at 50% 20%, rgba(232, 168, 124, 0.10), transparent 55%),
+    radial-gradient(ellipse at 50% 110%, rgba(90, 130, 90, 0.12), transparent 60%),
+    linear-gradient(#151210, #1d1712 55%, #241b13);
+}
+.hv-title-wrap { text-align: center; }
+.hv-title-logo {
+  width: min(420px, 86vw); image-rendering: pixelated;
+  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.55));
+  animation: hv-float 3.6s ease-in-out infinite;
+}
+@keyframes hv-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+.hv-tagline {
+  margin: 2px 0 14px; font-size: 12px; letter-spacing: 3px;
+  color: #d8c9a8; opacity: 0.75;
+}
+.hv-title-screen .hv-card {
+  background: linear-gradient(#3a2b20, #33251b);
+  border: 2px solid #5c4432;
+  box-shadow: 0 0 0 2px #241b13, 0 0 0 4px #5c4432, 0 14px 30px rgba(0, 0, 0, 0.5);
+  border-radius: 6px;
+}
+.hv-title-screen .hv-login-tabs button {
+  border-color: #5c4432; border-radius: 4px; color: #e8dcc4;
+}
+.hv-title-screen .hv-login-tabs button.sel { background: #4a3626; opacity: 1; }
+.hv-title-screen .hv-card input {
+  background: #241b13; border-color: #5c4432; border-radius: 4px; color: #f2e8d8;
+}
+.hv-title-screen .hv-card input:focus { border-color: #e8a84f; }
+.hv-title-screen .g-enter, .hv-title-screen .i-login {
+  background: linear-gradient(#f2d8a0, #e8a84f); color: #3a2416;
+  border-radius: 4px; box-shadow: 0 3px 0 #a06428; text-shadow: 0 1px 0 rgba(255,255,255,.35);
+}
+.hv-title-screen .g-enter:active, .hv-title-screen .i-login:active { transform: translateY(2px); box-shadow: 0 1px 0 #a06428; }
+.hv-title-screen .i-signup {
+  background: linear-gradient(#9cd8a0, #5aa668) !important; color: #1c3322 !important;
+  border-radius: 4px; box-shadow: 0 3px 0 #37663f;
+}
+.hv-title-screen .i-signup:active { transform: translateY(2px); box-shadow: 0 1px 0 #37663f !important; }
+@media (max-height: 640px) {
+  .hv-title-logo { width: min(300px, 70vw); }
+  .hv-tagline { margin-bottom: 8px; }
+}
 .hv-card {
   background: #241f1a; color: #f2e8dc;
   padding: 28px 32px; border-radius: 12px; width: 300px; text-align: center;

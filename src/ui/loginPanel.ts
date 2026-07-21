@@ -70,10 +70,13 @@ type LoginChoice = { mode: 'guest'; nickname: string } | { mode: 'id'; nickname:
 function showLoginPanel(sb: SupabaseClient): Promise<LoginChoice> {
   return new Promise((resolve) => {
     const panel = document.createElement('div');
-    panel.className = 'hv-panel';
+    panel.className = 'hv-panel hv-title-screen';
     panel.innerHTML = `
+      <div class="hv-title-wrap">
+        <img class="hv-title-logo" src="assets/ui/title.png" alt="홍대마을" />
+        <p class="hv-tagline">서울 홍대입구 · 함께 꾸미는 힐링 마을</p>
+      </div>
       <div class="hv-card">
-        <h1>홍대마을</h1>
         <div class="hv-login-tabs">
           <button data-tab="guest" class="sel">간편 입장</button>
           <button data-tab="id">아이디 로그인</button>
