@@ -1,8 +1,9 @@
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import { EV, type PosMsg, type ChatMsg, type EmoteMsg } from './protocol';
 import type { NetworkAdapter, PeerState } from './NetworkAdapter';
+import { normalizeAppearance, type Appearance } from '../game/art/appearance';
 
-interface PresenceMeta { nickname: string; color: string }
+interface PresenceMeta { nickname: string; color: string; appearance?: Appearance }
 
 /** NetworkAdapter의 Supabase Realtime 구현체 — presence(입장/퇴장) + broadcast(위치·채팅·이모트) */
 export class SupabaseAdapter implements NetworkAdapter {
@@ -13,7 +14,9 @@ export class SupabaseAdapter implements NetworkAdapter {
   private stopped = false;
 
   private joinCbs: Array<(p: PeerState) => void> = [];
+  private updateCbs: Array<(p: PeerState) => void> = [];
   private leaveCbs: Array<(id: string) => void> = [];
+  private lastMeta = new Map<string, string>(); // userId → 직전 메타 직렬화 (변경 감지)
   private posCbs: Array<(id: string, m: PosMsg, at: number) => void> = [];
   private chatCbs: Array<(id: string, m: ChatMsg) => void> = [];
   private emoteCbs: Array<(id: string, m: EmoteMsg) => void> = [];
@@ -36,6 +39,7 @@ export class SupabaseAdapter implements NetworkAdapter {
 
   clearListeners(): void {
     this.joinCbs = [];
+    this.updateCbs = [];
     this.leaveCbs = [];
     this.posCbs = [];
     this.chatCbs = [];
@@ -72,7 +76,9 @@ export class SupabaseAdapter implements NetworkAdapter {
     ch.subscribe((status) => {
       if (status === 'SUBSCRIBED') {
         this.retryMs = 1000;
-        void ch.track({ nickname: self.nickname, color: self.color } satisfies PresenceMeta);
+        void ch.track({
+          nickname: self.nickname, color: self.color, appearance: self.appearance,
+        } satisfies PresenceMeta);
       } else if (status === 'CHANNEL_ERROR' || status === 'CLOSED' || status === 'TIMED_OUT') {
         // 끊겨도 게임은 "혼자 모드"로 계속 (스펙 §7) — 지수 백오프 재구독
         this.scheduleResubscribe();
@@ -102,19 +108,44 @@ export class SupabaseAdapter implements NetworkAdapter {
     const current = new Set(Object.keys(state));
 
     for (const id of current) {
-      if (id === self.userId || this.known.has(id)) continue;
+      if (id === self.userId) continue;
       const meta = state[id]?.[0];
       if (!meta) continue;
-      this.known.add(id);
-      this.joinCbs.forEach((cb) => cb({ userId: id, nickname: meta.nickname, color: meta.color }));
+      const peer: PeerState = {
+        userId: id,
+        nickname: meta.nickname,
+        color: meta.color,
+        appearance: normalizeAppearance(meta.appearance, meta.color),
+      };
+      const serialized = JSON.stringify([meta.nickname, meta.appearance ?? meta.color]);
+      if (!this.known.has(id)) {
+        this.known.add(id);
+        this.lastMeta.set(id, serialized);
+        this.joinCbs.forEach((cb) => cb(peer));
+      } else if (this.lastMeta.get(id) !== serialized) {
+        this.lastMeta.set(id, serialized);
+        this.updateCbs.forEach((cb) => cb(peer)); // 외형·닉네임 변경
+      }
     }
     for (const id of [...this.known]) {
       if (!current.has(id)) {
         this.known.delete(id);
+        this.lastMeta.delete(id);
         this.leaveCbs.forEach((cb) => cb(id));
       }
     }
   }
+
+  async updateSelf(self: PeerState): Promise<void> {
+    this.self = self;
+    if (this.channel) {
+      await this.channel.track({
+        nickname: self.nickname, color: self.color, appearance: self.appearance,
+      } satisfies PresenceMeta);
+    }
+  }
+
+  onPeerUpdate(cb: (peer: PeerState) => void): void { this.updateCbs.push(cb); }
 
   private broadcast(event: string, payload: Record<string, unknown>): void {
     const self = this.self;

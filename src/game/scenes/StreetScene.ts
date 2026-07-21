@@ -4,6 +4,9 @@ import { TILE, ZOOM, MAP_W, MAP_H } from '../config';
 import { ZONES, SPAWN_TILE, HOUSE_DOORS, buildCollision } from '../world/mapData';
 import { buildStreetArt } from '../art/streetArt';
 import { ensureCharacter } from '../art/characterArt';
+import { DEFAULT_APPEARANCE, type Appearance } from '../art/appearance';
+import { CustomizePanel } from '../../ui/customizePanel';
+import { saveAppearance } from '../../ui/loginPanel';
 import { fetchRooms, claimRoom, grantStarterOnce, type RoomInfo } from '../../db/roomsApi';
 import { tileToWorld, worldToTile, type CollisionGrid } from '../world/grid';
 import { stepPlayer, type MoveInput } from '../entities/playerMotion';
@@ -25,16 +28,11 @@ interface Remote {
   sprite: Phaser.GameObjects.Sprite;
   label: Phaser.GameObjects.Text;
   track: RemoteTrack;
-  color: string;
+  charKey: string;
   lastF: 0 | 1 | 2 | 3;
 }
 
 interface Bubble { c: Phaser.GameObjects.Container; owner: Phaser.GameObjects.Sprite; until: number }
-
-/** 프로필 색이 손상됐어도 캐릭터는 뜨게 */
-export function safeColor(color: string): string {
-  return /^[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : 'e8c9a0';
-}
 
 const WASD = [
   Phaser.Input.Keyboard.KeyCodes.W, Phaser.Input.Keyboard.KeyCodes.A,
@@ -54,6 +52,8 @@ export class StreetScene extends Phaser.Scene {
   private bubbles: Bubble[] = [];
   private chat: ChatInput | null = null;
   private emotes: EmoteWheel | null = null;
+  private customize: CustomizePanel | null = null;
+  private charKey = '';
   private hint: HTMLDivElement | null = null;
   private lastSentAt = 0;
   private facing: 0 | 1 | 2 | 3 = 0;
@@ -65,7 +65,8 @@ export class StreetScene extends Phaser.Scene {
   constructor() { super('street'); }
 
   init(data: Partial<StreetData>): void {
-    this.peer = data.peer ?? { userId: 'offline', nickname: '게스트', color: 'e8c9a0' };
+    this.peer = data.peer
+      ?? { userId: 'offline', nickname: '게스트', color: 'e8c9a0', appearance: DEFAULT_APPEARANCE };
     this.adapter = data.adapter ?? null;
     this.sb = (this.registry.get('sb') as SupabaseClient | undefined) ?? null;
     this.remotes = new Map();
@@ -96,10 +97,10 @@ export class StreetScene extends Phaser.Scene {
     this.marker = this.add.rectangle(0, 0, TILE, TILE).setOrigin(0)
       .setStrokeStyle(2, 0xf2d8a8).setVisible(false).setDepth(4);
 
-    // 로컬 플레이어 (프로시저럴 캐릭터 스프라이트, 셔츠 = 프로필 색)
+    // 로컬 플레이어 (커스터마이징 외형)
     const spawn = tileToWorld(this.spawnTile.tx, this.spawnTile.ty);
-    const charKey = ensureCharacter(this, safeColor(this.peer.color));
-    this.player = this.add.sprite(spawn.x + TILE / 2, spawn.y + TILE / 2, charKey, 0).setDepth(10);
+    this.charKey = ensureCharacter(this, this.peer.appearance);
+    this.player = this.add.sprite(spawn.x + TILE / 2, spawn.y + TILE / 2, this.charKey, 0).setDepth(10);
     this.playerLabel = this.makeNameLabel(this.peer.nickname).setDepth(11);
 
     // 입력
@@ -150,7 +151,7 @@ export class StreetScene extends Phaser.Scene {
 
     // 걷기 애니메이션
     const moving = input.up || input.down || input.left || input.right;
-    const animKey = `char-${safeColor(this.peer.color)}-walk-${this.facing}`;
+    const animKey = `${this.charKey}-walk-${this.facing}`;
     if (moving) {
       if (this.player.anims.currentAnim?.key !== animKey || !this.player.anims.isPlaying) {
         this.player.play(animKey);
@@ -182,7 +183,7 @@ export class StreetScene extends Phaser.Scene {
         const moved = Math.abs(p.x - r.sprite.x) + Math.abs(p.y - r.sprite.y) > 0.4;
         r.sprite.setPosition(p.x, p.y);
         r.label.setPosition(p.x, p.y - 18);
-        const ak = `char-${r.color}-walk-${r.lastF}`;
+        const ak = `${r.charKey}-walk-${r.lastF}`;
         if (moved) {
           if (r.sprite.anims.currentAnim?.key !== ak || !r.sprite.anims.isPlaying) r.sprite.play(ak);
         } else if (r.sprite.anims.isPlaying) {
@@ -233,6 +234,14 @@ export class StreetScene extends Phaser.Scene {
   private wireAdapter(a: NetworkAdapter): void {
     a.clearListeners(); // 씬 재진입 시 콜백 중복 방지
     a.onPeerJoin((peer) => this.addRemote(peer));
+    a.onPeerUpdate((peer) => {
+      const r = this.remotes.get(peer.userId);
+      if (!r) return;
+      r.charKey = ensureCharacter(this, peer.appearance);
+      r.sprite.stop();
+      r.sprite.setTexture(r.charKey, r.lastF * 2);
+      r.label.setText(peer.nickname);
+    });
     a.onPeerLeave((id) => this.removeRemote(id));
     a.onPos((id, m, at) => {
       const r = this.remotes.get(id);
@@ -254,11 +263,10 @@ export class StreetScene extends Phaser.Scene {
   private addRemote(peer: PeerState): void {
     if (this.remotes.has(peer.userId)) return;
     const spawn = tileToWorld(SPAWN_TILE.tx, SPAWN_TILE.ty);
-    const color = safeColor(peer.color);
-    const key = ensureCharacter(this, color);
-    const sprite = this.add.sprite(spawn.x + TILE / 2, spawn.y + TILE / 2, key, 0).setDepth(10);
+    const charKey = ensureCharacter(this, peer.appearance);
+    const sprite = this.add.sprite(spawn.x + TILE / 2, spawn.y + TILE / 2, charKey, 0).setDepth(10);
     const label = this.makeNameLabel(peer.nickname).setDepth(11);
-    this.remotes.set(peer.userId, { sprite, label, track: new RemoteTrack(), color, lastF: 0 });
+    this.remotes.set(peer.userId, { sprite, label, track: new RemoteTrack(), charKey, lastF: 0 });
   }
 
   private removeRemote(userId: string): void {
@@ -297,14 +305,35 @@ export class StreetScene extends Phaser.Scene {
       this.adapter?.sendEmote({ k });
     });
 
+    this.customize = new CustomizePanel(this.peer.appearance, {
+      onChange: (a) => this.applyAppearance(a, false),
+      onSave: (a) => this.applyAppearance(a, true),
+      onToggle: (open) => this.setGameKeysEnabled(!open),
+    });
+
     const kb = this.input.keyboard!;
     kb.on('keydown-ENTER', () => { if (!this.chat!.isOpen) this.chat!.open(); });
     kb.on('keydown-E', () => { if (!this.chat!.isOpen) this.emotes!.toggle(); });
+    kb.on('keydown-C', () => {
+      if (!this.chat!.isOpen && !this.customize!.isOpen) this.customize!.open(this.peer.appearance);
+    });
 
     this.hint = document.createElement('div');
     this.hint.className = 'hv-hint';
-    this.hint.textContent = 'WASD 이동 · Enter 채팅 · E 이모트';
+    this.hint.textContent = 'WASD 이동 · Enter 채팅 · E 이모트 · C 꾸미기';
     document.body.appendChild(this.hint);
+  }
+
+  /** 커스터마이징 적용 — 미리보기는 로컬만, 저장 시 DB·presence 전파 */
+  private applyAppearance(a: Appearance, persist: boolean): void {
+    this.peer.appearance = a;
+    this.peer.color = a.shirt;
+    this.charKey = ensureCharacter(this, a);
+    this.player.stop();
+    this.player.setTexture(this.charKey, this.facing * 2);
+    if (!persist) return;
+    if (this.sb) void saveAppearance(this.sb, this.peer.userId, a);
+    void this.adapter?.updateSelf(this.peer);
   }
 
   /** 채팅 입력 중에는 Phaser 키보드를 끄고 WASD 캡처를 풀어 브라우저 기본 입력을 살린다 */
@@ -341,6 +370,7 @@ export class StreetScene extends Phaser.Scene {
     void this.adapter?.disconnect();
     this.chat?.destroy();
     this.emotes?.destroy();
+    this.customize?.destroy();
     this.hint?.remove();
   }
 }

@@ -38,7 +38,8 @@ async function boot(): Promise<void> {
   } catch (err) {
     // Supabase 미설정·장애 시에도 게임은 혼자 모드로 계속 (스펙 §7)
     console.warn('[홍대마을] 오프라인 모드로 시작:', err);
-    peer = { userId: 'offline', nickname: '게스트', color: 'e8c9a0' };
+    const { DEFAULT_APPEARANCE } = await import('./game/art/appearance');
+    peer = { userId: 'offline', nickname: '게스트', color: 'e8c9a0', appearance: DEFAULT_APPEARANCE };
   }
 
   game.scene.add('room', RoomScene, false);
