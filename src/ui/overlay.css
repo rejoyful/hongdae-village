@@ -303,3 +303,170 @@
 .hv-inv button.sel { border-color: #e8a87c; background: #3a2f24; }
 .hv-inv button i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
 .hv-inv button b { opacity: 0.6; font-weight: 600; }
+
+/* ── 게임형 HUD (레퍼런스 UI) ── */
+.hv-hud { position: fixed; inset: 0; pointer-events: none; z-index: 12; font-family: system-ui, sans-serif; }
+.hv-hud-hearts {
+  position: absolute; left: 14px; top: 12px; display: flex; gap: 2px;
+  font-size: 22px; filter: drop-shadow(0 2px 0 rgba(0,0,0,.35));
+}
+.hv-hud-hearts .off { opacity: .45; }
+.hv-hud-coins {
+  position: absolute; right: 14px; top: 12px; pointer-events: auto;
+  background: linear-gradient(#e7bd7f, #d9a45b); color: #4a2e14;
+  font-weight: 800; font-size: 14px; padding: 6px 14px; border-radius: 999px;
+  border: 2px solid #6e4522; box-shadow: 0 0 0 2px #f2dcae inset, 0 3px 0 #5c3a1c;
+}
+.hv-hud-bar {
+  position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%);
+  display: flex; gap: 6px; pointer-events: auto; padding: 7px 10px;
+  background: linear-gradient(#a06a3c, #8a5630); border: 3px solid #5c3a1c;
+  border-radius: 14px; box-shadow: 0 0 0 2px #c89058 inset, 0 5px 0 #4a2e14;
+  max-width: 96vw; overflow-x: auto;
+}
+.hv-hud-bar button {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  width: 52px; min-width: 52px; padding: 5px 0 3px; cursor: pointer;
+  background: linear-gradient(#e7bd7f, #d9a45b); border: 2px solid #6e4522;
+  border-radius: 10px; box-shadow: 0 3px 0 #5c3a1c;
+  user-select: none; -webkit-user-select: none; touch-action: manipulation;
+}
+.hv-hud-bar button:active { transform: translateY(2px); box-shadow: 0 1px 0 #5c3a1c; }
+.hv-hud-bar .ico { font-size: 20px; line-height: 1; }
+.hv-hud-bar .lbl { font-size: 9px; font-weight: 800; color: #4a2e14; }
+.hv-hud-settings {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(15, 12, 10, 0.55); pointer-events: auto;
+}
+.hv-hud-settings .card {
+  position: relative; width: 260px; padding: 18px 20px; border-radius: 12px;
+  background: linear-gradient(#e7bd7f, #dcae6b); border: 3px solid #6e4522;
+  box-shadow: 0 0 0 3px #f2dcae inset, 0 10px 24px rgba(0,0,0,.45); color: #4a2e14;
+}
+.hv-hud-settings h3 { margin: 0 0 8px; font-size: 16px; }
+.hv-hud-settings .who { margin: 0 0 10px; font-weight: 700; font-size: 13px; }
+.hv-hud-settings .guide { display: flex; flex-direction: column; gap: 3px; font-size: 11px;
+  background: #f2dcae; border: 2px solid #c89058; border-radius: 8px; padding: 8px 10px; }
+.hv-hud-settings .logout {
+  margin-top: 12px; width: 100%; padding: 9px; border: 2px solid #7a2e1c; border-radius: 8px;
+  background: linear-gradient(#e88a6a, #d86848); color: #fff; font-weight: 800; cursor: pointer;
+  box-shadow: 0 3px 0 #7a2e1c;
+}
+.hv-hud-settings .off { margin: 12px 0 0; font-size: 11px; opacity: .7; text-align: center; }
+.hv-hud-settings .close-x {
+  position: absolute; right: 8px; top: 8px; border: 0; background: transparent;
+  font-size: 14px; cursor: pointer; color: #4a2e14; font-weight: 800;
+}
+
+/* ── 나무 프레임 모달 공통 (소지품·가이드북·지도) ── */
+.hv-wood-modal {
+  position: fixed; inset: 0; z-index: 19;
+  display: flex; align-items: center; justify-content: center; flex-direction: column;
+  background: rgba(15, 12, 10, 0.55); font-family: system-ui, sans-serif;
+}
+.wood-frame {
+  position: relative; display: flex; flex-direction: column; gap: 8px;
+  width: min(440px, 94vw); max-height: 84vh; padding: 14px;
+  background: linear-gradient(#b07a46, #96613a); border: 3px solid #5c3a1c;
+  border-radius: 16px; box-shadow: 0 0 0 3px #c89058 inset, 0 14px 32px rgba(0,0,0,.5);
+}
+.wood-head { display: flex; align-items: center; justify-content: space-between; padding: 0 2px; }
+.wood-head h2 { margin: 0; font-size: 16px; color: #fff2d8; text-shadow: 0 2px 0 #4a2e14; }
+.wood-head .pill {
+  background: #fff2d8; color: #7a5220; font-weight: 800; font-size: 12px;
+  padding: 4px 12px; border-radius: 999px; border: 2px solid #c89058;
+}
+.wood-page {
+  background: linear-gradient(#f2dcae, #ecd09a); border: 2px solid #c89058;
+  border-radius: 10px; overflow-y: auto; flex: 1;
+}
+.wood-tabs { display: flex; gap: 5px; overflow-x: auto; padding: 2px; }
+.wood-tabs button {
+  flex: 1; min-width: 46px; padding: 7px 4px; font-size: 11px; font-weight: 800;
+  background: linear-gradient(#d9a45b, #c8904a); color: #4a2e14;
+  border: 2px solid #6e4522; border-radius: 8px; cursor: pointer; box-shadow: 0 2px 0 #5c3a1c;
+}
+.wood-tabs button.sel {
+  background: linear-gradient(#fff2d8, #f2dcae); box-shadow: 0 0 0 2px #e8a84f inset, 0 2px 0 #5c3a1c;
+}
+.wood-close {
+  align-self: center; margin-top: 2px; width: 120px; padding: 8px 0;
+  font-size: 16px; font-weight: 900; color: #7a4a14; cursor: pointer;
+  background: linear-gradient(#f2c25c, #e8a83c); border: 3px solid #8a5a1c;
+  border-radius: 12px; box-shadow: 0 4px 0 #6e4514;
+}
+.wood-close:active { transform: translateY(2px); box-shadow: 0 2px 0 #6e4514; }
+
+/* 소지품 그리드 */
+.bag-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+  gap: 8px; padding: 12px; min-height: 180px; align-content: start;
+}
+.bag-grid .slot {
+  position: relative; aspect-ratio: 1; border: 2px solid #c89058; border-radius: 10px;
+  background: #e0c088; cursor: pointer; box-shadow: inset 0 2px 4px rgba(90,58,28,.35);
+  display: flex; align-items: center; justify-content: center;
+}
+.bag-grid .slot i {
+  width: 70%; height: 70%; border-radius: 8px; display: flex;
+  align-items: center; justify-content: center; font-size: 22px; font-style: normal;
+  border: 1px solid rgba(74,46,20,.4);
+}
+.bag-grid .slot b {
+  position: absolute; right: 3px; bottom: 2px; font-size: 11px; color: #fff;
+  background: #7a5220; border-radius: 6px; padding: 0 5px; border: 1px solid #5c3a1c;
+}
+.bag-grid .empty { grid-column: 1 / -1; text-align: center; font-size: 12px; color: #8a6a3c; padding: 40px 10px; }
+.bag-name { margin: 0; text-align: center; font-size: 12px; font-weight: 800; color: #fff2d8; min-height: 15px; }
+
+/* 가이드북 (도감) */
+.dex-frame { width: min(420px, 94vw); }
+.dex-body { display: flex; gap: 8px; flex: 1; min-height: 0; }
+.dex-tabs { display: flex; flex-direction: column; gap: 5px; }
+.dex-tabs button {
+  width: 44px; height: 44px; font-size: 20px; cursor: pointer;
+  border: 2px solid #5c3a1c; border-radius: 10px; opacity: .82; box-shadow: 0 2px 0 #4a2e14;
+}
+.dex-tabs button.sel { opacity: 1; box-shadow: 0 0 0 2px #fff2d8 inset, 0 2px 0 #4a2e14; transform: translateX(3px); }
+.dex-list { padding: 8px 10px; max-height: 52vh; }
+.dex-title {
+  text-align: center; font-weight: 900; font-size: 13px; color: #7a5220;
+  background: #fff8e4; border: 2px solid #c89058; border-radius: 999px;
+  padding: 4px 0; margin: 2px 0 8px;
+}
+.dex-list .row {
+  display: flex; align-items: center; gap: 10px; padding: 7px 8px; margin-bottom: 6px;
+  background: #e0c088; border: 1px solid #c89058; border-radius: 8px; font-size: 13px;
+}
+.dex-list .row i {
+  width: 30px; height: 30px; border-radius: 7px; display: flex; flex: none;
+  align-items: center; justify-content: center; font-size: 17px; font-style: normal;
+  border: 1px solid rgba(74,46,20,.4);
+}
+.dex-list .row .nm { flex: 1; font-weight: 700; color: #4a2e14; }
+.dex-list .row .own { font-size: 11px; font-weight: 800; color: #7a5220; }
+.dex-list .row.unknown { opacity: .55; }
+.dex-list .row.unknown i { background: #b09468; color: #6e5230; font-weight: 900; }
+
+/* 지도 */
+.map-frame { width: min(680px, 96vw); }
+.map-page { padding: 8px; display: flex; }
+.map-page canvas {
+  width: 100%; height: auto; image-rendering: pixelated;
+  border: 2px solid #c89058; border-radius: 6px;
+}
+
+/* HUD 등장 후 기존 요소 위치 보정 */
+.hv-chat { bottom: 96px; }
+.hv-hint { bottom: 96px; }
+@media (max-width: 700px) {
+  .hv-hud-bar { bottom: 6px; gap: 4px; padding: 5px 6px; }
+  .hv-hud-bar button { width: 44px; min-width: 44px; }
+  .hv-hud-bar .ico { font-size: 17px; }
+  .hv-hud-hearts { font-size: 18px; }
+  .hv-dpad { bottom: 110px; }
+  .hv-chat { bottom: 88px; }
+  .hv-emotes { bottom: 240px; }
+  .map-frame, .wood-frame { max-height: 88vh; }
+  .dex-list { max-height: 46vh; }
+}
