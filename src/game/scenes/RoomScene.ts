@@ -76,7 +76,7 @@ export class RoomScene extends Phaser.Scene {
 
     const cam = this.cameras.main;
     cam.setZoom(ZOOM);
-    cam.setBounds(0, 0, ROOM_W * TILE, ROOM_H * TILE);
+    // bounds를 걸면 방(뷰포트보다 작음)이 좌상단에 고정되므로 중앙 정렬만 사용
     cam.centerOn((ROOM_W * TILE) / 2, (ROOM_H * TILE) / 2);
 
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.onPointerMove(p));
