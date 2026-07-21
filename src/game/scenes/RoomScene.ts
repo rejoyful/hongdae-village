@@ -11,7 +11,6 @@ import { CATALOG_BY_ID } from '../../items/catalog';
 import { HOUSE_DOORS } from '../world/mapData';
 import { makeRoomBackground, ensureFurniture } from '../art/roomArt';
 import { ensureCharacter } from '../art/characterArt';
-import { safeColor } from './StreetScene';
 import type { NetworkAdapter, PeerState } from '../../net/NetworkAdapter';
 import { InventoryBar } from '../../ui/inventoryBar';
 import {
@@ -31,6 +30,7 @@ export class RoomScene extends Phaser.Scene {
   private player!: Phaser.GameObjects.Sprite;
   private keys!: Record<'W' | 'A' | 'S' | 'D', Phaser.Input.Keyboard.Key>;
   private facing: 0 | 1 | 2 | 3 = 3;
+  private charKey = '';
 
   private roomId = 1;
   private isOwner = false;
@@ -68,8 +68,8 @@ export class RoomScene extends Phaser.Scene {
     this.add.image(0, 0, makeRoomBackground(this)).setOrigin(0).setDepth(0);
 
     const spawn = tileToWorld(ROOM_SPAWN.tx, ROOM_SPAWN.ty);
-    const charKey = ensureCharacter(this, safeColor(this.peer.color));
-    this.player = this.add.sprite(spawn.x + TILE / 2, spawn.y + TILE / 2, charKey, 6).setDepth(10);
+    this.charKey = ensureCharacter(this, this.peer.appearance);
+    this.player = this.add.sprite(spawn.x + TILE / 2, spawn.y + TILE / 2, this.charKey, 6).setDepth(10);
     this.facing = 3; // 문으로 들어와 위를 보는 상태
 
     const kb = this.input.keyboard!;
@@ -117,7 +117,7 @@ export class RoomScene extends Phaser.Scene {
     else if (input.left) this.facing = 2;
     else if (input.up) this.facing = 3;
     const moving = input.up || input.down || input.left || input.right;
-    const animKey = `char-${safeColor(this.peer.color)}-walk-${this.facing}`;
+    const animKey = `${this.charKey}-walk-${this.facing}`;
     if (moving) {
       if (this.player.anims.currentAnim?.key !== animKey || !this.player.anims.isPlaying) {
         this.player.play(animKey);

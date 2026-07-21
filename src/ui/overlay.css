@@ -38,6 +38,29 @@
   width: 44px; height: 44px; border-radius: 10px; border: 1px solid #4a3f35;
   background: rgba(26, 23, 19, 0.92); font-size: 20px; cursor: pointer;
 }
+.hv-custom {
+  position: fixed; right: 24px; top: 50%; transform: translateY(-50%);
+  display: flex; z-index: 15; font-family: system-ui, sans-serif;
+}
+.hv-custom-card {
+  background: rgba(26, 23, 19, 0.94); border: 1px solid #4a3f35;
+  border-radius: 12px; padding: 18px 20px; width: 240px; color: #f2e8dc;
+}
+.hv-custom-card h2 { font-size: 15px; margin: 0 0 12px; }
+.hv-custom-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 13px; }
+.hv-custom-row .lbl { width: 44px; opacity: 0.7; }
+.hv-custom-row .val { flex: 1; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.hv-custom-row .val i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; border: 1px solid #4a3f35; }
+.hv-custom-row button {
+  width: 26px; height: 26px; border-radius: 6px; border: 1px solid #4a3f35;
+  background: #241f1a; color: #f2e8dc; cursor: pointer;
+}
+.hv-custom-actions { display: flex; gap: 8px; margin-top: 14px; }
+.hv-custom-actions button {
+  flex: 1; padding: 8px; border: 0; border-radius: 8px; cursor: pointer; font-weight: 700;
+}
+.hv-custom-actions .save { background: #e8a87c; color: #241f1a; }
+.hv-custom-actions .cancel { background: #3a3128; color: #f2e8dc; }
 .hv-hint {
   position: fixed; left: 24px; bottom: 24px; z-index: 5;
   color: #f2e8dc; opacity: 0.55; font: 12px system-ui, sans-serif;
