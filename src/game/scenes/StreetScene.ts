@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { TILE, ZOOM, MAP_W, MAP_H } from '../config';
 import { ZONES, SPAWN_TILE, HOUSE_DOORS, buildCollision } from '../world/mapData';
 import { buildStreetArt } from '../art/streetArt';
-import { ensureCharacter } from '../art/characterArt';
+import { ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
 import { DEFAULT_APPEARANCE, type Appearance } from '../art/appearance';
 import { CustomizePanel } from '../../ui/customizePanel';
 import { saveAppearance } from '../../ui/loginPanel';
@@ -100,7 +100,8 @@ export class StreetScene extends Phaser.Scene {
     // 로컬 플레이어 (커스터마이징 외형)
     const spawn = tileToWorld(this.spawnTile.tx, this.spawnTile.ty);
     this.charKey = ensureCharacter(this, this.peer.appearance);
-    this.player = this.add.sprite(spawn.x + TILE / 2, spawn.y + TILE / 2, this.charKey, 0).setDepth(10);
+    this.player = this.add.sprite(spawn.x + TILE / 2, spawn.y + TILE / 2, this.charKey, 0)
+      .setOrigin(0.5, 0.66).setDepth(10); // 발이 충돌 박스 바닥에 오게
     this.playerLabel = this.makeNameLabel(this.peer.nickname).setDepth(11);
 
     // 입력
@@ -158,7 +159,7 @@ export class StreetScene extends Phaser.Scene {
       }
     } else if (this.player.anims.isPlaying) {
       this.player.stop();
-      this.player.setFrame(this.facing * 2);
+      this.player.setFrame(this.facing * FRAMES_PER_DIR);
     }
 
     // 문 타일을 밟으면 입장 (클릭 없이 걸어서 들어가기)
@@ -182,22 +183,22 @@ export class StreetScene extends Phaser.Scene {
       if (p) {
         const moved = Math.abs(p.x - r.sprite.x) + Math.abs(p.y - r.sprite.y) > 0.4;
         r.sprite.setPosition(p.x, p.y);
-        r.label.setPosition(p.x, p.y - 18);
+        r.label.setPosition(p.x, p.y - 26);
         const ak = `${r.charKey}-walk-${r.lastF}`;
         if (moved) {
           if (r.sprite.anims.currentAnim?.key !== ak || !r.sprite.anims.isPlaying) r.sprite.play(ak);
         } else if (r.sprite.anims.isPlaying) {
           r.sprite.stop();
-          r.sprite.setFrame(r.lastF * 2);
+          r.sprite.setFrame(r.lastF * FRAMES_PER_DIR);
         }
       }
     }
 
     // 라벨·말풍선 위치 추종 및 만료 처리
-    this.playerLabel.setPosition(this.player.x, this.player.y - 18);
+    this.playerLabel.setPosition(this.player.x, this.player.y - 26);
     this.bubbles = this.bubbles.filter((b) => {
       if (now >= b.until || !b.owner.active) { b.c.destroy(); return false; }
-      b.c.setPosition(b.owner.x, b.owner.y - 32);
+      b.c.setPosition(b.owner.x, b.owner.y - 38);
       return true;
     });
   }
@@ -239,7 +240,7 @@ export class StreetScene extends Phaser.Scene {
       if (!r) return;
       r.charKey = ensureCharacter(this, peer.appearance);
       r.sprite.stop();
-      r.sprite.setTexture(r.charKey, r.lastF * 2);
+      r.sprite.setTexture(r.charKey, r.lastF * FRAMES_PER_DIR);
       r.label.setText(peer.nickname);
     });
     a.onPeerLeave((id) => this.removeRemote(id));
@@ -264,7 +265,8 @@ export class StreetScene extends Phaser.Scene {
     if (this.remotes.has(peer.userId)) return;
     const spawn = tileToWorld(SPAWN_TILE.tx, SPAWN_TILE.ty);
     const charKey = ensureCharacter(this, peer.appearance);
-    const sprite = this.add.sprite(spawn.x + TILE / 2, spawn.y + TILE / 2, charKey, 0).setDepth(10);
+    const sprite = this.add.sprite(spawn.x + TILE / 2, spawn.y + TILE / 2, charKey, 0)
+      .setOrigin(0.5, 0.66).setDepth(10);
     const label = this.makeNameLabel(peer.nickname).setDepth(11);
     this.remotes.set(peer.userId, { sprite, label, track: new RemoteTrack(), charKey, lastF: 0 });
   }
@@ -330,7 +332,7 @@ export class StreetScene extends Phaser.Scene {
     this.peer.color = a.shirt;
     this.charKey = ensureCharacter(this, a);
     this.player.stop();
-    this.player.setTexture(this.charKey, this.facing * 2);
+    this.player.setTexture(this.charKey, this.facing * FRAMES_PER_DIR);
     if (!persist) return;
     if (this.sb) void saveAppearance(this.sb, this.peer.userId, a);
     void this.adapter?.updateSelf(this.peer);

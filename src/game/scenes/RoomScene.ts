@@ -10,7 +10,7 @@ import { screenToTile } from '../input/pointer';
 import { CATALOG_BY_ID } from '../../items/catalog';
 import { HOUSE_DOORS } from '../world/mapData';
 import { makeRoomBackground, ensureFurniture } from '../art/roomArt';
-import { ensureCharacter } from '../art/characterArt';
+import { ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
 import type { NetworkAdapter, PeerState } from '../../net/NetworkAdapter';
 import { InventoryBar } from '../../ui/inventoryBar';
 import {
@@ -69,7 +69,9 @@ export class RoomScene extends Phaser.Scene {
 
     const spawn = tileToWorld(ROOM_SPAWN.tx, ROOM_SPAWN.ty);
     this.charKey = ensureCharacter(this, this.peer.appearance);
-    this.player = this.add.sprite(spawn.x + TILE / 2, spawn.y + TILE / 2, this.charKey, 6).setDepth(10);
+    this.player = this.add.sprite(
+      spawn.x + TILE / 2, spawn.y + TILE / 2, this.charKey, 3 * FRAMES_PER_DIR,
+    ).setOrigin(0.5, 0.66).setDepth(10);
     this.facing = 3; // 문으로 들어와 위를 보는 상태
 
     const kb = this.input.keyboard!;
@@ -124,7 +126,7 @@ export class RoomScene extends Phaser.Scene {
       }
     } else if (this.player.anims.isPlaying) {
       this.player.stop();
-      this.player.setFrame(this.facing * 2);
+      this.player.setFrame(this.facing * FRAMES_PER_DIR);
     }
 
     // 문 타일에 서면 거리로 퇴장 — 들어온 집 문 앞으로 복귀
