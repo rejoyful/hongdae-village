@@ -31,6 +31,10 @@ import { POS_HZ, INTERP_DELAY_MS, sanitizeChat, type EmoteKind } from '../../net
 import type { NetworkAdapter, PeerState } from '../../net/NetworkAdapter';
 import { ChatInput } from '../../ui/chatInput';
 import { EmoteWheel, EMOTE_EMOJI } from '../../ui/emoteWheel';
+import { GameHud } from '../../ui/gameHud';
+import { BagPanel } from '../../ui/bagPanel';
+import { CollectionPanel } from '../../ui/collectionPanel';
+import { MapPanel } from '../../ui/mapPanel';
 
 interface StreetData {
   peer: PeerState;
@@ -80,7 +84,10 @@ export class StreetScene extends Phaser.Scene {
   private onOmokTile = false;
   private onBoardTile = false;
   private forestMs = 0;
-  private coinsEl: HTMLDivElement | null = null;
+  private hud: GameHud | null = null;
+  private bag: BagPanel | null = null;
+  private dex: CollectionPanel | null = null;
+  private mapPanel: MapPanel | null = null;
   private coins = 0;
   private charKey = '';
   private hint: HTMLDivElement | null = null;
@@ -407,6 +414,10 @@ export class StreetScene extends Phaser.Scene {
     kb.on('keydown-C', () => {
       if (!this.chat!.isOpen && !this.customize!.isOpen) this.customize!.open(this.peer.appearance);
     });
+    kb.on('keydown-B', () => void this.openBag());
+    kb.on('keydown-G', () => void this.openDex());
+    kb.on('keydown-M', () => this.openMap());
+    kb.on('keydown-Q', () => this.openQuests());
 
     this.shop = new ShopPanel({
       buyEnabled: !!this.sb,
@@ -452,33 +463,79 @@ export class StreetScene extends Phaser.Scene {
     this.applyTimeOfDay();
     this.time.addEvent({ delay: 60_000, loop: true, callback: () => this.applyTimeOfDay() });
 
-    // 코인 HUD + 출석 보상
-    this.coinsEl = document.createElement('div');
-    this.coinsEl.className = 'hv-coins';
-    this.coinsEl.textContent = '🪙 …';
-    document.body.appendChild(this.coinsEl);
+    // 게임형 HUD (하트·코인·하단 아이콘 바) + 소지품·가이드북·지도 패널
+    this.bag = new BagPanel({ online: !!this.sb, onToggle: (o) => this.setGameKeysEnabled(!o) });
+    this.dex = new CollectionPanel(this.peer.userId, { onToggle: (o) => this.setGameKeysEnabled(!o) });
+    this.mapPanel = new MapPanel({
+      onToggle: (o) => this.setGameKeysEnabled(!o),
+      getPlayerTile: () => worldToTile(this.player.x, this.player.y),
+    });
+    this.hud = new GameHud({
+      nickname: this.peer.nickname,
+      onBag: () => void this.openBag(),
+      onDex: () => void this.openDex(),
+      onMap: () => this.openMap(),
+      onQuest: () => this.openQuests(),
+      onCustomize: () => { if (!this.chat!.isOpen && !this.customize!.isOpen) this.customize!.open(this.peer.appearance); },
+      onChat: () => { if (!this.chat!.isOpen) this.chat!.open(); },
+      onEmote: () => { if (!this.chat!.isOpen) this.emotes!.toggle(); },
+      onLogout: this.sb ? () => { void this.sb!.auth.signOut().then(() => location.reload()); } : undefined,
+    });
+    this.refreshHearts();
     void this.initCoins();
 
-    // 모바일 터치 컨트롤
-    if (isTouchDevice()) {
-      this.touch = new TouchControls([
-        { emoji: '💬', label: '채팅', onTap: () => { if (!this.chat!.isOpen) this.chat!.open(); } },
-        { emoji: '😊', label: '이모트', onTap: () => { if (!this.chat!.isOpen) this.emotes!.toggle(); } },
-        { emoji: '👕', label: '꾸미기', onTap: () => { if (!this.customize!.isOpen) this.customize!.open(this.peer.appearance); } },
-      ]);
-    }
+    // 모바일 터치 컨트롤 — D-패드만 (액션은 HUD 바로 통합)
+    if (isTouchDevice()) this.touch = new TouchControls([]);
 
     this.hint = document.createElement('div');
     this.hint.className = 'hv-hint';
     this.hint.textContent = isTouchDevice()
       ? '패드로 이동 · 문을 밟으면 입장'
-      : 'WASD 이동 · Enter 채팅 · E 이모트 · C 꾸미기 · 가구점=상점 · 카페=알바';
+      : 'WASD 이동 · Enter 채팅 · 문을 밟으면 입장';
     document.body.appendChild(this.hint);
+  }
+
+  // --- HUD 패널 열기 (동시에 하나만) ---
+
+  private anyPanelOpen(): boolean {
+    return (this.chat?.isOpen ?? false) || (this.customize?.isOpen ?? false)
+      || (this.bag?.isOpen ?? false) || (this.dex?.isOpen ?? false)
+      || (this.mapPanel?.isOpen ?? false) || (this.quests?.isOpen ?? false)
+      || (this.shop?.isOpen ?? false);
+  }
+
+  private async openBag(): Promise<void> {
+    if (this.anyPanelOpen()) return;
+    if (this.sb) this.shopCounts = await fetchInventory(this.sb, this.peer.userId);
+    this.bag!.open(this.shopCounts);
+  }
+
+  private async openDex(): Promise<void> {
+    if (this.anyPanelOpen()) return;
+    if (this.sb) this.shopCounts = await fetchInventory(this.sb, this.peer.userId);
+    this.dex!.open(this.shopCounts);
+  }
+
+  private openMap(): void {
+    if (this.anyPanelOpen()) return;
+    this.mapPanel!.open();
+  }
+
+  private openQuests(): void {
+    if (this.anyPanelOpen()) return;
+    this.quests!.open(this.questProgress());
+  }
+
+  /** 하트 = 오늘의 퀘스트 달성 수 */
+  private refreshHearts(): void {
+    const prog = this.questProgress();
+    const done = DAILY_QUESTS.filter((q) => (prog.get(q.registryKey) ?? 0) >= q.goal).length;
+    this.hud?.setHearts(done, DAILY_QUESTS.length);
   }
 
   private setCoins(v: number): void {
     this.coins = v;
-    if (this.coinsEl) this.coinsEl.textContent = `🪙 ${v.toLocaleString()}`;
+    this.hud?.setCoins(v);
     this.shop?.setCoins(v);
   }
 
@@ -535,6 +592,7 @@ export class StreetScene extends Phaser.Scene {
   private incQuest(key: string, by = 1): void {
     this.registry.set(key, ((this.registry.get(key) as number | undefined) ?? 0) + by);
     this.quests?.refresh(this.questProgress());
+    this.refreshHearts();
   }
 
   private questProgress(): Map<string, number> {
@@ -661,7 +719,10 @@ export class StreetScene extends Phaser.Scene {
     this.quests?.destroy();
     this.npcs?.destroy();
     this.touch?.destroy();
-    this.coinsEl?.remove();
+    this.hud?.destroy();
+    this.bag?.destroy();
+    this.dex?.destroy();
+    this.mapPanel?.destroy();
     this.hint?.remove();
   }
 }
