@@ -16,6 +16,8 @@ export class CustomizePanel {
       onChange: (a: Appearance) => void;
       onSave: (a: Appearance) => void;
       onToggle: (open: boolean) => void;
+      /** 계정 지키기 — 이메일 연결. 에러 메시지 또는 null(성공) 반환 */
+      onLinkEmail?: (email: string) => Promise<string | null>;
     },
   ) {
     this.a = { ...initial };
@@ -81,6 +83,15 @@ export class CustomizePanel {
           <button class="save">저장</button>
           <button class="cancel">닫기</button>
         </div>
+        ${this.opts.onLinkEmail ? `
+        <div class="hv-custom-account">
+          <p>💾 계정 지키기 — 이메일을 연결하면 다른 기기·브라우저에서도 이어집니다</p>
+          <div class="row">
+            <input type="email" placeholder="이메일 주소" />
+            <button class="link">연결</button>
+          </div>
+          <p class="acc-note"></p>
+        </div>` : ''}
       </div>`;
     this.root.querySelectorAll<HTMLButtonElement>('button[data-f]').forEach((b) => {
       b.addEventListener('click', () => this.cycle(b.dataset.f as keyof Appearance, Number(b.dataset.d) as 1 | -1));
@@ -90,6 +101,24 @@ export class CustomizePanel {
       this.close();
     });
     this.root.querySelector('.cancel')!.addEventListener('click', () => this.close());
+
+    const linkBtn = this.root.querySelector<HTMLButtonElement>('.hv-custom-account .link');
+    if (linkBtn && this.opts.onLinkEmail) {
+      linkBtn.addEventListener('click', () => {
+        const emailInput = this.root.querySelector<HTMLInputElement>('.hv-custom-account input')!;
+        const noteEl = this.root.querySelector<HTMLParagraphElement>('.acc-note')!;
+        const email = emailInput.value.trim();
+        if (!email.includes('@')) { noteEl.textContent = '이메일 주소를 확인해주세요'; return; }
+        noteEl.textContent = '확인 메일 보내는 중…';
+        void this.opts.onLinkEmail!(email).then((err) => {
+          noteEl.textContent = err
+            ? `연결 실패: ${err}`
+            : '확인 메일을 보냈어요! 메일 속 링크를 누르면 연결 완료 ✉️';
+        });
+      });
+      this.root.querySelector<HTMLInputElement>('.hv-custom-account input')!
+        .addEventListener('keydown', (e) => e.stopPropagation());
+    }
   }
 
   destroy(): void { this.root.remove(); }

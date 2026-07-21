@@ -20,7 +20,7 @@ import { BUILDING_TEXTURES } from '../art/assetManifest';
 import { ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
 import { DEFAULT_APPEARANCE, type Appearance } from '../art/appearance';
 import { CustomizePanel } from '../../ui/customizePanel';
-import { saveAppearance } from '../../ui/loginPanel';
+import { saveAppearance, linkEmail } from '../../ui/loginPanel';
 import { fetchRooms, claimRoom, grantStarterOnce, type RoomInfo } from '../../db/roomsApi';
 import { tileToWorld, worldToTile, type CollisionGrid } from '../world/grid';
 import { stepPlayer, type MoveInput } from '../entities/playerMotion';
@@ -387,6 +387,7 @@ export class StreetScene extends Phaser.Scene {
       onChange: (a) => this.applyAppearance(a, false),
       onSave: (a) => this.applyAppearance(a, true),
       onToggle: (open) => this.setGameKeysEnabled(!open),
+      onLinkEmail: this.sb ? (email) => linkEmail(this.sb!, email) : undefined,
     });
 
     const kb = this.input.keyboard!;
