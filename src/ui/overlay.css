@@ -61,6 +61,45 @@
 }
 .hv-custom-actions .save { background: #e8a87c; color: #241f1a; }
 .hv-custom-actions .cancel { background: #3a3128; color: #f2e8dc; }
+.hv-shop {
+  position: fixed; inset: 0; z-index: 18;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(15, 12, 10, 0.6); font-family: system-ui, sans-serif;
+}
+.hv-shop-card {
+  background: #241f1a; color: #f2e8dc; border: 1px solid #4a3f35;
+  border-radius: 14px; width: 420px; max-height: 78vh; display: flex; flex-direction: column;
+}
+.hv-shop-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px 8px; }
+.hv-shop-head h2 { font-size: 16px; margin: 0; flex: 1; }
+.hv-shop-head .coins { font-size: 14px; font-weight: 700; color: #f2d8a8; }
+.hv-shop-head .close { border: 0; background: transparent; color: #f2e8dc; font-size: 14px; cursor: pointer; opacity: .7; }
+.hv-shop-tabs { display: flex; gap: 4px; padding: 0 12px 8px; }
+.hv-shop-tabs button {
+  padding: 5px 10px; border-radius: 6px; border: 1px solid transparent;
+  background: transparent; color: #f2e8dc; opacity: .6; font-size: 12px; cursor: pointer;
+}
+.hv-shop-tabs button.sel { opacity: 1; background: #3a2f24; border-color: #4a3f35; }
+.hv-shop-items { overflow-y: auto; padding: 4px 12px 12px; }
+.hv-shop-items .row {
+  display: flex; align-items: center; gap: 8px; padding: 7px 6px;
+  border-bottom: 1px solid #322b24; font-size: 13px;
+}
+.hv-shop-items i { width: 14px; height: 14px; border-radius: 4px; }
+.hv-shop-items .nm { flex: 1; }
+.hv-shop-items .sz { opacity: .5; font-size: 11px; }
+.hv-shop-items .pr { color: #f2d8a8; min-width: 64px; text-align: right; }
+.hv-shop-items button {
+  padding: 5px 12px; border: 0; border-radius: 6px; background: #e8a87c;
+  color: #241f1a; font-weight: 700; font-size: 12px; cursor: pointer;
+}
+.hv-shop-items button:disabled { opacity: .35; cursor: default; }
+.hv-shop-card .off { text-align: center; font-size: 12px; opacity: .6; padding: 0 0 12px; margin: 0; }
+.hv-coins {
+  position: fixed; right: 24px; top: 20px; z-index: 8;
+  background: rgba(26, 23, 19, 0.85); color: #f2d8a8; font: 700 14px system-ui, sans-serif;
+  padding: 8px 14px; border-radius: 999px; border: 1px solid #4a3f35;
+}
 .hv-hint {
   position: fixed; left: 24px; bottom: 24px; z-index: 5;
   color: #f2e8dc; opacity: 0.55; font: 12px system-ui, sans-serif;

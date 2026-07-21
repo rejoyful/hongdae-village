@@ -47,7 +47,12 @@ export const HOUSE_DOORS: Array<{ roomId: number; tx: number; ty: number }> = [
   { roomId: 10, tx: 76, ty: 21 },
 ];
 
+/** 상점 문 — 밟으면 상점 패널이 열린다 (가구점 「살림」, 스펙 §3 구매) */
+export const SHOP_DOORS: Array<{ shop: 'furniture'; tx: number; ty: number }> = [
+  { shop: 'furniture', tx: 12, ty: 35 },
+];
+
 export function buildCollision(): CollisionGrid {
   // 문 타일은 건물에서 뚫어 걸어 들어갈 수 있게 한다 (밟으면 입장)
-  return CollisionGrid.fromRects(MAP_W, MAP_H, SOLID_RECTS, HOUSE_DOORS);
+  return CollisionGrid.fromRects(MAP_W, MAP_H, SOLID_RECTS, [...HOUSE_DOORS, ...SHOP_DOORS]);
 }

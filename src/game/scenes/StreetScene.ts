@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { TILE, ZOOM, MAP_W, MAP_H } from '../config';
-import { ZONES, SPAWN_TILE, HOUSE_DOORS, buildCollision } from '../world/mapData';
+import { ZONES, SPAWN_TILE, HOUSE_DOORS, SHOP_DOORS, buildCollision } from '../world/mapData';
+import { ShopPanel } from '../../ui/shopPanel';
+import { fetchCoins, claimDaily, buyItem } from '../../db/economyApi';
 import { buildStreetArt } from '../art/streetArt';
 import { BUILDING_TEXTURES } from '../art/assetManifest';
 import { ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
@@ -54,6 +56,9 @@ export class StreetScene extends Phaser.Scene {
   private chat: ChatInput | null = null;
   private emotes: EmoteWheel | null = null;
   private customize: CustomizePanel | null = null;
+  private shop: ShopPanel | null = null;
+  private coinsEl: HTMLDivElement | null = null;
+  private coins = 0;
   private charKey = '';
   private hint: HTMLDivElement | null = null;
   private lastSentAt = 0;
@@ -62,6 +67,7 @@ export class StreetScene extends Phaser.Scene {
   private rooms: RoomInfo[] = [];
   private spawnTile = SPAWN_TILE;
   private entering = false;
+  private onShopTile = false;
 
   constructor() { super('street'); }
 
@@ -178,6 +184,12 @@ export class StreetScene extends Phaser.Scene {
       const tile = worldToTile(next.x, next.y);
       const door = HOUSE_DOORS.find((d) => d.tx === tile.tx && d.ty === tile.ty);
       if (door) void this.enterDoor(door.roomId);
+      else {
+        // 상점 문은 "밟는 순간" 1회만 열림 (서 있는 동안 재오픈 방지)
+        const onShop = SHOP_DOORS.some((d) => d.tx === tile.tx && d.ty === tile.ty);
+        if (onShop && !this.onShopTile && this.shop && !this.shop.isOpen) this.shop.open(this.coins);
+        this.onShopTile = onShop;
+      }
     }
 
     // 위치 브로드캐스트 (POS_HZ 스로틀)
@@ -331,10 +343,51 @@ export class StreetScene extends Phaser.Scene {
       if (!this.chat!.isOpen && !this.customize!.isOpen) this.customize!.open(this.peer.appearance);
     });
 
+    this.shop = new ShopPanel({
+      buyEnabled: !!this.sb,
+      onToggle: (open) => this.setGameKeysEnabled(!open),
+      onBuy: (itemId) => void this.handleBuy(itemId),
+    });
+
+    // 코인 HUD + 출석 보상
+    this.coinsEl = document.createElement('div');
+    this.coinsEl.className = 'hv-coins';
+    this.coinsEl.textContent = '🪙 …';
+    document.body.appendChild(this.coinsEl);
+    void this.initCoins();
+
     this.hint = document.createElement('div');
     this.hint.className = 'hv-hint';
-    this.hint.textContent = 'WASD 이동 · Enter 채팅 · E 이모트 · C 꾸미기';
+    this.hint.textContent = 'WASD 이동 · Enter 채팅 · E 이모트 · C 꾸미기 · 가구점 문=상점';
     document.body.appendChild(this.hint);
+  }
+
+  private setCoins(v: number): void {
+    this.coins = v;
+    if (this.coinsEl) this.coinsEl.textContent = `🪙 ${v.toLocaleString()}`;
+    this.shop?.setCoins(v);
+  }
+
+  private async initCoins(): Promise<void> {
+    if (!this.sb) { this.setCoins(0); return; }
+    this.setCoins(await fetchCoins(this.sb, this.peer.userId));
+    const claimed = await claimDaily(this.sb);
+    if (claimed !== null) {
+      this.setCoins(claimed);
+      this.showBubble(this.player, '출석 보상 +100 🪙');
+    }
+  }
+
+  private async handleBuy(itemId: string): Promise<void> {
+    if (!this.sb) return;
+    const res = await buyItem(this.sb, itemId);
+    if (res.ok) {
+      this.setCoins(res.balance);
+    } else if (res.reason === 'no-coins') {
+      this.showBubble(this.player, '코인이 부족해요 😢');
+    } else {
+      this.showBubble(this.player, '구매에 실패했어요');
+    }
   }
 
   /** 커스터마이징 적용 — 미리보기는 로컬만, 저장 시 DB·presence 전파 */
@@ -384,6 +437,8 @@ export class StreetScene extends Phaser.Scene {
     this.chat?.destroy();
     this.emotes?.destroy();
     this.customize?.destroy();
+    this.shop?.destroy();
+    this.coinsEl?.remove();
     this.hint?.remove();
   }
 }
