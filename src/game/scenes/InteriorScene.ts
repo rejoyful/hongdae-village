@@ -91,7 +91,7 @@ export class InteriorScene extends Phaser.Scene {
     cam.setZoom(window.innerWidth < 700 ? 1.4 : ZOOM);
     cam.centerOn((w * TILE) / 2, (h * TILE) / 2);
 
-    if (isTouchDevice()) this.touch = new TouchControls([]);
+    if (isTouchDevice()) this.touch = new TouchControls();
 
     this.hint = document.createElement('div');
     this.hint.className = 'hv-hint';

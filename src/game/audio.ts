@@ -1,6 +1,8 @@
+import { buildScore, LOOP_LEN, type ScoreNote } from './music';
+
 /**
  * 오디오 엔진 (스펙 §2 "차분한 힐링 음악") — 외부 파일 없이 WebAudio로
- * 잔잔한 제너러티브 BGM(펜타토닉 플럭 + 패드)과 효과음을 합성한다.
+ * 작곡된 로파이 루프(music.ts 스코어)와 효과음을 합성한다.
  * 볼륨은 설정 패널 슬라이더와 연동, localStorage에 지속.
  */
 export type SeKind = 'click' | 'coin' | 'success' | 'note' | 'door' | 'pop';
@@ -32,9 +34,9 @@ class AudioEngine {
   private bgmGain: GainNode | null = null;
   private seGain: GainNode | null = null;
   private timer: number | null = null;
-  private nextNoteAt = 0;
-  private nextPadAt = 0;
-  private melodyIdx = 2;
+  private score: ScoreNote[] = [];
+  private loopStart = 0;
+  private scheduledUntil = 0;
   prefs: AudioPrefs = loadPrefs();
 
   /** 첫 사용자 제스처에서 호출 — 오토플레이 정책 준수 */
@@ -77,62 +79,81 @@ class AudioEngine {
     try { localStorage.setItem(PREF_KEY, JSON.stringify(this.prefs)); } catch { /* ignore */ }
   }
 
-  // ── BGM: 2박마다 펜타토닉 랜덤워크 플럭, 8초마다 부드러운 패드 코드 ──
+  // ── BGM: music.ts의 작곡된 8마디 루프를 룩어헤드 스케줄러로 재생 ──
 
   private startBgm(): void {
     if (!this.ctx || this.timer !== null) return;
-    this.nextNoteAt = this.ctx.currentTime + 0.3;
-    this.nextPadAt = this.ctx.currentTime + 0.3;
-    this.timer = window.setInterval(() => this.schedule(), 250);
+    this.score = buildScore();
+    this.loopStart = this.ctx.currentTime + 0.25;
+    this.scheduledUntil = this.loopStart;
+    this.timer = window.setInterval(() => this.schedule(), 300);
+    this.schedule();
   }
 
   private schedule(): void {
     const ctx = this.ctx!;
-    const ahead = ctx.currentTime + 0.6;
-    while (this.nextNoteAt < ahead) {
-      // 30% 쉼표로 여백을 준다
-      if (Math.random() > 0.3) this.pluck(this.nextNoteAt);
-      this.nextNoteAt += 0.9 + Math.random() * 0.6;
-    }
-    while (this.nextPadAt < ahead) {
-      this.pad(this.nextPadAt);
-      this.nextPadAt += 8;
+    const ahead = ctx.currentTime + 1.2;
+    while (this.scheduledUntil < ahead) {
+      const winStart = this.scheduledUntil;
+      const winEnd = Math.min(ahead, winStart + 1.2);
+      for (const n of this.score) {
+        // 루프 반복 고려 — 이 창에 걸리는 반복 회차의 노트만 스케줄
+        const loopIdx = Math.floor((winStart - this.loopStart) / LOOP_LEN);
+        for (const k of [loopIdx, loopIdx + 1]) {
+          const at = this.loopStart + k * LOOP_LEN + n.t;
+          if (at >= winStart && at < winEnd) this.playNote(n, at);
+        }
+      }
+      this.scheduledUntil = winEnd;
     }
   }
 
-  private pluck(at: number): void {
+  private playNote(n: ScoreNote, at: number): void {
     const ctx = this.ctx!;
-    this.melodyIdx = Math.max(0, Math.min(PENTA.length - 1,
-      this.melodyIdx + Math.floor(Math.random() * 3) - 1));
-    const f = PENTA[this.melodyIdx]!;
-    const osc = ctx.createOscillator();
-    osc.type = 'triangle';
-    osc.frequency.value = f * 2;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(0, at);
-    g.gain.linearRampToValueAtTime(0.16, at + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.001, at + 1.4);
-    const lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass'; lp.frequency.value = 1800;
-    osc.connect(g); g.connect(lp); lp.connect(this.bgmGain!);
-    osc.start(at); osc.stop(at + 1.5);
-  }
-
-  private pad(at: number): void {
-    const ctx = this.ctx!;
-    const roots = [PENTA[0]!, PENTA[3]!, PENTA[1]!];
-    const root = roots[Math.floor(Math.random() * roots.length)]!;
-    for (const mult of [1, 1.5, 2]) {
-      const osc = ctx.createOscillator();
-      osc.type = 'sine';
-      osc.frequency.value = root * mult * 0.5;
+    if (n.voice === 'hat') { // 브러시 햇 — 필터드 노이즈 한 톨
+      const len = Math.floor(ctx.sampleRate * 0.04);
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const hp = ctx.createBiquadFilter();
+      hp.type = 'highpass'; hp.frequency.value = 6000;
       const g = ctx.createGain();
-      g.gain.setValueAtTime(0, at);
-      g.gain.linearRampToValueAtTime(0.05, at + 2.5);
-      g.gain.linearRampToValueAtTime(0, at + 7.5);
-      osc.connect(g); g.connect(this.bgmGain!);
-      osc.start(at); osc.stop(at + 8);
+      g.gain.value = 0.05 * n.vel;
+      src.connect(hp); hp.connect(g); g.connect(this.bgmGain!);
+      src.start(at);
+      return;
     }
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    let peak = 0.1;
+    switch (n.voice) {
+      case 'bass':
+        osc.type = 'sine'; lp.frequency.value = 400; peak = 0.22 * n.vel; break;
+      case 'pluck':
+        osc.type = 'triangle'; lp.frequency.value = 2200; peak = 0.10 * n.vel; break;
+      case 'lead':
+        osc.type = 'sine'; lp.frequency.value = 3200; peak = 0.15 * n.vel; break;
+      case 'chime':
+        osc.type = 'sine'; lp.frequency.value = 6000; peak = 0.08 * n.vel; break;
+    }
+    osc.frequency.value = n.f;
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(peak, at + (n.voice === 'bass' ? 0.03 : 0.015));
+    g.gain.exponentialRampToValueAtTime(0.001, at + n.dur);
+    osc.connect(g); g.connect(lp); lp.connect(this.bgmGain!);
+    // 리드는 살짝 비브라토 — 사람 손맛
+    if (n.voice === 'lead') {
+      const lfo = ctx.createOscillator();
+      const lfoG = ctx.createGain();
+      lfo.frequency.value = 5.2; lfoG.gain.value = 3;
+      lfo.connect(lfoG); lfoG.connect(osc.frequency);
+      lfo.start(at); lfo.stop(at + n.dur);
+    }
+    osc.start(at); osc.stop(at + n.dur + 0.1);
   }
 
   // ── 효과음 합성 ──

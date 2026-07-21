@@ -1,4 +1,5 @@
 import { audio } from '../game/audio';
+import { pixelIcons } from './pixelIcons';
 import pkg from '../../package.json';
 
 /**
@@ -22,17 +23,17 @@ export interface HudActions {
   nickname: string;
 }
 
-const BAR_BUTTONS: Array<{ act: string; emoji: string; label: string }> = [
-  { act: 'bag', emoji: '🎒', label: '소지품' },
-  { act: 'dex', emoji: '📖', label: '가이드북' },
-  { act: 'map', emoji: '🗺️', label: '지도' },
-  { act: 'residents', emoji: '👥', label: '주민' },
-  { act: 'ranking', emoji: '🏆', label: '랭킹' },
-  { act: 'quest', emoji: '📜', label: '퀘스트' },
-  { act: 'customize', emoji: '👕', label: '꾸미기' },
-  { act: 'chat', emoji: '💬', label: '채팅' },
-  { act: 'emote', emoji: '😊', label: '이모트' },
-  { act: 'settings', emoji: '⚙️', label: '설정' },
+const BAR_BUTTONS: Array<{ act: string; icon: string; label: string }> = [
+  { act: 'bag', icon: 'bag', label: '소지품' },
+  { act: 'dex', icon: 'book', label: '가이드북' },
+  { act: 'map', icon: 'map', label: '지도' },
+  { act: 'residents', icon: 'people', label: '주민' },
+  { act: 'ranking', icon: 'trophy', label: '랭킹' },
+  { act: 'quest', icon: 'scroll', label: '퀘스트' },
+  { act: 'customize', icon: 'shirt', label: '꾸미기' },
+  { act: 'chat', icon: 'chat', label: '채팅' },
+  { act: 'emote', icon: 'smile', label: '이모트' },
+  { act: 'settings', icon: 'gear', label: '설정' },
 ];
 
 export class GameHud {
@@ -44,18 +45,19 @@ export class GameHud {
   private clockTimer: number;
 
   constructor(private readonly opts: HudActions) {
+    const icons = pixelIcons();
     this.root = document.createElement('div');
     this.root.className = 'hv-hud';
     this.root.innerHTML = `
       <div class="hv-hud-hearts" title="오늘의 퀘스트 진행"></div>
       <div class="hv-hud-top-right">
-        <div class="hv-hud-coins">🪙 <b>…</b></div>
+        <div class="hv-hud-coins"><img src="${icons.coin}" alt=""> <b>…</b></div>
         <div class="hv-hud-clock">…</div>
       </div>
       <div class="hv-hud-bar">
         ${BAR_BUTTONS.map((b) => `
           <button data-act="${b.act}" title="${b.label}">
-            <span class="ico">${b.emoji}</span><span class="lbl">${b.label}</span>
+            <img class="ico" src="${icons[b.icon]}" alt=""><span class="lbl">${b.label}</span>
           </button>`).join('')}
       </div>
       <div class="hv-hud-settings" style="display:none">
@@ -131,10 +133,16 @@ export class GameHud {
     this.coinsEl.querySelector('b')!.textContent = v.toLocaleString();
   }
 
-  /** 하트 = 오늘의 퀘스트 달성 수 (총 5개) */
+  private prevHearts = -1;
+
+  /** 하트 = 오늘의 퀘스트 달성 수 (총 5개) — 새로 채워진 하트는 통통 튄다 */
   setHearts(done: number, total: number): void {
+    const icons = pixelIcons();
+    const bumped = this.prevHearts >= 0 && done > this.prevHearts;
     this.heartsEl.innerHTML = Array.from({ length: total }, (_, i) =>
-      `<span class="${i < done ? 'on' : 'off'}">${i < done ? '🧡' : '🤎'}</span>`).join('');
+      `<img class="${i < done ? 'on' : 'off'} ${bumped && i === done - 1 ? 'bump' : ''}"
+        src="${i < done ? icons.heart : icons.heartEmpty}" alt="">`).join('');
+    this.prevHearts = done;
   }
 
   private tickClock(): void {
