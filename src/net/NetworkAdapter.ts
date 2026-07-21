@@ -9,6 +9,8 @@ export interface PeerState { userId: string; nickname: string; color: string }
 export interface NetworkAdapter {
   connect(self: PeerState): Promise<void>;
   disconnect(): Promise<void>;
+  /** 씬 재진입 시 이전 씬이 등록한 콜백 제거 (중복 수신 방지) */
+  clearListeners(): void;
   sendPos(msg: PosMsg): void; // fire-and-forget, POS_HZ 주기
   sendChat(msg: ChatMsg): void;
   sendEmote(msg: EmoteMsg): void;

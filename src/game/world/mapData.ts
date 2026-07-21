@@ -37,6 +37,16 @@ export const SOLID_RECTS: Rect[] = [
 /** 스폰 지점: 역 출구 앞 광장 (스펙 §2) */
 export const SPAWN_TILE = { tx: 40, ty: 42 };
 
+/** 개인 공간 10채의 문 — 각 주택 건물 하단 중앙 타일 (클릭하면 입주/입장, 스펙 §2·§3) */
+export const HOUSE_DOORS: Array<{ roomId: number; tx: number; ty: number }> = [
+  { roomId: 1,  tx: 6,  ty: 15 }, { roomId: 2,  tx: 15, ty: 15 },
+  { roomId: 3,  tx: 6,  ty: 23 }, { roomId: 4,  tx: 15, ty: 23 },
+  { roomId: 5,  tx: 22, ty: 21 },
+  { roomId: 6,  tx: 60, ty: 15 }, { roomId: 7,  tx: 69, ty: 15 },
+  { roomId: 8,  tx: 60, ty: 23 }, { roomId: 9,  tx: 69, ty: 23 },
+  { roomId: 10, tx: 76, ty: 21 },
+];
+
 export function buildCollision(): CollisionGrid {
   return CollisionGrid.fromRects(MAP_W, MAP_H, SOLID_RECTS);
 }

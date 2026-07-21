@@ -22,13 +22,24 @@ export class SupabaseAdapter implements NetworkAdapter {
 
   async connect(self: PeerState): Promise<void> {
     this.self = self;
+    this.stopped = false; // 씬 재진입(거리 복귀) 시 재활성화
+    this.known.clear();
     this.subscribe();
   }
 
   async disconnect(): Promise<void> {
     this.stopped = true;
+    this.known.clear();
     if (this.channel) await this.channel.unsubscribe();
     this.channel = null;
+  }
+
+  clearListeners(): void {
+    this.joinCbs = [];
+    this.leaveCbs = [];
+    this.posCbs = [];
+    this.chatCbs = [];
+    this.emoteCbs = [];
   }
 
   private subscribe(): void {

@@ -42,3 +42,16 @@
   position: fixed; left: 24px; bottom: 24px; z-index: 5;
   color: #f2e8dc; opacity: 0.55; font: 12px system-ui, sans-serif;
 }
+.hv-inv {
+  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+  display: flex; gap: 6px; max-width: 90vw; overflow-x: auto; z-index: 10;
+  padding: 8px; background: rgba(26, 23, 19, 0.88); border-radius: 12px;
+}
+.hv-inv button {
+  display: flex; align-items: center; gap: 6px; white-space: nowrap;
+  padding: 8px 10px; border-radius: 8px; border: 1px solid #4a3f35;
+  background: #241f1a; color: #f2e8dc; font: 12px system-ui, sans-serif; cursor: pointer;
+}
+.hv-inv button.sel { border-color: #e8a87c; background: #3a2f24; }
+.hv-inv button i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.hv-inv button b { opacity: 0.6; font-weight: 600; }
