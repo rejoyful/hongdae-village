@@ -94,3 +94,25 @@ describe('quests', () => {
     }
   });
 });
+
+// --- 아이디·코드 로그인 ---
+import { validateId, validateCode, idToEmail } from '../src/game/auth';
+
+describe('auth', () => {
+  it('아이디 규칙: 영문소문자·숫자·_ 3~16자 (대문자는 소문자화 후 통과)', () => {
+    expect(validateId('hong_dae1')).toBeNull();
+    expect(validateId('HongDae')).toBeNull(); // trim+lower 후 검증
+    expect(validateId('ab')).not.toBeNull();
+    expect(validateId('한글아이디')).not.toBeNull();
+    expect(validateId('a'.repeat(17))).not.toBeNull();
+  });
+
+  it('코드는 6자 이상', () => {
+    expect(validateCode('12345')).not.toBeNull();
+    expect(validateCode('123456')).toBeNull();
+  });
+
+  it('아이디→이메일 매핑은 소문자로 고정된다', () => {
+    expect(idToEmail(' HongDae ')).toBe('hongdae@player.hongdae.app');
+  });
+});
