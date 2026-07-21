@@ -74,6 +74,39 @@
 .hv-shop-head h2 { font-size: 16px; margin: 0; flex: 1; }
 .hv-shop-head .coins { font-size: 14px; font-weight: 700; color: #f2d8a8; }
 .hv-shop-head .close { border: 0; background: transparent; color: #f2e8dc; font-size: 14px; cursor: pointer; opacity: .7; }
+.hv-shop-mode { display: flex; gap: 4px; }
+.hv-shop-mode button {
+  padding: 4px 10px; border-radius: 6px; border: 1px solid #4a3f35;
+  background: transparent; color: #f2e8dc; opacity: .6; font-size: 12px; cursor: pointer;
+}
+.hv-shop-mode button.sel { opacity: 1; background: #3a2f24; }
+.hv-cafe {
+  position: fixed; inset: 0; z-index: 18;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(15, 12, 10, 0.6); font-family: system-ui, sans-serif;
+}
+.hv-cafe-card {
+  background: #241f1a; color: #f2e8dc; border: 1px solid #4a3f35;
+  border-radius: 14px; width: 380px; padding: 16px 18px;
+}
+.hv-cafe-head { display: flex; align-items: center; gap: 10px; }
+.hv-cafe-head h2 { font-size: 15px; margin: 0; flex: 1; }
+.hv-cafe-head span { font-size: 13px; color: #f2d8a8; }
+.hv-cafe-head .close { border: 0; background: transparent; color: #f2e8dc; cursor: pointer; opacity: .7; }
+.hv-cafe-order {
+  display: flex; gap: 6px; flex-wrap: wrap; margin: 14px 0 6px;
+  padding: 10px; background: #1a1713; border-radius: 10px; min-height: 24px;
+}
+.hv-cafe-order span { font-size: 13px; opacity: .85; padding: 3px 8px; border-radius: 6px; background: #322b24; }
+.hv-cafe-order span.done { opacity: .35; text-decoration: line-through; }
+.hv-cafe-order span.now { outline: 2px solid #e8a87c; }
+.hv-cafe-card .note { font-size: 12px; opacity: .75; min-height: 16px; margin: 6px 2px 10px; }
+.hv-cafe-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.hv-cafe-btns button {
+  padding: 12px; border: 1px solid #4a3f35; border-radius: 10px;
+  background: #322b24; color: #f2e8dc; font-size: 14px; cursor: pointer;
+}
+.hv-cafe-btns button:active { background: #3a2f24; }
 .hv-shop-tabs { display: flex; gap: 4px; padding: 0 12px 8px; }
 .hv-shop-tabs button {
   padding: 5px 10px; border-radius: 6px; border: 1px solid transparent;

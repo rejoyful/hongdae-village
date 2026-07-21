@@ -52,7 +52,12 @@ export const SHOP_DOORS: Array<{ shop: 'furniture'; tx: number; ty: number }> = 
   { shop: 'furniture', tx: 12, ty: 35 },
 ];
 
+/** 카페 「모퉁이」 문 — 밟으면 알바 미니게임 (스펙 §3 수익 활동) */
+export const CAFE_DOORS: Array<{ tx: number; ty: number }> = [
+  { tx: 28, ty: 35 },
+];
+
 export function buildCollision(): CollisionGrid {
   // 문 타일은 건물에서 뚫어 걸어 들어갈 수 있게 한다 (밟으면 입장)
-  return CollisionGrid.fromRects(MAP_W, MAP_H, SOLID_RECTS, [...HOUSE_DOORS, ...SHOP_DOORS]);
+  return CollisionGrid.fromRects(MAP_W, MAP_H, SOLID_RECTS, [...HOUSE_DOORS, ...SHOP_DOORS, ...CAFE_DOORS]);
 }

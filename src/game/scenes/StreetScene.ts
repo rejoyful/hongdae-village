@@ -1,9 +1,11 @@
 import Phaser from 'phaser';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { TILE, ZOOM, MAP_W, MAP_H } from '../config';
-import { ZONES, SPAWN_TILE, HOUSE_DOORS, SHOP_DOORS, buildCollision } from '../world/mapData';
+import { ZONES, SPAWN_TILE, HOUSE_DOORS, SHOP_DOORS, CAFE_DOORS, buildCollision } from '../world/mapData';
 import { ShopPanel } from '../../ui/shopPanel';
-import { fetchCoins, claimDaily, buyItem } from '../../db/economyApi';
+import { CafePanel } from '../../ui/cafePanel';
+import { fetchCoins, claimDaily, buyItem, sellItem } from '../../db/economyApi';
+import { fetchInventory } from '../../db/roomsApi';
 import { buildStreetArt } from '../art/streetArt';
 import { BUILDING_TEXTURES } from '../art/assetManifest';
 import { ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
@@ -57,6 +59,7 @@ export class StreetScene extends Phaser.Scene {
   private emotes: EmoteWheel | null = null;
   private customize: CustomizePanel | null = null;
   private shop: ShopPanel | null = null;
+  private cafe: CafePanel | null = null;
   private coinsEl: HTMLDivElement | null = null;
   private coins = 0;
   private charKey = '';
@@ -68,6 +71,7 @@ export class StreetScene extends Phaser.Scene {
   private spawnTile = SPAWN_TILE;
   private entering = false;
   private onShopTile = false;
+  private onCafeTile = false;
 
   constructor() { super('street'); }
 
@@ -185,10 +189,13 @@ export class StreetScene extends Phaser.Scene {
       const door = HOUSE_DOORS.find((d) => d.tx === tile.tx && d.ty === tile.ty);
       if (door) void this.enterDoor(door.roomId);
       else {
-        // 상점 문은 "밟는 순간" 1회만 열림 (서 있는 동안 재오픈 방지)
+        // 상점·카페 문은 "밟는 순간" 1회만 열림 (서 있는 동안 재오픈 방지)
         const onShop = SHOP_DOORS.some((d) => d.tx === tile.tx && d.ty === tile.ty);
-        if (onShop && !this.onShopTile && this.shop && !this.shop.isOpen) this.shop.open(this.coins);
+        if (onShop && !this.onShopTile && this.shop && !this.shop.isOpen) void this.openShop();
         this.onShopTile = onShop;
+        const onCafe = CAFE_DOORS.some((d) => d.tx === tile.tx && d.ty === tile.ty);
+        if (onCafe && !this.onCafeTile && this.cafe && !this.cafe.isOpen) this.cafe.open();
+        this.onCafeTile = onCafe;
       }
     }
 
@@ -347,6 +354,11 @@ export class StreetScene extends Phaser.Scene {
       buyEnabled: !!this.sb,
       onToggle: (open) => this.setGameKeysEnabled(!open),
       onBuy: (itemId) => void this.handleBuy(itemId),
+      onSell: (itemId) => void this.handleSell(itemId),
+    });
+    this.cafe = new CafePanel({
+      onToggle: (open) => this.setGameKeysEnabled(!open),
+      onComplete: () => void this.handleCafeComplete(),
     });
 
     // 코인 HUD + 출석 보상
@@ -358,7 +370,7 @@ export class StreetScene extends Phaser.Scene {
 
     this.hint = document.createElement('div');
     this.hint.className = 'hv-hint';
-    this.hint.textContent = 'WASD 이동 · Enter 채팅 · E 이모트 · C 꾸미기 · 가구점 문=상점';
+    this.hint.textContent = 'WASD 이동 · Enter 채팅 · E 이모트 · C 꾸미기 · 가구점=상점 · 카페=알바';
     document.body.appendChild(this.hint);
   }
 
@@ -378,15 +390,52 @@ export class StreetScene extends Phaser.Scene {
     }
   }
 
+  private shopCounts = new Map<string, number>();
+
+  private async openShop(): Promise<void> {
+    if (this.sb) this.shopCounts = await fetchInventory(this.sb, this.peer.userId);
+    this.shop!.open(this.coins, this.shopCounts);
+  }
+
   private async handleBuy(itemId: string): Promise<void> {
     if (!this.sb) return;
     const res = await buyItem(this.sb, itemId);
     if (res.ok) {
       this.setCoins(res.balance);
+      this.shopCounts.set(itemId, (this.shopCounts.get(itemId) ?? 0) + 1);
+      this.shop?.setCounts(this.shopCounts);
     } else if (res.reason === 'no-coins') {
       this.showBubble(this.player, '코인이 부족해요 😢');
     } else {
       this.showBubble(this.player, '구매에 실패했어요');
+    }
+  }
+
+  private async handleSell(itemId: string): Promise<void> {
+    if (!this.sb) return;
+    const bal = await sellItem(this.sb, itemId);
+    if (bal === null) {
+      this.showBubble(this.player, '판매에 실패했어요');
+      return;
+    }
+    this.setCoins(bal);
+    this.shopCounts.set(itemId, Math.max(0, (this.shopCounts.get(itemId) ?? 0) - 1));
+    this.shop?.setCounts(this.shopCounts);
+  }
+
+  private async handleCafeComplete(): Promise<void> {
+    if (!this.sb) {
+      this.showBubble(this.player, '알바 완료! (오프라인 — 보상은 접속 후에)');
+      return;
+    }
+    const { data } = await this.sb.rpc('earn_activity', { p_kind: 'cafe' });
+    if (typeof data === 'number' && data >= 0) {
+      this.setCoins(data);
+      this.showBubble(this.player, '알바비 +60 🪙 수고했어요!');
+    } else if (data === -3) {
+      this.showBubble(this.player, '오늘 알바는 여기까지! (하루 3번)');
+    } else {
+      this.showBubble(this.player, '보상 지급에 실패했어요');
     }
   }
 
@@ -438,6 +487,7 @@ export class StreetScene extends Phaser.Scene {
     this.emotes?.destroy();
     this.customize?.destroy();
     this.shop?.destroy();
+    this.cafe?.destroy();
     this.coinsEl?.remove();
     this.hint?.remove();
   }
