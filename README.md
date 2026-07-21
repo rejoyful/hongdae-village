@@ -15,11 +15,26 @@ npm test           # 단위 테스트
 npm run typecheck  # 타입 검사
 ```
 
+## 멀티플레이 설정 (Supabase)
+
+1. [supabase.com](https://supabase.com)에서 프로젝트 생성
+2. Authentication → Sign In / Up → **Anonymous Sign-Ins 활성화**
+3. SQL Editor에서 `supabase/migrations/0001_profiles.sql` 실행
+4. 프로젝트 루트에 `.env.local` 작성:
+
+```bash
+VITE_SUPABASE_URL=https://xxxx.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJ...
+```
+
+`.env.local`이 없으면 **오프라인 혼자 모드**로 실행됩니다 (게임은 그대로 동작).
+
 ## 스택
 
-Phaser 3 · TypeScript · Vite · Vitest · Supabase (Phase 2~)
+Phaser 3 · TypeScript · Vite · Vitest · Supabase (Auth 익명 로그인 · Realtime presence/broadcast)
 
 ## 조작
 
 - 이동: W/A/S/D
 - 상호작용·배치: 마우스 클릭
+- 채팅: Enter (말풍선) · 이모트: E (8종 휠)
