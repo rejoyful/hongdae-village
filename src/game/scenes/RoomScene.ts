@@ -4,7 +4,8 @@ import { TILE, ZOOM } from '../config';
 import { tileToWorld, worldToTile, type CollisionGrid } from '../world/grid';
 import { ROOM_W, ROOM_H, ROOM_DOOR, ROOM_SPAWN, buildRoomCollision } from '../world/roomMap';
 import { stepPlayer, type MoveInput } from '../entities/playerMotion';
-import { canPlace, footprint, sizeOf, type Placed, type Rot } from '../entities/placement';
+import { canPlace, footprint, sizeOf, layerOf, type Placed, type Rot } from '../entities/placement';
+import { FLOOR } from '../world/roomMap';
 import { screenToTile } from '../input/pointer';
 import { CATALOG_BY_ID } from '../../items/catalog';
 import { HOUSE_DOORS } from '../world/mapData';
@@ -15,7 +16,7 @@ import type { NetworkAdapter, PeerState } from '../../net/NetworkAdapter';
 import { InventoryBar } from '../../ui/inventoryBar';
 import {
   fetchInventory, fetchPlacements, insertPlacement, deletePlacement,
-  adjustInventory, subscribePlacements,
+  adjustInventory, subscribePlacements, grantStarterOnce,
 } from '../../db/roomsApi';
 
 interface RoomData {
@@ -143,6 +144,8 @@ export class RoomScene extends Phaser.Scene {
       this.redrawPlacements();
       this.unsubscribe = subscribePlacements(this.sb, this.roomId, () => void this.refresh());
       if (this.isOwner) {
+        // 시작 세트가 확장되면 기존 유저도 부족분을 받는다 (없는 아이템만 채움)
+        await grantStarterOnce(this.sb, this.peer.userId);
         this.counts = await fetchInventory(this.sb, this.peer.userId);
         this.mountInventory();
       }
@@ -176,7 +179,11 @@ export class RoomScene extends Phaser.Scene {
     if (!CATALOG_BY_ID.has(p.itemId)) return;
     const key = ensureFurniture(this, p.itemId, p.rot);
     const w = tileToWorld(p.tx, p.ty);
-    const img = this.add.image(w.x, w.y, key).setOrigin(0).setDepth(5);
+    const layer = layerOf(p.itemId);
+    // 러그(4)는 가구(5) 밑에, 벽걸이(6)는 벽지 위로 올려 그린다
+    const yOff = layer === 'wall' ? -22 : 0;
+    const depth = layer === 'rug' ? 4 : layer === 'wall' ? 6 : 5;
+    const img = this.add.image(w.x, w.y + yOff, key).setOrigin(0).setDepth(depth);
     this.placedGfx.set(p.id, img);
   }
 
@@ -205,7 +212,8 @@ export class RoomScene extends Phaser.Scene {
     if (!def || !size) return;
     const ok = canPlace(this.placed, itemId, this.ghostTile.tx, this.ghostTile.ty, this.ghostRot);
     const w = tileToWorld(this.ghostTile.tx, this.ghostTile.ty);
-    this.ghost.setPosition(w.x, w.y)
+    const yOff = layerOf(itemId) === 'wall' ? -22 : 0;
+    this.ghost.setPosition(w.x, w.y + yOff)
       .setSize(size.w * TILE, size.h * TILE)
       .setFillStyle(parseInt(def.color, 16), 0.55)
       .setStrokeStyle(2, ok ? 0x6ee87c : 0xe86e6e);
@@ -218,6 +226,9 @@ export class RoomScene extends Phaser.Scene {
       scrollX: cam.scrollX, scrollY: cam.scrollY, zoom: cam.zoom,
       width: cam.width, height: cam.height,
     });
+    // 벽걸이는 벽 행에 자석처럼 붙는다
+    const itemId = this.inv?.selected;
+    if (itemId && layerOf(itemId) === 'wall') this.ghostTile = { tx: this.ghostTile.tx, ty: FLOOR.y };
     this.updateGhost();
   }
 
@@ -234,7 +245,12 @@ export class RoomScene extends Phaser.Scene {
       scrollX: cam.scrollX, scrollY: cam.scrollY, zoom: cam.zoom,
       width: cam.width, height: cam.height,
     });
-    const hit = this.placed.find((pl) => footprint(pl).some((f) => f.tx === t.tx && f.ty === t.ty));
+    // 벽걸이는 벽지 위(한 칸 위)에 그려지므로 그 위치 클릭도 인정
+    const hit = this.placed.find((pl) =>
+      footprint(pl).some((f) =>
+        (f.tx === t.tx && f.ty === t.ty) ||
+        (layerOf(pl.itemId) === 'wall' && f.tx === t.tx && f.ty === t.ty + 1),
+      ));
     if (hit) void this.removePlaced(hit);
   }
 
