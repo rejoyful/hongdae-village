@@ -10,6 +10,7 @@ import { screenToTile } from '../input/pointer';
 import { CATALOG_BY_ID } from '../../items/catalog';
 import { HOUSE_DOORS } from '../world/mapData';
 import { makeRoomBackground, ensureFurniture } from '../art/roomArt';
+import { ROOM_MATERIALS, FURNITURE_ASSETS, furnitureAssetKey } from '../art/assetManifest';
 import { ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
 import type { NetworkAdapter, PeerState } from '../../net/NetworkAdapter';
 import { InventoryBar } from '../../ui/inventoryBar';
@@ -50,6 +51,22 @@ export class RoomScene extends Phaser.Scene {
   private localSeq = 0;
 
   constructor() { super('room'); }
+
+  preload(): void {
+    // AI 방 재질·가구 스프라이트 — 404여도 프로시저럴 폴백으로 계속
+    for (const m of ROOM_MATERIALS) {
+      if (!this.textures.exists(m.key)) this.load.image(m.key, m.url);
+    }
+    for (const f of FURNITURE_ASSETS) {
+      for (const rot of f.rots) {
+        const key = furnitureAssetKey(f.itemId, rot);
+        if (!this.textures.exists(key)) this.load.image(key, `assets/furniture/${f.itemId}_${rot}.png`);
+      }
+    }
+    this.load.on('loaderror', (file: { key: string }) => {
+      console.warn('[홍대마을] 자산 로드 실패(프로시저럴 폴백):', file.key);
+    });
+  }
 
   init(data: RoomData): void {
     this.roomId = data.roomId;

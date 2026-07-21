@@ -18,6 +18,24 @@ export const BUILDING_TEXTURES: BuildingTexture[] = [
   { key: 'bldg-store',      url: 'assets/buildings/store.png' },
 ];
 
+/** AI 가구 스프라이트 — public/assets/furniture/<id>_<rot>.png, 키 furn-ai-<id>-<rot> */
+export const FURNITURE_ASSETS: Array<{ itemId: string; rots: Array<0 | 1> }> = [
+  { itemId: 'bed_basic', rots: [0, 1] },
+  { itemId: 'rug_cream', rots: [0, 1] },
+  { itemId: 'desk_wood', rots: [0, 1] },
+  { itemId: 'bookshelf', rots: [0, 1] },
+  { itemId: 'tea_table', rots: [0] },
+  { itemId: 'plant_pot', rots: [0] },
+  { itemId: 'bear_doll', rots: [0] },
+];
+
+export const furnitureAssetKey = (itemId: string, rot: 0 | 1): string => `furn-ai-${itemId}-${rot}`;
+
+/** 방 재질 (바닥 등) */
+export const ROOM_MATERIALS: BuildingTexture[] = [
+  { key: 'room-floor-ai', url: 'assets/room/floor_wood.png' }, // 128×128 타일링
+];
+
 /** mapData.SOLID_RECTS 인덱스 → 텍스처 키 (주택 4종은 좌우 골목에 교차 배치) */
 export const BUILDING_PLACEMENT = new Map<number, string>([
   // 주택 골목 (서): 4~8
