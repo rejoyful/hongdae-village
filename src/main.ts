@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import './ui/overlay.css';
+import { installAudioUnlock } from './game/audio';
 import { StreetScene } from './game/scenes/StreetScene';
 import { RoomScene } from './game/scenes/RoomScene';
 import { InteriorScene } from './game/scenes/InteriorScene';
@@ -20,6 +21,7 @@ export function createGame(parent: string): Phaser.Game {
 }
 
 async function boot(): Promise<void> {
+  installAudioUnlock(); // 첫 입력에서 BGM·효과음 시작 (오토플레이 정책)
   const game = createGame('game');
 
   // 개발 모드 전용 디버그 훅 (콘솔·자동화 검증에서 게임 상태 접근용)

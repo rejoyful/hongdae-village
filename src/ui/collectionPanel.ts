@@ -38,6 +38,9 @@ export class CollectionPanel {
 
   get isOpen(): boolean { return this.opened; }
 
+  /** 지금까지 발견한 아이템 수 (랭킹 가산값) */
+  get foundCount(): number { return this.discovered.size; }
+
   /** 인벤토리 스냅샷을 발견 목록에 병합 (열 때마다 호출) */
   absorb(counts: Map<string, number>): void {
     this.counts = counts;

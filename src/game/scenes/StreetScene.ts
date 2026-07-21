@@ -35,6 +35,13 @@ import { GameHud } from '../../ui/gameHud';
 import { BagPanel } from '../../ui/bagPanel';
 import { CollectionPanel } from '../../ui/collectionPanel';
 import { MapPanel } from '../../ui/mapPanel';
+import { ResidentsPanel } from '../../ui/residentsPanel';
+import { RankingPanel } from '../../ui/rankingPanel';
+import { fetchRanking } from '../../db/rankingApi';
+import { ActionMotions, IdleBreath } from '../entities/actionMotion';
+import { ResidentNpcs } from '../entities/npcResidents';
+import { RESIDENTS } from '../residents/residents';
+import { audio } from '../audio';
 
 interface StreetData {
   peer: PeerState;
@@ -88,6 +95,11 @@ export class StreetScene extends Phaser.Scene {
   private bag: BagPanel | null = null;
   private dex: CollectionPanel | null = null;
   private mapPanel: MapPanel | null = null;
+  private residentsPanel: ResidentsPanel | null = null;
+  private rankingPanel: RankingPanel | null = null;
+  private residents: ResidentNpcs | null = null;
+  private motions: ActionMotions | null = null;
+  private idleBreath: IdleBreath | null = null;
   private coins = 0;
   private charKey = '';
   private hint: HTMLDivElement | null = null;
@@ -235,6 +247,7 @@ export class StreetScene extends Phaser.Scene {
         const interiorDoor = INTERIOR_DOORS.find((d) => d.tx === tile.tx && d.ty === tile.ty);
         if (interiorDoor && !this.entering) {
           this.entering = true;
+          audio.playSe('door');
           this.scene.start('interior', { shop: interiorDoor.shop, peer: this.peer, adapter: this.adapter });
           return;
         }
@@ -259,8 +272,10 @@ export class StreetScene extends Phaser.Scene {
       }
     }
 
-    // NPC 무리
+    // NPC 무리 + 이름 있는 주민 (근접 인사)
     this.npcs?.update(delta);
+    this.residents?.update(next.x, next.y);
+    this.idleBreath?.set(!moving && !this.anyPanelOpen());
 
     // 위치 브로드캐스트 (POS_HZ 스로틀)
     const now = this.time.now;
@@ -300,6 +315,7 @@ export class StreetScene extends Phaser.Scene {
   private async enterDoor(roomId: number): Promise<void> {
     if (this.entering) return;
     this.entering = true;
+    audio.playSe('door');
     let isOwner = false;
     if (!this.sb) {
       isOwner = true; // 오프라인: 모든 방을 주인 모드로 (로컬 전용)
@@ -425,17 +441,30 @@ export class StreetScene extends Phaser.Scene {
       onBuy: (itemId) => void this.handleBuy(itemId),
       onSell: (itemId) => void this.handleSell(itemId),
     });
+    // 활동 패널 — 여는 동안 캐릭터가 그 행동을 연상시키는 모션을 한다
     this.cafe = new CafePanel({
-      onToggle: (open) => this.setGameKeysEnabled(!open),
+      onToggle: (open) => {
+        this.setGameKeysEnabled(!open);
+        if (open) this.motions!.play(this.player, 'cafe');
+        else this.motions!.stop(this.player);
+      },
       onComplete: () => void this.handleCafeComplete(),
     });
     this.busking = new BuskingPanel({
-      onToggle: (open) => this.setGameKeysEnabled(!open),
+      onToggle: (open) => {
+        this.setGameKeysEnabled(!open);
+        if (open) this.motions!.play(this.player, 'busking');
+        else this.motions!.stop(this.player);
+      },
       onComplete: () => void this.handleBuskingComplete(),
     });
 
     this.omok = new OmokPanel({
-      onToggle: (open) => this.setGameKeysEnabled(!open),
+      onToggle: (open) => {
+        this.setGameKeysEnabled(!open);
+        if (open) this.motions!.play(this.player, 'omok');
+        else this.motions!.stop(this.player);
+      },
       onWin: () => void this.handleOmokWin(),
     });
     this.quests = new QuestPanel({
@@ -463,12 +492,29 @@ export class StreetScene extends Phaser.Scene {
     this.applyTimeOfDay();
     this.time.addEvent({ delay: 60_000, loop: true, callback: () => this.applyTimeOfDay() });
 
-    // 게임형 HUD (하트·코인·하단 아이콘 바) + 소지품·가이드북·지도 패널
+    // 행동 모션 + 이름 있는 주민 NPC
+    this.motions = new ActionMotions(this);
+    this.idleBreath = new IdleBreath(this, this.player);
+    this.residents = new ResidentNpcs(this, this.peer.userId, {
+      onBubble: (s, t) => this.showBubble(s, t),
+      onGreet: (s) => this.motions!.play(s, 'greet'),
+    });
+
+    // 게임형 HUD (하트·코인·시계·하단 아이콘 바) + 패널들
     this.bag = new BagPanel({ online: !!this.sb, onToggle: (o) => this.setGameKeysEnabled(!o) });
     this.dex = new CollectionPanel(this.peer.userId, { onToggle: (o) => this.setGameKeysEnabled(!o) });
     this.mapPanel = new MapPanel({
       onToggle: (o) => this.setGameKeysEnabled(!o),
       getPlayerTile: () => worldToTile(this.player.x, this.player.y),
+    });
+    this.residentsPanel = new ResidentsPanel(this.bakePortraits(), {
+      onToggle: (o) => this.setGameKeysEnabled(!o),
+    });
+    this.rankingPanel = new RankingPanel({
+      online: !!this.sb,
+      myId: this.peer.userId,
+      onToggle: (o) => this.setGameKeysEnabled(!o),
+      fetchRows: () => fetchRanking(this.sb!),
     });
     this.hud = new GameHud({
       nickname: this.peer.nickname,
@@ -476,10 +522,19 @@ export class StreetScene extends Phaser.Scene {
       onDex: () => void this.openDex(),
       onMap: () => this.openMap(),
       onQuest: () => this.openQuests(),
+      onResidents: () => this.openResidents(),
+      onRanking: () => this.openRanking(),
       onCustomize: () => { if (!this.chat!.isOpen && !this.customize!.isOpen) this.customize!.open(this.peer.appearance); },
       onChat: () => { if (!this.chat!.isOpen) this.chat!.open(); },
       onEmote: () => { if (!this.chat!.isOpen) this.emotes!.toggle(); },
       onLogout: this.sb ? () => { void this.sb!.auth.signOut().then(() => location.reload()); } : undefined,
+      onResetData: () => {
+        try {
+          localStorage.removeItem(`hv-dex-${this.peer.userId}`);
+          localStorage.removeItem(`hv-trust-${this.peer.userId}`);
+        } catch { /* ignore */ }
+        location.reload();
+      },
     });
     this.refreshHearts();
     void this.initCoins();
@@ -501,7 +556,42 @@ export class StreetScene extends Phaser.Scene {
     return (this.chat?.isOpen ?? false) || (this.customize?.isOpen ?? false)
       || (this.bag?.isOpen ?? false) || (this.dex?.isOpen ?? false)
       || (this.mapPanel?.isOpen ?? false) || (this.quests?.isOpen ?? false)
-      || (this.shop?.isOpen ?? false);
+      || (this.shop?.isOpen ?? false) || (this.residentsPanel?.isOpen ?? false)
+      || (this.rankingPanel?.isOpen ?? false);
+  }
+
+  private openResidents(): void {
+    if (this.anyPanelOpen()) return;
+    this.residentsPanel!.open(this.residents!.getTrust());
+  }
+
+  private openRanking(): void {
+    if (this.anyPanelOpen()) return;
+    const trust = this.residents!.getTrust();
+    const trustSum = Object.values(trust).reduce((s, e) => s + e.v, 0);
+    this.rankingPanel!.open({
+      coins: this.coins,
+      hearts: this.questDoneCount(),
+      dexFound: this.dex!.foundCount,
+      trustSum,
+    });
+  }
+
+  /** 주민 초상 — 스프라이트 시트 정면 1프레임을 확대해 dataURL로 굽는다 */
+  private bakePortraits(): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const def of RESIDENTS) {
+      const key = ensureCharacter(this, def.appearance);
+      const src = this.textures.get(key).getSourceImage();
+      if (!(src instanceof HTMLCanvasElement) && !(src instanceof HTMLImageElement)) continue;
+      const c = document.createElement('canvas');
+      c.width = 48; c.height = 64;
+      const ctx = c.getContext('2d')!;
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(src, 0, 0, 24, 32, 0, 0, 48, 64);
+      out[def.id] = c.toDataURL();
+    }
+    return out;
   }
 
   private async openBag(): Promise<void> {
@@ -526,11 +616,14 @@ export class StreetScene extends Phaser.Scene {
     this.quests!.open(this.questProgress());
   }
 
+  private questDoneCount(): number {
+    const prog = this.questProgress();
+    return DAILY_QUESTS.filter((q) => (prog.get(q.registryKey) ?? 0) >= q.goal).length;
+  }
+
   /** 하트 = 오늘의 퀘스트 달성 수 */
   private refreshHearts(): void {
-    const prog = this.questProgress();
-    const done = DAILY_QUESTS.filter((q) => (prog.get(q.registryKey) ?? 0) >= q.goal).length;
-    this.hud?.setHearts(done, DAILY_QUESTS.length);
+    this.hud?.setHearts(this.questDoneCount(), DAILY_QUESTS.length);
   }
 
   private setCoins(v: number): void {
@@ -546,6 +639,7 @@ export class StreetScene extends Phaser.Scene {
     if (claimed !== null) {
       this.setCoins(claimed);
       this.showBubble(this.player, '출석 보상 +100 🪙');
+      this.motions?.play(this.player, 'coin');
     }
   }
 
@@ -610,6 +704,7 @@ export class StreetScene extends Phaser.Scene {
       this.setCoins(data);
       this.quests?.markClaimed(questId);
       this.showBubble(this.player, '퀘스트 보상 +40 🪙');
+      this.motions?.play(this.player, 'coin');
     } else if (data === -3) {
       this.quests?.markClaimed(questId); // 오늘 이미 수령
     } else {
@@ -626,6 +721,7 @@ export class StreetScene extends Phaser.Scene {
     if (typeof data === 'number' && data >= 0) {
       this.setCoins(data);
       this.showBubble(this.player, '오목 승리! +50 🪙');
+      this.motions?.play(this.player, 'win');
     } else if (data === -3) {
       this.showBubble(this.player, '즐거운 대국! (보상은 하루 3번)');
     }
@@ -641,6 +737,7 @@ export class StreetScene extends Phaser.Scene {
     if (typeof data === 'number' && data >= 0) {
       this.setCoins(data);
       this.showBubble(this.player, '관객들의 박수! +30 🪙');
+      this.motions?.play(this.player, 'win');
     } else if (data === -3) {
       this.showBubble(this.player, '오늘 버스킹은 여기까지! (하루 10번)');
     } else {
@@ -658,6 +755,7 @@ export class StreetScene extends Phaser.Scene {
     if (typeof data === 'number' && data >= 0) {
       this.setCoins(data);
       this.showBubble(this.player, '알바비 +60 🪙 수고했어요!');
+      this.motions?.play(this.player, 'coin');
     } else if (data === -3) {
       this.showBubble(this.player, '오늘 알바는 여기까지! (하루 3번)');
     } else {
@@ -718,11 +816,16 @@ export class StreetScene extends Phaser.Scene {
     this.omok?.destroy();
     this.quests?.destroy();
     this.npcs?.destroy();
+    this.residents?.destroy();
+    this.motions?.destroy();
+    this.idleBreath?.destroy();
     this.touch?.destroy();
     this.hud?.destroy();
     this.bag?.destroy();
     this.dex?.destroy();
     this.mapPanel?.destroy();
+    this.residentsPanel?.destroy();
+    this.rankingPanel?.destroy();
     this.hint?.remove();
   }
 }
