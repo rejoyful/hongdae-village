@@ -11,6 +11,7 @@ export interface ItemDef {
   h: number;      // 타일 높이
   color: string;  // 기본색 hex (# 제외)
   accent?: string; // 포인트색 hex
+  price: number;  // 상점 가격 (코인) — DB item_prices와 0004 마이그레이션으로 동기
 }
 
 const CATEGORIES: ItemCategory[] = ['furniture', 'electronics', 'plant', 'deco', 'rug', 'wall'];
@@ -32,6 +33,7 @@ export function validateCatalog(items: unknown[]): items is ItemDef[] {
     if (typeof o.color !== 'string' || !HEX.test(o.color)) return false;
     if (o.accent !== undefined && !HEX.test(o.accent)) return false;
     if (o.category === 'wall' && o.h !== 1) return false; // 벽걸이는 1타일 높이
+    if (!Number.isInteger(o.price) || o.price! <= 0) return false;
   }
   return true;
 }
