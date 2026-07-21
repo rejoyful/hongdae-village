@@ -4,6 +4,7 @@ import { ROOM_W, ROOM_H, ROOM_DOOR } from '../world/roomMap';
 import { PAL, ROOM_PAL } from './palette';
 import { CATALOG_BY_ID } from '../../items/catalog';
 import { makeTexture, seeded, type Px } from './pixelCanvas';
+import { furnitureAssetKey } from './assetManifest';
 
 const T = TILE;
 
@@ -12,13 +13,25 @@ export function makeRoomBackground(scene: Phaser.Scene): string {
   const key = 'room-bg';
   makeTexture(scene, key, ROOM_W * T, ROOM_H * T, (d) => {
     const rnd = seeded(9);
-    for (let ty = 0; ty < ROOM_H; ty++) {
-      for (let tx = 0; tx < ROOM_W; tx++) {
-        const x = tx * T, y = ty * T;
-        d.rect(x, y, T, T, (tx + ty) % 2 ? ROOM_PAL.floorWood1 : ROOM_PAL.floorWood2);
-        d.rect(x, y + T - 1, T, 1, ROOM_PAL.floorSeam, 0.5);
-        if (tx % 2 === 0) d.rect(x, y, 1, T, ROOM_PAL.floorSeam, 0.35);
-        d.speckle(x, y, T, T, ROOM_PAL.floorSeam, 0.015, rnd, 0.6);
+    // 바닥: AI 재질이 로드돼 있으면 타일링, 없으면 프로시저럴 마루
+    const floorTex = scene.textures.exists('room-floor-ai')
+      ? (scene.textures.get('room-floor-ai').getSourceImage() as HTMLImageElement | HTMLCanvasElement)
+      : null;
+    if (floorTex) {
+      for (let y = 0; y < ROOM_H * T; y += floorTex.height) {
+        for (let x = 0; x < ROOM_W * T; x += floorTex.width) {
+          d.ctx.drawImage(floorTex, x, y);
+        }
+      }
+    } else {
+      for (let ty = 0; ty < ROOM_H; ty++) {
+        for (let tx = 0; tx < ROOM_W; tx++) {
+          const x = tx * T, y = ty * T;
+          d.rect(x, y, T, T, (tx + ty) % 2 ? ROOM_PAL.floorWood1 : ROOM_PAL.floorWood2);
+          d.rect(x, y + T - 1, T, 1, ROOM_PAL.floorSeam, 0.5);
+          if (tx % 2 === 0) d.rect(x, y, 1, T, ROOM_PAL.floorSeam, 0.35);
+          d.speckle(x, y, T, T, ROOM_PAL.floorSeam, 0.015, rnd, 0.6);
+        }
       }
     }
     const wall = (x: number, y: number, w: number, h: number) => {
@@ -359,9 +372,16 @@ const DRAWERS: Record<string, (c: Ctx) => void> = {
   },
 };
 
-/** 가구 텍스처 (아이템·회전별 캐시) */
+/** 가구 텍스처 — AI 스프라이트 우선, 없으면 프로시저럴 아키타입 드로어 */
 export function ensureFurniture(scene: Phaser.Scene, itemId: string, rot: 0 | 1): string {
-  const def = CATALOG_BY_ID.get(itemId);
+  const aiKey = furnitureAssetKey(itemId, rot);
+  if (scene.textures.exists(aiKey)) return aiKey;
+  // 정사각형 아이템은 rot 1도 rot 0 텍스처 재사용
+  const def0 = CATALOG_BY_ID.get(itemId);
+  if (rot === 1 && def0 && def0.w === def0.h && scene.textures.exists(furnitureAssetKey(itemId, 0))) {
+    return furnitureAssetKey(itemId, 0);
+  }
+  const def = def0;
   const key = `furn-${itemId}-${rot}`;
   if (!def) return key;
   const wall = def.category === 'wall';
