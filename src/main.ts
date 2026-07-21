@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import './ui/overlay.css';
 import { StreetScene } from './game/scenes/StreetScene';
 import { RoomScene } from './game/scenes/RoomScene';
+import { InteriorScene } from './game/scenes/InteriorScene';
 import { createSupabase } from './supabaseClient';
 import { ensureProfile } from './ui/loginPanel';
 import { SupabaseAdapter } from './net/SupabaseAdapter';
@@ -43,6 +44,7 @@ async function boot(): Promise<void> {
   }
 
   game.scene.add('room', RoomScene, false);
+  game.scene.add('interior', InteriorScene, false);
   const devRoom = params.get('room');
   if (devRoom) {
     game.scene.add('street', StreetScene, false);

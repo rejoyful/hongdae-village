@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { TILE, ZOOM, MAP_W, MAP_H } from '../config';
 import {
-  ZONES, SPAWN_TILE, HOUSE_DOORS, SHOP_DOORS, CAFE_DOORS,
+  ZONES, SPAWN_TILE, HOUSE_DOORS, SHOP_DOORS, CAFE_DOORS, INTERIOR_DOORS,
   BUSKING_SPOT, OMOK_SPOT, BOARD_SPOT, buildCollision,
 } from '../world/mapData';
 import { NpcCrowd } from '../entities/npcAmbient';
@@ -16,7 +16,7 @@ import { phaseForHour, seoulHour } from '../world/timeOfDay';
 import { fetchCoins, claimDaily, buyItem, sellItem } from '../../db/economyApi';
 import { fetchInventory } from '../../db/roomsApi';
 import { buildStreetArt } from '../art/streetArt';
-import { BUILDING_TEXTURES } from '../art/assetManifest';
+import { BUILDING_TEXTURES, PROP_ASSETS } from '../art/assetManifest';
 import { ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
 import { DEFAULT_APPEARANCE, type Appearance } from '../art/appearance';
 import { CustomizePanel } from '../../ui/customizePanel';
@@ -97,7 +97,7 @@ export class StreetScene extends Phaser.Scene {
 
   preload(): void {
     // AI 아트 자산 — 404여도 게임은 프로시저럴 폴백으로 계속
-    for (const a of BUILDING_TEXTURES) {
+    for (const a of [...BUILDING_TEXTURES, ...PROP_ASSETS]) {
       if (!this.textures.exists(a.key)) this.load.image(a.key, a.url);
     }
     this.load.on('loaderror', (file: { key: string }) => {
@@ -225,6 +225,12 @@ export class StreetScene extends Phaser.Scene {
         const onOmok = tile.tx === OMOK_SPOT.tx && tile.ty === OMOK_SPOT.ty;
         if (onOmok && !this.onOmokTile && this.omok && !this.omok.isOpen) this.omok.open();
         this.onOmokTile = onOmok;
+        const interiorDoor = INTERIOR_DOORS.find((d) => d.tx === tile.tx && d.ty === tile.ty);
+        if (interiorDoor && !this.entering) {
+          this.entering = true;
+          this.scene.start('interior', { shop: interiorDoor.shop, peer: this.peer, adapter: this.adapter });
+          return;
+        }
         const onBoard = tile.tx === BOARD_SPOT.tx && tile.ty === BOARD_SPOT.ty;
         if (onBoard && !this.onBoardTile && this.quests && !this.quests.isOpen) {
           this.quests.open(this.questProgress());

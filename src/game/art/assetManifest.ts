@@ -16,6 +16,10 @@ export const BUILDING_TEXTURES: BuildingTexture[] = [
   { key: 'bldg-cafe',       url: 'assets/buildings/cafe.png' },
   { key: 'bldg-conv',       url: 'assets/buildings/conv.png' },
   { key: 'bldg-store',      url: 'assets/buildings/store.png' },
+  { key: 'bldg-apple',      url: 'assets/buildings/apple.png' },   // Apple 홍대 (320×96)
+  { key: 'bldg-gs25',       url: 'assets/buildings/gs25.png' },    // GS25 (192×96)
+  { key: 'bldg-cu',         url: 'assets/buildings/cu.png' },      // CU (192×96)
+  { key: 'bldg-seven',      url: 'assets/buildings/seven.png' },   // 세븐일레븐 (192×96)
 ];
 
 /** AI 가구 스프라이트 — public/assets/furniture/<id>_<rot>.png, 키 furn-ai-<id>-<rot> */
@@ -36,6 +40,13 @@ export const ROOM_MATERIALS: BuildingTexture[] = [
   { key: 'room-floor-ai', url: 'assets/room/floor_wood.png' }, // 128×128 타일링
 ];
 
+/** 거리 소품 AI 자산 (실제 홍대 감성 — 없으면 해당 소품만 생략) */
+export const PROP_ASSETS: BuildingTexture[] = [
+  { key: 'prop-cart',   url: 'assets/props/bungeoppang_cart.png' }, // 붕어빵 포차 (2×2)
+  { key: 'prop-arcade', url: 'assets/props/claw_photobooth.png' },  // 인형뽑기+네컷부스 (3×2)
+  { key: 'prop-mural',  url: 'assets/props/mural.png' },            // 그래피티 벽화 (8×3)
+];
+
 /** mapData.SOLID_RECTS 인덱스 → 텍스처 키 (주택 4종은 좌우 골목에 교차 배치) */
 export const BUILDING_PLACEMENT = new Map<number, string>([
   // 주택 골목 (서): 4~8
@@ -46,4 +57,6 @@ export const BUILDING_PLACEMENT = new Map<number, string>([
   [14, 'bldg-furniture'], [15, 'bldg-cafe'], [16, 'bldg-conv'], [17, 'bldg-store'],
   // 역 출구 구조물: 18
   [18, 'bldg-station'],
+  // 북측 상가 (실브랜드): 19~22
+  [19, 'bldg-apple'], [20, 'bldg-gs25'], [21, 'bldg-cu'], [22, 'bldg-seven'],
 ]);

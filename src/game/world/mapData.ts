@@ -32,6 +32,11 @@ export const SOLID_RECTS: Rect[] = [
   { x: 48, y: 33, w: 8, h: 3 }, { x: 64, y: 33, w: 8, h: 3 },
   // 역 출구 구조물
   { x: 36, y: 46, w: 8, h: 4 },
+  // 북측 상가 — 실제 홍대 브랜드 (인덱스 19~22, 인테리어 입장 가능)
+  { x: 6, y: 28, w: 10, h: 3 },  // 19 Apple 홍대
+  { x: 20, y: 28, w: 6, h: 3 },  // 20 GS25
+  { x: 46, y: 28, w: 6, h: 3 },  // 21 CU
+  { x: 58, y: 28, w: 6, h: 3 },  // 22 세븐일레븐
 ];
 
 /** 스폰 지점: 역 출구 앞 광장 (스펙 §2) */
@@ -60,6 +65,15 @@ export const CAFE_DOORS: Array<{ tx: number; ty: number }> = [
 /** 버스킹 스팟 — 메인 스트리트 보도, 밟으면 버스킹 (스펙 §2·§3) */
 export const BUSKING_SPOT = { tx: 40, ty: 30 };
 
+/** 인테리어 입장 문 — 북측 상가 (밟으면 내부 씬으로) */
+export type InteriorShop = 'apple' | 'gs25' | 'cu' | 'seven';
+export const INTERIOR_DOORS: Array<{ shop: InteriorShop; tx: number; ty: number }> = [
+  { shop: 'apple', tx: 11, ty: 30 },
+  { shop: 'gs25', tx: 23, ty: 30 },
+  { shop: 'cu', tx: 49, ty: 30 },
+  { shop: 'seven', tx: 61, ty: 30 },
+];
+
 /** 공원 오목판 — 숲길 벤치 옆 (스펙 §3 재미 요소) */
 export const OMOK_SPOT = { tx: 24, ty: 5 };
 
@@ -68,5 +82,6 @@ export const BOARD_SPOT = { tx: 36, ty: 44 };
 
 export function buildCollision(): CollisionGrid {
   // 문 타일은 건물에서 뚫어 걸어 들어갈 수 있게 한다 (밟으면 입장)
-  return CollisionGrid.fromRects(MAP_W, MAP_H, SOLID_RECTS, [...HOUSE_DOORS, ...SHOP_DOORS, ...CAFE_DOORS]);
+  return CollisionGrid.fromRects(MAP_W, MAP_H, SOLID_RECTS,
+    [...HOUSE_DOORS, ...SHOP_DOORS, ...CAFE_DOORS, ...INTERIOR_DOORS]);
 }
