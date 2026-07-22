@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { TILE, ZOOM } from '../config';
+import { TILE, ZOOM, TEXT_RES, UI_FONT } from '../config';
 import { tileToWorld, worldToTile, CollisionGrid, type CollisionGrid as Grid } from '../world/grid';
 import { INTERIORS, type InteriorDef } from '../world/interiors';
 import { INTERIOR_DOORS, type InteriorShop } from '../world/mapData';
@@ -104,7 +104,7 @@ export class InteriorScene extends Phaser.Scene {
       const w = tileToWorld(npc.tx, npc.ty);
       const s = this.add.sprite(w.x + TILE / 2, w.y + TILE / 2, key, 0).setOrigin(0.5, 0.66).setDepth(9);
       this.add.text(s.x, s.y - 24, npc.name, {
-        fontSize: '8px', color: '#fff2d8', backgroundColor: '#7a5220', padding: { x: 3, y: 1 },
+        fontFamily: UI_FONT, fontSize: '10px', color: '#fff2d8', backgroundColor: '#7a5220', padding: { x: 3, y: 1 }, resolution: TEXT_RES,
       }).setOrigin(0.5, 1).setDepth(11).setAlpha(0.95);
       this.tweens.add({ targets: s, y: s.y - 3, duration: 1300, yoyo: true, repeat: -1,
         ease: 'Sine.easeInOut', delay: (npc.name.length * 173) % 1000 });
@@ -114,9 +114,9 @@ export class InteriorScene extends Phaser.Scene {
     // 상호작용 스팟 표시 (통통 튀는 라벨)
     for (const sp of this.def.spots) {
       const w = tileToWorld(sp.tx, sp.ty);
-      const icon = this.add.text(w.x + TILE / 2, w.y - 2, '✨', { fontSize: '12px' }).setOrigin(0.5, 1).setDepth(12);
+      const icon = this.add.text(w.x + TILE / 2, w.y - 2, '✨', { fontFamily: UI_FONT, fontSize: '12px' }).setOrigin(0.5, 1).setDepth(12);
       this.add.text(w.x + TILE / 2, w.y + TILE, sp.label, {
-        fontSize: '7px', color: '#fff2d8', backgroundColor: '#5c4432', padding: { x: 2, y: 1 },
+        fontFamily: UI_FONT, fontSize: '9px', color: '#fff2d8', backgroundColor: '#5c4432', padding: { x: 2, y: 1 }, resolution: TEXT_RES,
       }).setOrigin(0.5, 0).setDepth(12).setAlpha(0.9);
       this.tweens.add({ targets: icon, y: w.y - 8, duration: 640, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     }
@@ -203,7 +203,7 @@ export class InteriorScene extends Phaser.Scene {
       return true;
     });
     const t = this.add.text(0, 0, text, {
-      fontSize: '11px', color: '#4a2e14', wordWrap: { width: 150 }, align: 'center', resolution: 2,
+      fontFamily: UI_FONT, fontSize: '11px', color: '#4a2e14', wordWrap: { width: 150 }, align: 'center', resolution: TEXT_RES,
     }).setOrigin(0.5);
     const b = t.getBounds();
     const w = b.width + 16, h = b.height + 10;

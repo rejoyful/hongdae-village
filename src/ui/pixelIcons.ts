@@ -171,6 +171,24 @@ export const ICON_DEFS: Record<string, IconDef> = {
       '............',
     ],
   },
+  // 💎 보물 — 다이아 젬
+  gem: {
+    pal: { o: O, c: '#5ac8e0', h: '#b0f0ff', d: '#2a8ab0', w: '#ffffff' },
+    rows: [
+      '............',
+      '..o.oooo.o..',
+      '.ochhcccdo..',
+      'occhcccddco.',
+      'ocwhccccddo.',
+      '.occcccddo..',
+      '..occcddo...',
+      '...occdo....',
+      '....odo.....',
+      '.....o......',
+      '............',
+      '............',
+    ],
+  },
   // ⚙️ 설정 — 톱니바퀴
   gear: {
     pal: { o: O, g: '#a89882', d: '#887860' },

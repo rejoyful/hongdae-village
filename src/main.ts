@@ -11,6 +11,7 @@ import { SupabaseAdapter } from './net/SupabaseAdapter';
 import type { NetworkAdapter, PeerState } from './net/NetworkAdapter';
 import { GameHud } from './ui/gameHud';
 import { QuestStore } from './game/questProgress';
+import { TreasureStore } from './game/treasure/treasureStore';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 export function createGame(parent: string): Phaser.Game {
@@ -53,6 +54,7 @@ async function boot(): Promise<void> {
   const sb = game.registry.get('sb') as SupabaseClient | undefined;
   const questStore = new QuestStore(peer.userId);
   game.registry.set('quests', questStore);
+  game.registry.set('treasure', new TreasureStore(peer.userId));
   const hud = new GameHud({
     nickname: peer.nickname,
     onLogout: sb ? () => { void sb.auth.signOut().then(() => location.reload()); } : undefined,

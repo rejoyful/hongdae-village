@@ -21,6 +21,7 @@ export interface BarActions {
   onResidents: () => void;
   onRanking: () => void;
   onQuest: () => void;
+  onTreasure: () => void;
   onCustomize: () => void;
   onChat: () => void;
   onEmote: () => void;
@@ -33,6 +34,7 @@ const BAR_BUTTONS: Array<{ act: keyof BarActions; icon: string; label: string }>
   { act: 'onResidents', icon: 'people', label: '주민' },
   { act: 'onRanking', icon: 'trophy', label: '랭킹' },
   { act: 'onQuest', icon: 'scroll', label: '퀘스트' },
+  { act: 'onTreasure', icon: 'gem', label: '보물' },
   { act: 'onCustomize', icon: 'shirt', label: '꾸미기' },
   { act: 'onChat', icon: 'chat', label: '채팅' },
   { act: 'onEmote', icon: 'smile', label: '이모트' },

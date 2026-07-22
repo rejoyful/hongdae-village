@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { TILE, ZOOM, TEXT_RES } from '../config';
+import { TILE, ZOOM, TEXT_RES, UI_FONT } from '../config';
 import { tileToWorld, worldToTile, CollisionGrid } from '../world/grid';
 import { stepPlayer, type MoveInput } from '../entities/playerMotion';
 import { canPlace, footprint, sizeOf, layerOf, type Placed, type Rot, type PlaceRegion } from '../entities/placement';
@@ -120,7 +120,7 @@ export class RoomScene extends Phaser.Scene {
       const cx = (rm.rect.x + rm.rect.w / 2) * TILE;
       const cy = (rm.rect.y + 0.4) * TILE;
       this.add.text(cx, cy, rm.name, {
-        fontSize: '9px', color: '#8a6a4a', resolution: TEXT_RES,
+        fontFamily: UI_FONT, fontSize: '9px', color: '#8a6a4a', resolution: TEXT_RES,
       }).setOrigin(0.5).setDepth(1).setAlpha(0.5);
     }
 
