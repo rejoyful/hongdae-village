@@ -68,6 +68,7 @@ import { STREET_SPARKLES } from '../treasure/treasures';
 import { BagPanel } from '../../ui/bagPanel';
 import { CollectionPanel } from '../../ui/collectionPanel';
 import { MapPanel } from '../../ui/mapPanel';
+import { Minimap } from '../../ui/minimap';
 import { ResidentsPanel } from '../../ui/residentsPanel';
 import { RankingPanel } from '../../ui/rankingPanel';
 import { fetchRanking } from '../../db/rankingApi';
@@ -187,6 +188,8 @@ export class StreetScene extends Phaser.Scene {
   private bag: BagPanel | null = null;
   private dex: CollectionPanel | null = null;
   private mapPanel: MapPanel | null = null;
+  private minimap: Minimap | null = null;
+  private lastMinimapMs = 0;
   private residentsPanel: ResidentsPanel | null = null;
   private rankingPanel: RankingPanel | null = null;
   private residents: ResidentNpcs | null = null;
@@ -466,6 +469,10 @@ export class StreetScene extends Phaser.Scene {
     if (moving && !this.anyPanelOpen()) this.tickPetGift(delta);
     if (!this.anyPanelOpen()) this.hunt?.update(delta);
     this.tickBattle(delta);
+    if (this.minimap && this.time.now - this.lastMinimapMs > 200) {
+      this.lastMinimapMs = this.time.now;
+      this.minimap.update(worldToTile(next.x, next.y), this.remoteTiles());
+    }
     this.idleBreath?.set(!moving && !this.anyPanelOpen());
 
     // 위치 브로드캐스트 (POS_HZ 스로틀)
@@ -671,6 +678,11 @@ export class StreetScene extends Phaser.Scene {
     this.refreshOnline();
   }
 
+  /** 다른 유저들의 현재 타일 (지도·미니맵용) */
+  private remoteTiles(): Array<{ tx: number; ty: number }> {
+    return [...this.remotes.values()].map((r) => worldToTile(r.sprite.x, r.sprite.y));
+  }
+
   /** 좌상단 접속자 목록 갱신 (나 + 원격 닉네임) */
   private refreshOnline(): void {
     this.onlineList?.render([...this.remotes.values()].map((r) => r.nick));
@@ -845,7 +857,10 @@ export class StreetScene extends Phaser.Scene {
     this.mapPanel = new MapPanel({
       onToggle: (o) => this.setGameKeysEnabled(!o),
       getPlayerTile: () => worldToTile(this.player.x, this.player.y),
+      getRemoteTiles: () => this.remoteTiles(),
     });
+    // 우측 상단 미니맵 — 항상 표시, 유저 위치 실시간, 클릭 시 전체 지도
+    this.minimap = new Minimap(() => this.openMap());
     this.residentsPanel = new ResidentsPanel(this.bakePortraits(), {
       onToggle: (o) => this.setGameKeysEnabled(!o),
     });
@@ -1614,6 +1629,7 @@ export class StreetScene extends Phaser.Scene {
     this.bag?.destroy();
     this.dex?.destroy();
     this.mapPanel?.destroy();
+    this.minimap?.destroy();
     this.residentsPanel?.destroy();
     this.rankingPanel?.destroy();
     if (this.escHandler) document.removeEventListener('keydown', this.escHandler);
