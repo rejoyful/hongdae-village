@@ -76,3 +76,18 @@ describe('몬스터·무기 데이터', () => {
     }
   });
 });
+
+describe('레벨 호칭', () => {
+  it('레벨 구간마다 호칭이 오른다', async () => {
+    const { titleForLevel, isTitleUpAt, TITLES } = await import('../src/game/battle/titles');
+    expect(titleForLevel(1)).toBe('새내기 모험가');
+    expect(titleForLevel(5)).toBe('견습 사냥꾼');
+    expect(titleForLevel(50)).toBe('전설의 영웅');
+    expect(titleForLevel(999)).toBe('전설의 영웅');
+    // 단조 증가(높은 레벨 호칭이 낮은 레벨과 같거나 더 상위)
+    let seen = -1;
+    for (const t of TITLES) { expect(t.minLevel).toBeGreaterThan(seen); seen = t.minLevel; }
+    expect(isTitleUpAt(5)).toBe(true);
+    expect(isTitleUpAt(6)).toBe(false);
+  });
+});
