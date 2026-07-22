@@ -21,6 +21,11 @@ import { InventoryBar } from '../../ui/inventoryBar';
 import type { GameHud } from '../../ui/gameHud';
 import type { QuestStore } from '../questProgress';
 import { DAILY_QUESTS } from '../quests';
+import type { TreasureStore } from '../treasure/treasureStore';
+import { TREASURE_BY_ID } from '../treasure/treasures';
+import { drawGem } from '../../ui/treasureIcons';
+import { makeTexture } from '../art/pixelCanvas';
+import { PAL } from '../art/palette';
 import {
   fetchInventory, fetchPlacements, insertPlacement, deletePlacement,
   subscribePlacements, grantStarterOnce,
@@ -123,6 +128,8 @@ export class RoomScene extends Phaser.Scene {
         fontFamily: UI_FONT, fontSize: '9px', color: '#8a6a4a', resolution: TEXT_RES,
       }).setOrigin(0.5).setDepth(1).setAlpha(0.5);
     }
+
+    this.drawTreasureDisplay();
 
     const spawn = tileToWorld(this.plan.spawn.tx, this.plan.spawn.ty);
     this.charKey = ensureCharacter(this, this.peer.appearance);
@@ -387,6 +394,42 @@ export class RoomScene extends Phaser.Scene {
     // 서버가 삭제 + 인벤 복귀 원자 처리 (0007 pickup_item)
     const ok = await deletePlacement(this.sb, p.id, this.peer.userId, p.itemId);
     if (!ok) void this.refresh(); // 실패 시 서버 상태로 복원
+  }
+
+  /** 내가 제작한 보물을 벽 상단 진열장에 전시 (소장 페이오프 — 동숲 감성) */
+  private drawTreasureDisplay(): void {
+    if (!this.isOwner) return;
+    const store = this.registry.get('treasure') as TreasureStore | undefined;
+    if (!store) return;
+    const crafted = Object.keys(store.get().crafted).filter((id) => (store.get().crafted[id] ?? 0) > 0 && TREASURE_BY_ID.has(id));
+    if (crafted.length === 0) return;
+
+    const cellW = 22;
+    const maxCols = Math.max(3, this.plan.w - 4);
+    const cols = Math.min(crafted.length, maxCols);
+    const shown = crafted.slice(0, cols);
+    const shelfW = cols * cellW + 8, shelfH = 28;
+    const key = `treasure-shelf-${this.roomId}-${shown.join('-')}`;
+    if (!this.textures.exists(key)) {
+      makeTexture(this, key, shelfW, shelfH, (d) => {
+        // 나무 선반 판자
+        d.rect(2, shelfH - 7, shelfW - 4, 6, PAL.doorWood);
+        d.rect(2, shelfH - 7, shelfW - 4, 2, PAL.doorDark, 0.5);
+        d.rect(2, shelfH - 2, shelfW - 4, 2, PAL.doorDark, 0.35);
+        shown.forEach((id, i) => {
+          const t = TREASURE_BY_ID.get(id)!;
+          const cx = 4 + i * cellW + cellW / 2;
+          d.rect(cx - 6, shelfH - 10, 12, 3, PAL.doorDark);  // 받침
+          drawGem(d.ctx, t, cx, shelfH - 16, 7);
+        });
+      });
+    }
+    const wx = (this.plan.w * TILE - shelfW) / 2;
+    this.add.image(wx, TILE * 0.35, key).setOrigin(0).setDepth(3);
+    this.add.text((this.plan.w * TILE) / 2, TILE * 0.3, `🏆 내 보물 ${crafted.length}종 전시 중`, {
+      fontFamily: UI_FONT, fontSize: '8px', color: '#fff2d8', backgroundColor: '#7a5220',
+      padding: { x: 3, y: 1 }, resolution: TEXT_RES,
+    }).setOrigin(0.5, 1).setDepth(3).setAlpha(0.9);
   }
 
   private teardown(): void {

@@ -9,13 +9,13 @@ function shade(hex: string, amt: number): string {
   return `rgb(${r},${g},${b})`;
 }
 
-/** 보물 하나를 파세트 젬으로 렌더 (희귀도 색 + 컷 모양 + 반짝임) → dataURL */
-export function renderGem(t: Treasure, size = 48): string {
-  const c = document.createElement('canvas');
-  c.width = size; c.height = size;
-  const ctx = c.getContext('2d')!;
+/**
+ * 파세트 젬을 임의의 2D 컨텍스트에 그린다 (DOM canvas·Phaser 텍스처 공용).
+ * cx,cy = 중심, r = 반경. 그림자 포함.
+ */
+export function drawGem(ctx: CanvasRenderingContext2D, t: Treasure, cx: number, cy: number, r: number): void {
   const base = RARITY_COLOR[t.rarity];
-  const cx = size / 2, cy = size / 2, r = size * 0.38;
+  const size = r / 0.38;
   // id 해시로 컷(면 수) 변주 6~8
   let h = 0; for (const ch of t.id) h = (h * 31 + ch.charCodeAt(0)) & 0xffff;
   const facets = 6 + (h % 3);
@@ -55,6 +55,14 @@ export function renderGem(t: Treasure, size = 48): string {
   ctx.beginPath(); ctx.arc(cx - r * 0.3, cy - r * 0.35, size * 0.045, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = 'rgba(255,255,255,0.6)';
   ctx.beginPath(); ctx.arc(cx + r * 0.25, cy + r * 0.1, size * 0.028, 0, Math.PI * 2); ctx.fill();
+}
+
+/** 보물 하나를 파세트 젬으로 렌더 → dataURL (도감·HUD용) */
+export function renderGem(t: Treasure, size = 48): string {
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const ctx = c.getContext('2d')!;
+  drawGem(ctx, t, size / 2, size / 2, size * 0.38);
   return c.toDataURL();
 }
 
