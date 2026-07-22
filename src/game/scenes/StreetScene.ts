@@ -344,11 +344,10 @@ export class StreetScene extends Phaser.Scene {
     });
 
     // 카메라 — 로컬 플레이어만 팔로우 (좁은 화면은 줌을 낮춰 시야 확보)
-    const cam = this.cameras.main;
-    // 모바일은 세로가 좁으므로 화면 크기에 맞춰 시야 확보 (가로 회전 포함)
-    cam.setZoom(streetZoom());
-    cam.setBounds(0, 0, MAP_W * TILE, MAP_H * TILE);
-    cam.startFollow(this.player, true, 0.12, 0.12);
+    this.reassertCamera();
+    // 건물에서 나온 직후 리사이즈 레이스로 팔로우가 풀려 "맵 전체가 보이며 멈추는" 현상 방지 — 재확정
+    this.time.delayedCall(60, () => this.reassertCamera());
+    this.time.delayedCall(220, () => this.reassertCamera());
     // 화면 회전·리사이즈 시 줌 재적용
     this.scale.on('resize', this.onResize, this);
 
@@ -689,7 +688,16 @@ export class StreetScene extends Phaser.Scene {
   }
 
   private onResize(): void {
-    this.cameras.main?.setZoom(streetZoom());
+    this.reassertCamera();
+  }
+
+  /** 카메라 줌·경계·팔로우를 항상 다시 확정 (씬 전환·리사이즈 후 팔로우 유실 방지) */
+  private reassertCamera(): void {
+    const cam = this.cameras.main;
+    if (!cam || !this.player) return;
+    cam.setZoom(streetZoom());
+    cam.setBounds(0, 0, MAP_W * TILE, MAP_H * TILE);
+    cam.startFollow(this.player, true, 0.12, 0.12);
   }
 
   private updateFacing(input: MoveInput): void {
@@ -1196,10 +1204,10 @@ export class StreetScene extends Phaser.Scene {
     if (!this.hunt || !this.battleHud) return;
     const inField = this.hunt.contains(this.player.x, this.player.y);
     this.battleHud.setVisible(inField || this.isFatigued());
-    // 최근 피격 없고 위험 밖이면 HP 서서히 회복
+    // 최근 피격 없으면 HP 회복 (더 빠르게 — 금방 죽던 문제 완화)
     const maxHp = maxHpForLevel(this.battleStore.level);
-    if (this.playerHp < maxHp && this.time.now - this.lastHitMs > 3000) {
-      this.playerHp = Math.min(maxHp, this.playerHp + (8 * delta) / 1000);
+    if (this.playerHp < maxHp && this.time.now - this.lastHitMs > 2200) {
+      this.playerHp = Math.min(maxHp, this.playerHp + (16 * delta) / 1000);
     }
     const w = weaponById(this.battleStore.equippedId());
     this.battleHud.set({

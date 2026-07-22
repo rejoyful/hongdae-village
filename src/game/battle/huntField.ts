@@ -27,34 +27,44 @@ const TARGET_COUNT = 9;       // 필드에 유지할 몬스터 수
 const PLAYER_RANGE = 30;      // 자동 공격 반경(px)
 const MON_RANGE = 24;         // 몬스터 공격 반경(px)
 const PLAYER_SWING_MS = 620;  // 내 휘두르기 간격
-const MON_ATK_MS = 1150;      // 몬스터 공격 간격
+const MON_ATK_MS = 1500;      // 몬스터 공격 간격 (완화 — 덜 아프게)
 const MON_SPEED = 22;         // px/s
+const DAMAGE_SCALE = 0.55;    // 몬스터 피해 전역 완화 (금방 죽던 문제)
 
 /** 사냥터 전투 컨트롤러 — 몬스터 로밍 + 근접 자동 전투 + 처치·리스폰·티어 전진 */
 export class HuntField {
   private mobs: Mob[] = [];
   private swingCd = 0;
-  private tier: number;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly field: FieldRect,
     private readonly cb: HuntCallbacks,
   ) {
-    this.tier = cb.currentTier();
     for (let i = 0; i < TARGET_COUNT; i++) this.spawn();
   }
 
   private rnd(a: number, b: number): number { return a + Math.random() * (b - a); }
 
+  /** 출몰 티어 — 현재 티어 위주로, 약한 하위 티어도 섞어서 낸다(골드·난이도 완급) */
+  private pickTier(): number {
+    const cur = this.cb.currentTier();
+    if (cur <= 1) return 1;
+    if (Math.random() < 0.55) return cur;                 // 절반 이상은 현재 티어
+    return 1 + Math.floor(Math.random() * (cur - 1));      // 나머지는 1..cur-1 (약함·골드 적음)
+  }
+
   private spawn(): void {
-    const pool = monstersOfTier(this.tier);
+    const pool = monstersOfTier(this.pickTier());
     const species = pool[Math.floor(Math.random() * pool.length)]!;
     const key = ensureMonster(this.scene, species.id);
     if (!key) return;
     const x = this.rnd(this.field.x + 12, this.field.x + this.field.w - 12);
     const y = this.rnd(this.field.y + 12, this.field.y + this.field.h - 12);
-    const sprite = this.scene.add.sprite(x, y, key).setOrigin(0.5, 0.8).setDepth(8).setScale(1.2);
+    // 티어가 높을수록 덩치가 크다 = 강해 보인다
+    const scale = 1.05 + (species.tier - 1) * 0.13;
+    const sprite = this.scene.add.sprite(x, y, key).setOrigin(0.5, 0.8).setDepth(8).setScale(scale);
+    if (species.tier >= 5) sprite.setTint(0xffd0d0); // 최상위는 붉은 살기
     const bar = this.scene.add.graphics().setDepth(9);
     const ang = this.rnd(0, Math.PI * 2);
     this.mobs.push({
@@ -62,18 +72,6 @@ export class HuntField {
       vx: Math.cos(ang) * MON_SPEED, vy: Math.sin(ang) * MON_SPEED,
       turnMs: this.rnd(600, 1800), atkCd: this.rnd(300, MON_ATK_MS),
     });
-  }
-
-  /** 티어가 바뀌면 다음 티어 몬스터로 교체 */
-  private syncTier(): void {
-    const t = this.cb.currentTier();
-    if (t !== this.tier) {
-      this.tier = t;
-      // 남은 몬스터를 서서히 새 티어로 — 즉시 전부 교체(연출은 리스폰이 담당)
-      for (const m of this.mobs) { m.bar.destroy(); m.sprite.destroy(); }
-      this.mobs = [];
-      for (let i = 0; i < TARGET_COUNT; i++) this.spawn();
-    }
   }
 
   private drawBar(m: Mob): void {
@@ -88,7 +86,7 @@ export class HuntField {
   private hurt(m: Mob, dmg: number): void {
     m.hp -= dmg;
     m.sprite.setTintFill(0xffffff);
-    this.scene.time.delayedCall(70, () => m.sprite.clearTint());
+    this.scene.time.delayedCall(70, () => { if (m.species.tier >= 5) m.sprite.setTint(0xffd0d0); else m.sprite.clearTint(); });
     const t = this.scene.add.text(m.sprite.x, m.sprite.y - 18, `-${dmg}`, {
       fontFamily: 'system-ui', fontSize: '11px', color: '#ffe08a', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(22);
@@ -113,7 +111,6 @@ export class HuntField {
 
   /** 매 프레임 호출. 플레이어 위치 기준으로 전투 판정 */
   update(delta: number): void {
-    this.syncTier();
     const p = this.cb.getPlayerPos();
     const dt = delta / 1000;
     this.swingCd -= delta;
@@ -143,7 +140,7 @@ export class HuntField {
         if (m.atkCd <= 0) {
           m.atkCd = MON_ATK_MS;
           this.scene.tweens.add({ targets: m.sprite, x: m.sprite.x + (p.x > m.sprite.x ? 4 : -4), duration: 90, yoyo: true });
-          this.cb.onPlayerHit(m.species.atk);
+          this.cb.onPlayerHit(Math.max(1, Math.round(m.species.atk * DAMAGE_SCALE)));
         }
       }
       if (dist < nd) { nd = dist; nearest = m; }

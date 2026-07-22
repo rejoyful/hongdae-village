@@ -8,9 +8,9 @@ export function xpToNext(level: number): number {
   return Math.round(40 * Math.pow(level, 1.7));
 }
 
-/** 레벨별 최대 체력 */
+/** 레벨별 최대 체력 (초반 생존력 상향 — 금방 죽던 문제) */
 export function maxHpForLevel(level: number): number {
-  return 40 + (level - 1) * 12;
+  return 55 + (level - 1) * 14;
 }
 
 /** 레벨별 기본 공격력 (무기 보너스 별도) */

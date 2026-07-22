@@ -14,8 +14,8 @@ describe('전투·성장 곡선', () => {
   });
 
   it('체력·공격력은 레벨에 비례한다', () => {
-    expect(maxHpForLevel(1)).toBe(40);
-    expect(maxHpForLevel(5)).toBe(88);
+    expect(maxHpForLevel(1)).toBe(55);
+    expect(maxHpForLevel(5)).toBe(111);
     expect(baseAtkForLevel(1)).toBe(4);
     expect(baseAtkForLevel(5)).toBeGreaterThan(baseAtkForLevel(1));
   });
