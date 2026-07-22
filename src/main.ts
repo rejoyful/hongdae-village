@@ -8,6 +8,9 @@ import { createSupabase } from './supabaseClient';
 import { ensureProfile } from './ui/loginPanel';
 import { SupabaseAdapter } from './net/SupabaseAdapter';
 import type { NetworkAdapter, PeerState } from './net/NetworkAdapter';
+import { GameHud } from './ui/gameHud';
+import { QuestStore } from './game/questProgress';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 export function createGame(parent: string): Phaser.Game {
   return new Phaser.Game({
@@ -44,6 +47,25 @@ async function boot(): Promise<void> {
     const { DEFAULT_APPEARANCE } = await import('./game/art/appearance');
     peer = { userId: 'offline', nickname: '게스트', color: 'e8c9a0', appearance: DEFAULT_APPEARANCE };
   }
+
+  // 세션 싱글턴: 퀘스트 진행 저장소 + 게임 HUD (씬 전환에도 유지, P2-1·P2-3)
+  const sb = game.registry.get('sb') as SupabaseClient | undefined;
+  const questStore = new QuestStore(peer.userId);
+  game.registry.set('quests', questStore);
+  const hud = new GameHud({
+    nickname: peer.nickname,
+    onLogout: sb ? () => { void sb.auth.signOut().then(() => location.reload()); } : undefined,
+    onResetData: () => {
+      try {
+        localStorage.removeItem(`hv-dex-${peer.userId}`);
+        localStorage.removeItem(`hv-trust-${peer.userId}`);
+        localStorage.removeItem(`hv-quests-${peer.userId}`);
+      } catch { /* ignore */ }
+      location.reload();
+    },
+  });
+  hud.setHearts(questStore.doneCount(), 5);
+  game.registry.set('hud', hud);
 
   game.scene.add('room', RoomScene, false);
   game.scene.add('interior', InteriorScene, false);

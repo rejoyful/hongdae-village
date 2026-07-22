@@ -15,6 +15,9 @@ import { TouchControls, isTouchDevice } from '../../ui/touchControls';
 import { ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
 import type { NetworkAdapter, PeerState } from '../../net/NetworkAdapter';
 import { InventoryBar } from '../../ui/inventoryBar';
+import type { GameHud } from '../../ui/gameHud';
+import type { QuestStore } from '../questProgress';
+import { DAILY_QUESTS } from '../quests';
 import {
   fetchInventory, fetchPlacements, insertPlacement, deletePlacement,
   subscribePlacements, grantStarterOnce,
@@ -291,8 +294,11 @@ export class RoomScene extends Phaser.Scene {
     if ((this.counts.get(itemId) ?? 0) <= 0) return;
     if (!canPlace(this.placed, itemId, tx, ty, rot)) return;
 
-    // 오늘의 인테리어 퀘스트 진행
-    this.registry.set('q_place', ((this.registry.get('q_place') as number | undefined) ?? 0) + 1);
+    // 오늘의 인테리어 퀘스트 진행 (지속 저장 + HUD 하트 갱신, P2-3)
+    const quests = this.registry.get('quests') as QuestStore | undefined;
+    quests?.bump('q_place');
+    const hud = this.registry.get('hud') as GameHud | undefined;
+    if (quests && hud) hud.setHearts(quests.doneCount(), DAILY_QUESTS.length);
 
     // 낙관적 반영 → 서버 실패 시 롤백 (스펙 §7)
     const localId = `local-${++this.localSeq}`;

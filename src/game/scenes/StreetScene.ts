@@ -32,6 +32,7 @@ import type { NetworkAdapter, PeerState } from '../../net/NetworkAdapter';
 import { ChatInput } from '../../ui/chatInput';
 import { EmoteWheel, EMOTE_EMOJI } from '../../ui/emoteWheel';
 import { GameHud } from '../../ui/gameHud';
+import type { QuestStore } from '../questProgress';
 import { BagPanel } from '../../ui/bagPanel';
 import { CollectionPanel } from '../../ui/collectionPanel';
 import { MapPanel } from '../../ui/mapPanel';
@@ -70,7 +71,6 @@ export class StreetScene extends Phaser.Scene {
   private player!: Phaser.GameObjects.Sprite;
   private playerLabel!: Phaser.GameObjects.Text;
   private keys!: Record<'W' | 'A' | 'S' | 'D', Phaser.Input.Keyboard.Key>;
-  private marker!: Phaser.GameObjects.Rectangle;
 
   private peer!: PeerState;
   private adapter: NetworkAdapter | null = null;
@@ -92,6 +92,7 @@ export class StreetScene extends Phaser.Scene {
   private onBoardTile = false;
   private forestMs = 0;
   private hud: GameHud | null = null;
+  private questStore!: QuestStore;
   private bag: BagPanel | null = null;
   private dex: CollectionPanel | null = null;
   private mapPanel: MapPanel | null = null;
@@ -129,6 +130,7 @@ export class StreetScene extends Phaser.Scene {
       ?? { userId: 'offline', nickname: '게스트', color: 'e8c9a0', appearance: DEFAULT_APPEARANCE };
     this.adapter = data.adapter ?? null;
     this.sb = (this.registry.get('sb') as SupabaseClient | undefined) ?? null;
+    this.questStore = this.registry.get('quests') as QuestStore;
     this.remotes = new Map();
     this.bubbles = [];
     this.spawnTile = data.spawnTile ?? SPAWN_TILE;
@@ -154,10 +156,6 @@ export class StreetScene extends Phaser.Scene {
     }
     if (this.sb) void fetchRooms(this.sb).then((r) => { this.rooms = r; });
 
-    // 클릭 마커
-    this.marker = this.add.rectangle(0, 0, TILE, TILE).setOrigin(0)
-      .setStrokeStyle(2, 0xf2d8a8).setVisible(false).setDepth(4);
-
     // 로컬 플레이어 (커스터마이징 외형)
     const spawn = tileToWorld(this.spawnTile.tx, this.spawnTile.ty);
     this.charKey = ensureCharacter(this, this.peer.appearance);
@@ -173,6 +171,7 @@ export class StreetScene extends Phaser.Scene {
       S: kb.addKey(Phaser.Input.Keyboard.KeyCodes.S),
       D: kb.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     };
+    // 집 문을 클릭하면 입장 (이동은 WASD·조이스틱 — 오해를 주던 클릭 마커는 제거, P2-2)
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       const cam = this.cameras.main;
       const { tx, ty } = screenToTile(p.x, p.y, {
@@ -180,9 +179,7 @@ export class StreetScene extends Phaser.Scene {
         width: cam.width, height: cam.height,
       });
       const door = HOUSE_DOORS.find((d) => d.tx === tx && d.ty === ty);
-      if (door) { void this.enterDoor(door.roomId); return; }
-      const w = tileToWorld(tx, ty);
-      this.marker.setPosition(w.x, w.y).setVisible(true);
+      if (door) void this.enterDoor(door.roomId);
     });
 
     // 카메라 — 로컬 플레이어만 팔로우 (좁은 화면은 줌을 낮춰 시야 확보)
@@ -254,7 +251,7 @@ export class StreetScene extends Phaser.Scene {
         }
         const onBoard = tile.tx === BOARD_SPOT.tx && tile.ty === BOARD_SPOT.ty;
         if (onBoard && !this.onBoardTile && this.quests && !this.quests.isOpen) {
-          this.quests.open(this.questProgress());
+          this.quests.open(this.questStore.progress(), this.questStore.get().claimed);
         }
         this.onBoardTile = onBoard;
       }
@@ -517,8 +514,9 @@ export class StreetScene extends Phaser.Scene {
       onToggle: (o) => this.setGameKeysEnabled(!o),
       fetchRows: () => fetchRanking(this.sb!),
     });
-    this.hud = new GameHud({
-      nickname: this.peer.nickname,
+    // HUD는 세션 싱글턴 (main 생성) — 거리 진입 시 액션 바만 장착
+    this.hud = this.registry.get('hud') as GameHud;
+    this.hud.mountActions({
       onBag: () => void this.openBag(),
       onDex: () => void this.openDex(),
       onMap: () => this.openMap(),
@@ -528,14 +526,6 @@ export class StreetScene extends Phaser.Scene {
       onCustomize: () => { if (!this.chat!.isOpen && !this.customize!.isOpen) this.customize!.open(this.peer.appearance); },
       onChat: () => { if (!this.chat!.isOpen) this.chat!.open(); },
       onEmote: () => { if (!this.chat!.isOpen) this.emotes!.toggle(); },
-      onLogout: this.sb ? () => { void this.sb!.auth.signOut().then(() => location.reload()); } : undefined,
-      onResetData: () => {
-        try {
-          localStorage.removeItem(`hv-dex-${this.peer.userId}`);
-          localStorage.removeItem(`hv-trust-${this.peer.userId}`);
-        } catch { /* ignore */ }
-        location.reload();
-      },
     });
     this.refreshHearts();
     void this.initCoins();
@@ -614,17 +604,16 @@ export class StreetScene extends Phaser.Scene {
 
   private openQuests(): void {
     if (this.anyPanelOpen()) return;
-    this.quests!.open(this.questProgress());
+    this.quests!.open(this.questStore.progress(), this.questStore.get().claimed);
   }
 
   private questDoneCount(): number {
-    const prog = this.questProgress();
-    return DAILY_QUESTS.filter((q) => (prog.get(q.registryKey) ?? 0) >= q.goal).length;
+    return this.questStore.doneCount();
   }
 
   /** 하트 = 오늘의 퀘스트 달성 수 */
   private refreshHearts(): void {
-    this.hud?.setHearts(this.questDoneCount(), DAILY_QUESTS.length);
+    this.hud?.setHearts(this.questStore.doneCount(), DAILY_QUESTS.length);
   }
 
   private setCoins(v: number): void {
@@ -685,17 +674,9 @@ export class StreetScene extends Phaser.Scene {
   // --- 퀘스트 진행 (game.registry — 씬 전환에도 유지) ---
 
   private incQuest(key: string, by = 1): void {
-    this.registry.set(key, ((this.registry.get(key) as number | undefined) ?? 0) + by);
-    this.quests?.refresh(this.questProgress());
+    this.questStore.bump(key, by); // localStorage 지속 (KST 자정 리셋, P2-3)
+    this.quests?.refresh(this.questStore.progress());
     this.refreshHearts();
-  }
-
-  private questProgress(): Map<string, number> {
-    const map = new Map<string, number>();
-    for (const q of DAILY_QUESTS) {
-      map.set(q.registryKey, (this.registry.get(q.registryKey) as number | undefined) ?? 0);
-    }
-    return map;
   }
 
   private async handleQuestClaim(questId: string): Promise<void> {
@@ -703,10 +684,12 @@ export class StreetScene extends Phaser.Scene {
     const { data } = await this.sb.rpc('earn_activity', { p_kind: questId });
     if (typeof data === 'number' && data >= 0) {
       this.setCoins(data);
+      this.questStore.claim(questId);
       this.quests?.markClaimed(questId);
       this.showBubble(this.player, '퀘스트 보상 +40 🪙');
       this.motions?.play(this.player, 'coin');
     } else if (data === -3) {
+      this.questStore.claim(questId);
       this.quests?.markClaimed(questId); // 오늘 이미 수령
     } else {
       this.showBubble(this.player, '보상 수령에 실패했어요');
@@ -831,7 +814,7 @@ export class StreetScene extends Phaser.Scene {
     this.motions?.destroy();
     this.idleBreath?.destroy();
     this.touch?.destroy();
-    this.hud?.destroy();
+    this.hud?.unmountActions(); // HUD는 싱글턴 — 액션 바만 내리고 상태·설정은 유지
     this.bag?.destroy();
     this.dex?.destroy();
     this.mapPanel?.destroy();
