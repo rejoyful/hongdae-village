@@ -143,24 +143,59 @@
   display: flex; z-index: 15; font-family: system-ui, sans-serif;
 }
 .hv-custom-card {
-  background: rgba(26, 23, 19, 0.94); border: 1px solid #4a3f35;
-  border-radius: 12px; padding: 18px 20px; width: 240px; color: #f2e8dc;
+  background: linear-gradient(#b07a46, #96613a); border: 3px solid #5c3a1c;
+  border-radius: 16px; padding: 14px 16px; width: 264px; color: #fff2d8;
+  box-shadow: 0 0 0 3px #c89058 inset, 0 14px 32px rgba(0,0,0,.5);
+  max-height: 92vh; overflow-y: auto; box-sizing: border-box;
+  animation: hv-pop .24s cubic-bezier(.34,1.56,.64,1);
 }
-.hv-custom-card h2 { font-size: 15px; margin: 0 0 12px; }
-.hv-custom-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 13px; }
-.hv-custom-row .lbl { width: 44px; opacity: 0.7; }
-.hv-custom-row .val { flex: 1; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px; }
-.hv-custom-row .val i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; border: 1px solid #4a3f35; }
+.hv-custom-card h2 { font-size: 16px; margin: 0; color: #fff2d8; text-shadow: 0 2px 0 #4a2e14; }
+.cc-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.cc-random {
+  padding: 5px 10px; border: 2px solid #6e4522; border-radius: 999px; cursor: pointer;
+  background: linear-gradient(#f2c25c, #e8a83c); color: #5a3a10; font-weight: 800; font-size: 11px;
+  box-shadow: 0 2px 0 #a06428;
+}
+.cc-random:active { transform: translateY(2px); box-shadow: 0 1px 0 #a06428; }
+.cc-preview-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 10px; }
+.cc-stage {
+  width: 100%; height: 168px; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at 50% 78%, #f2dcae, #d9b478 70%, #c89a5a);
+  border: 2px solid #c89058; border-radius: 12px; box-shadow: inset 0 2px 6px rgba(90,58,28,.3);
+}
+.cc-preview {
+  width: 108px; height: 144px; image-rendering: pixelated;
+  filter: drop-shadow(0 6px 4px rgba(74,46,20,.35));
+}
+.cc-turn { display: flex; gap: 5px; }
+.cc-turn button {
+  min-width: 40px; padding: 5px 0; border: 2px solid #6e4522; border-radius: 8px; cursor: pointer;
+  background: linear-gradient(#e7bd7f, #d9a45b); color: #4a2e14; font-weight: 800; font-size: 12px;
+  box-shadow: 0 2px 0 #5c3a1c;
+}
+.cc-turn button.sel { background: linear-gradient(#fff2d8, #f2dcae); box-shadow: 0 0 0 2px #e8a84f inset, 0 2px 0 #5c3a1c; }
+.cc-rows { display: flex; flex-direction: column; }
+.hv-custom-row {
+  display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 13px; font-weight: 700;
+  background: #e0c088; border: 1px solid #c89058; border-radius: 8px; padding: 4px 8px; color: #4a2e14;
+}
+.hv-custom-row .lbl { width: 42px; color: #7a5220; font-weight: 800; }
+.hv-custom-row .val { flex: 1; text-align: center; display: flex; align-items: center; justify-content: center; gap: 6px; color: #4a2e14; }
+.hv-custom-row .val i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; border: 1px solid #8a6a3c; }
 .hv-custom-row button {
-  width: 26px; height: 26px; border-radius: 6px; border: 1px solid #4a3f35;
-  background: #241f1a; color: #f2e8dc; cursor: pointer;
+  width: 28px; height: 28px; border-radius: 7px; border: 2px solid #6e4522; flex: none;
+  background: linear-gradient(#e7bd7f, #d9a45b); color: #4a2e14; cursor: pointer; font-weight: 900;
+  box-shadow: 0 2px 0 #5c3a1c;
 }
-.hv-custom-actions { display: flex; gap: 8px; margin-top: 14px; }
+.hv-custom-row button:active { transform: translateY(2px); box-shadow: 0 1px 0 #5c3a1c; }
+.hv-custom-actions { display: flex; gap: 8px; margin-top: 12px; }
 .hv-custom-actions button {
-  flex: 1; padding: 8px; border: 0; border-radius: 8px; cursor: pointer; font-weight: 700;
+  flex: 1; padding: 10px; border: 2px solid #6e4522; border-radius: 10px; cursor: pointer; font-weight: 800;
+  box-shadow: 0 3px 0 #5c3a1c;
 }
-.hv-custom-actions .save { background: #e8a87c; color: #241f1a; }
-.hv-custom-actions .cancel { background: #3a3128; color: #f2e8dc; }
+.hv-custom-actions button:active { transform: translateY(2px); box-shadow: 0 1px 0 #5c3a1c; }
+.hv-custom-actions .save { background: linear-gradient(#9cd8a0, #5aa668); color: #143a1e; }
+.hv-custom-actions .cancel { background: linear-gradient(#e7bd7f, #d9a45b); color: #4a2e14; }
 .hv-shop {
   position: fixed; inset: 0; z-index: 18;
   display: flex; align-items: center; justify-content: center;
@@ -853,12 +888,50 @@
 .hud-badge.done { background: #4ea86a; }
 
 /* ── 퀘스트 패널 안내 ── */
+/* 제목이 카드 좌상단에 딱 붙던 문제 — shop-card엔 패딩이 없어 head가 flush였다. 헤더에 여백 부여 */
+.hv-quest .hv-shop-card > .hv-cafe-head { padding: 14px 16px 4px; }
 .quest-intro { font-size: 12px; color: #cbb89a; line-height: 1.5; margin: 4px 14px 8px; }
 .quest-intro b { color: #f2d8a8; }
 .hv-quest-rows .where { color: #8cc0a0; font-size: 11px; }
 
 /* ── 접속자 목록: 하트 제거로 상단 여유 → 위로 ── */
 .hv-online { top: calc(12px + env(safe-area-inset-top, 0px)) !important; }
+
+/* ── 펫샵 「멍냥이네」 ── */
+.hv-petshop {
+  position: fixed; inset: 0; z-index: 18; display: flex; align-items: center; justify-content: center;
+  background: rgba(15, 12, 10, 0.55); font-family: system-ui, sans-serif;
+}
+.ps-frame { width: min(440px, 94vw); }
+.ps-tip { margin: 0 2px 4px; font-size: 12px; color: #fff2d8; opacity: .9; }
+.ps-list { padding: 10px; max-height: 60vh; display: flex; flex-direction: column; gap: 8px; }
+.ps-card {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  background: #f2e2b8; border: 2px solid #c89058; border-radius: 12px;
+}
+.ps-card.is-active { background: #fff2cc; outline: 2px solid #e8a83c; }
+.ps-pic {
+  width: 52px; height: 52px; flex: none; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at 50% 75%, #fff8e4, #e6d3aa); border: 1px solid #c89058; border-radius: 10px;
+}
+.ps-canvas { width: 44px; height: 44px; image-rendering: pixelated; }
+.ps-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ps-info b { font-size: 14px; color: #4a2e14; }
+.ps-info span { font-size: 11px; color: #8a6a3c; }
+.ps-card button {
+  flex: none; padding: 8px 12px; border: 2px solid #6e4522; border-radius: 9px; cursor: pointer;
+  font-weight: 800; font-size: 12px; box-shadow: 0 2px 0 #5c3a1c;
+}
+.ps-card button:active { transform: translateY(2px); box-shadow: 0 1px 0 #5c3a1c; }
+.ps-card button:disabled { opacity: .4; cursor: default; box-shadow: none; }
+.ps-buy { background: linear-gradient(#9cd8a0, #5aa668); color: #143a1e; }
+.ps-take { background: linear-gradient(#e7bd7f, #d9a45b); color: #4a2e14; }
+.ps-active { background: linear-gradient(#f2c25c, #e8a83c); color: #5a3a10; }
+.ps-rest {
+  align-self: center; margin-top: 2px; padding: 8px 18px; border: 2px solid #6e4522; border-radius: 999px;
+  background: linear-gradient(#e7bd7f, #d9a45b); color: #4a2e14; font-weight: 800; cursor: pointer; box-shadow: 0 2px 0 #5c3a1c;
+}
+@media (max-width: 700px) { .ps-list { max-height: 52vh; } }
 
 /* ── 가로 회전(landscape) 대응 — 낮은 높이에서 패널·바 압축 ── */
 @media (orientation: landscape) and (max-height: 520px) {
