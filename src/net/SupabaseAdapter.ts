@@ -3,7 +3,7 @@ import { EV, type PosMsg, type ChatMsg, type EmoteMsg } from './protocol';
 import type { NetworkAdapter, PeerState } from './NetworkAdapter';
 import { normalizeAppearance, type Appearance } from '../game/art/appearance';
 
-interface PresenceMeta { nickname: string; color: string; appearance?: Appearance }
+interface PresenceMeta { nickname: string; color: string; appearance?: Appearance; pet?: string | null; level?: number }
 
 /** NetworkAdapter의 Supabase Realtime 구현체 — presence(입장/퇴장) + broadcast(위치·채팅·이모트) */
 export class SupabaseAdapter implements NetworkAdapter {
@@ -78,6 +78,7 @@ export class SupabaseAdapter implements NetworkAdapter {
         this.retryMs = 1000;
         void ch.track({
           nickname: self.nickname, color: self.color, appearance: self.appearance,
+          pet: self.pet ?? null, level: self.level ?? 1,
         } satisfies PresenceMeta);
       } else if (status === 'CHANNEL_ERROR' || status === 'CLOSED' || status === 'TIMED_OUT') {
         // 끊겨도 게임은 "혼자 모드"로 계속 (스펙 §7) — 지수 백오프 재구독
@@ -116,8 +117,10 @@ export class SupabaseAdapter implements NetworkAdapter {
         nickname: meta.nickname,
         color: meta.color,
         appearance: normalizeAppearance(meta.appearance, meta.color),
+        pet: meta.pet ?? null,
+        level: typeof meta.level === 'number' ? meta.level : 1,
       };
-      const serialized = JSON.stringify([meta.nickname, meta.appearance ?? meta.color]);
+      const serialized = JSON.stringify([meta.nickname, meta.appearance ?? meta.color, meta.pet ?? null, meta.level ?? 1]);
       if (!this.known.has(id)) {
         this.known.add(id);
         this.lastMeta.set(id, serialized);
@@ -141,6 +144,7 @@ export class SupabaseAdapter implements NetworkAdapter {
     if (this.channel) {
       await this.channel.track({
         nickname: self.nickname, color: self.color, appearance: self.appearance,
+        pet: self.pet ?? null, level: self.level ?? 1,
       } satisfies PresenceMeta);
     }
   }

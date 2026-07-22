@@ -19,6 +19,7 @@ import { maxHpForLevel, totalAtk, xpToNext, FATIGUE_MS } from '../battle/combat'
 import { weaponById } from '../battle/weapons';
 import { titleForLevel, isTitleUpAt } from '../battle/titles';
 import { ensureWeaponSprite } from '../art/weaponArt';
+import { PlayerAura } from '../entities/playerAura';
 import type { MonsterSpecies } from '../battle/monsters';
 import { BattleHud } from '../../ui/battleHud';
 import { WeaponShopPanel } from '../../ui/weaponShopPanel';
@@ -88,6 +89,9 @@ interface Remote {
   charKey: string;
   lastF: 0 | 1 | 2 | 3;
   nick: string;
+  pet: PetFollower;   // 상대 동행 펫 (없으면 내부 스프라이트 null)
+  aura: PlayerAura;   // 상대 레벨 간지
+  level: number;
 }
 
 interface Bubble { c: Phaser.GameObjects.Container; owner: Phaser.GameObjects.Sprite; until: number }
@@ -161,6 +165,7 @@ export class StreetScene extends Phaser.Scene {
   private lastHitMs = -9999;
   private weaponSprite: Phaser.GameObjects.Sprite | null = null;
   private playerTitle!: Phaser.GameObjects.Text;
+  private playerAura!: PlayerAura;
   private properties: Property[] = [];
   private onRealtyTile = false;
   private escHandler: ((e: KeyboardEvent) => void) | null = null;
@@ -271,6 +276,11 @@ export class StreetScene extends Phaser.Scene {
       });
     this.refreshNameTag();
     this.refreshWeaponSprite();
+    // 레벨 간지 오라 (레벨↑ → 점점 화려하게) + 펫·레벨을 상대에게 전파
+    this.playerAura = new PlayerAura(this);
+    this.playerAura.setLevel(this.battleStore.level);
+    this.peer.pet = this.petStore.activeId();
+    this.peer.level = this.battleStore.level;
     if (this.sb) void fetchOwnedWeapons(this.sb, this.peer.userId).then((ids) => { ids.forEach((id) => this.battleStore.buyWeapon(id)); });
 
     // 입력
@@ -439,6 +449,8 @@ export class StreetScene extends Phaser.Scene {
         r.sprite.setPosition(p.x, p.y);
         r.label.setPosition(p.x, p.y - 26);
         r.ring.setPosition(p.x, p.y + 12);
+        r.aura.follow(p.x, p.y);
+        r.pet?.update(p.x, p.y, delta);
         const ak = `${r.charKey}-walk-${r.lastF}`;
         if (moved) {
           if (r.sprite.anims.currentAnim?.key !== ak || !r.sprite.anims.isPlaying) r.sprite.play(ak);
@@ -453,6 +465,7 @@ export class StreetScene extends Phaser.Scene {
     this.playerLabel.setPosition(this.player.x, this.player.y - 26);
     this.playerTitle.setPosition(this.player.x, this.player.y - 38);
     this.playerRing.setPosition(this.player.x, this.player.y + 12);
+    this.playerAura?.follow(this.player.x, this.player.y);
     this.positionWeaponSprite();
     this.bubbles = this.bubbles.filter((b) => {
       if (now >= b.until || !b.owner.active) { b.c.destroy(); return false; }
@@ -514,7 +527,10 @@ export class StreetScene extends Phaser.Scene {
       r.sprite.stop();
       r.sprite.setTexture(r.charKey, r.lastF * FRAMES_PER_DIR);
       r.nick = peer.nickname;
-      r.label.setText(`● ${peer.nickname}`);
+      r.level = peer.level ?? r.level;
+      r.label.setText(`● ${peer.nickname}  Lv.${r.level}`);
+      r.pet.setSpecies(peer.pet ?? null); // 상대 펫 반영
+      r.aura.setLevel(r.level);
       this.refreshOnline();
     });
     a.onPeerLeave((id) => this.removeRemote(id));
@@ -547,8 +563,13 @@ export class StreetScene extends Phaser.Scene {
       .setStrokeStyle(2, 0x2a5a8a, 0.9).setDepth(9);
     const sprite = this.add.sprite(spawn.x + TILE / 2, spawn.y + TILE / 2, charKey, 0)
       .setOrigin(0.5, 0.66).setDepth(10);
-    const label = this.makeNameLabel(peer.nickname, 'user').setDepth(11);
-    this.remotes.set(peer.userId, { sprite, label, ring, track: new RemoteTrack(), charKey, lastF: 0, nick: peer.nickname });
+    const level = peer.level ?? 1;
+    const label = this.makeNameLabel(`${peer.nickname}  Lv.${level}`, 'user').setDepth(11);
+    // 상대 동행 펫 + 레벨 간지 오라
+    const pet = new PetFollower(this, peer.pet ?? null);
+    const aura = new PlayerAura(this);
+    aura.setLevel(level);
+    this.remotes.set(peer.userId, { sprite, label, ring, track: new RemoteTrack(), charKey, lastF: 0, nick: peer.nickname, pet, aura, level });
     this.chatFeed?.push('', `${peer.nickname}님이 입장했어요`, 'system');
     this.refreshOnline();
   }
@@ -563,6 +584,8 @@ export class StreetScene extends Phaser.Scene {
     r.sprite.destroy();
     r.label.destroy();
     r.ring.destroy();
+    r.pet?.destroy();
+    r.aura.destroy();
     this.remotes.delete(userId);
     this.chatFeed?.push('', `${r.nick}님이 나갔어요`, 'system');
     this.refreshOnline();
@@ -935,6 +958,14 @@ export class StreetScene extends Phaser.Scene {
     this.petStore.setActive(petId);
     this.pet?.setSpecies(petId);
     this.refreshPetStage();
+    this.syncSelfMeta(); // 상대에게도 내 펫 반영
+  }
+
+  /** 내 펫·레벨 상태를 presence로 전파 (상대 화면에 반영) */
+  private syncSelfMeta(): void {
+    this.peer.pet = this.petStore.activeId();
+    this.peer.level = this.battleStore.level;
+    void this.adapter?.updateSelf(this.peer);
   }
 
   /** 먹이 주기 — 하루 1회, 친밀도 상승 + 히든 해금 체크 */
@@ -1084,6 +1115,8 @@ export class StreetScene extends Phaser.Scene {
     if (r.leveledUp > 0) {
       this.playerHp = maxHpForLevel(this.battleStore.level); // 레벨업 완전 회복
       this.refreshNameTag();
+      this.playerAura.setLevel(this.battleStore.level); // 간지 등급 갱신
+      this.syncSelfMeta();                              // 상대에게 레벨 전파
       this.showBubble(this.player, `🎉 레벨 업! Lv.${this.battleStore.level}`);
       this.motions?.play(this.player, 'win');
       this.cameras.main.flash(160, 255, 240, 180);
@@ -1446,6 +1479,7 @@ export class StreetScene extends Phaser.Scene {
     this.weaponShop?.destroy();
     this.hunt?.destroy();
     this.battleHud?.destroy();
+    this.playerAura?.destroy();
     this.pet?.destroy();
     this.treasure?.destroy();
     this.quests?.destroy();

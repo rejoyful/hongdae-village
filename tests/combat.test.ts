@@ -91,3 +91,18 @@ describe('레벨 호칭', () => {
     expect(isTitleUpAt(6)).toBe(false);
   });
 });
+
+describe('레벨 간지(오라) 등급', () => {
+  it('레벨이 오를수록 간지 등급이 오른다', async () => {
+    const { swagTier } = await import('../src/game/battle/swag');
+    expect(swagTier(1)).toBe(0);
+    expect(swagTier(4)).toBe(0);
+    expect(swagTier(5)).toBe(1);
+    expect(swagTier(10)).toBe(2);
+    expect(swagTier(20)).toBe(3);
+    expect(swagTier(35)).toBe(4);
+    expect(swagTier(50)).toBe(5);
+    expect(swagTier(999)).toBe(5);
+    for (let l = 1; l < 60; l++) expect(swagTier(l + 1)).toBeGreaterThanOrEqual(swagTier(l));
+  });
+});
