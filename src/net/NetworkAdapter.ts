@@ -6,6 +6,8 @@ export interface PeerState {
   nickname: string;
   color: string; // 레거시(상의색) — appearance.shirt와 동기 유지
   appearance: Appearance;
+  pet?: string | null; // 동행 펫 id (없으면 null) — 상대에게도 보이게
+  level?: number;      // 전투 레벨 — 이름표·간지 오라 동기
 }
 
 /**
