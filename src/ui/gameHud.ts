@@ -62,7 +62,7 @@ export class GameHud {
         <div class="hv-hud-clock">…</div>
         <button class="hv-hud-gear" title="설정"><img src="${icons.gear}" alt=""></button>
       </div>
-      <div class="hv-hud-bar" style="display:none"></div>
+      <div class="hv-hud-bar hidden"></div>
       <div class="hv-hud-settings" style="display:none">
         <div class="card">
           <h3>⚙️ 설정</h3>
@@ -138,12 +138,12 @@ export class GameHud {
         actions[el.dataset.act as keyof BarActions]();
       });
     });
-    this.barEl.style.display = 'flex';
+    this.barEl.classList.remove('hidden'); // display은 CSS(데스크톱 flex / 모바일 grid)가 결정
   }
 
   /** 거리 씬 이탈(방·인테리어 입장) 시 액션 바 제거 — 상태·설정은 유지 */
   unmountActions(): void {
-    this.barEl.style.display = 'none';
+    this.barEl.classList.add('hidden');
     this.barEl.innerHTML = '';
   }
 
