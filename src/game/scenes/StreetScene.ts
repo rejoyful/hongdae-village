@@ -547,6 +547,9 @@ export class StreetScene extends Phaser.Scene {
     a.onPeerUpdate((peer) => {
       const r = this.remotes.get(peer.userId);
       if (!r) return;
+      const prevLevel = r.level;
+      const prevWeapon = r.weaponId;
+      const prevPet = r.petId;
       r.charKey = ensureCharacter(this, peer.appearance);
       r.sprite.stop();
       r.sprite.setTexture(r.charKey, r.lastF * FRAMES_PER_DIR);
@@ -563,6 +566,16 @@ export class StreetScene extends Phaser.Scene {
       if (!wkey) { r.weaponSprite?.destroy(); r.weaponSprite = null; }
       else if (r.weaponSprite) r.weaponSprite.setTexture(wkey);
       else r.weaponSprite = this.add.sprite(r.sprite.x, r.sprite.y, wkey).setOrigin(0.5, 0.85).setDepth(11);
+      // 즉시 보이는 효과 — 상대 레벨업/장비 변경을 남들도 본다
+      if (r.level > prevLevel) {
+        this.levelUpFx(r.sprite, r.level);
+        this.showBubble(r.sprite, `🎉 Lv.${r.level} 달성!`, 'user');
+        this.chatFeed?.push('', `${r.nick}님이 Lv.${r.level} 달성! 🎉`, 'system');
+      } else if (r.weaponId !== prevWeapon && r.weaponId !== 'fist') {
+        this.sparkleFx(r.sprite, '⚔️✨');
+      } else if (r.petId !== prevPet && r.petId) {
+        this.sparkleFx(r.sprite, '🐾');
+      }
       this.refreshOnline();
     });
     a.onPeerLeave((id) => this.removeRemote(id));
@@ -1069,6 +1082,26 @@ export class StreetScene extends Phaser.Scene {
 
   private isFatigued(): boolean { return this.time.now < this.fatigueUntil; }
 
+  /** 레벨업 효과 — 금빛 링 + 위로 뜨는 텍스트 + 스프라이트 팝 (나·상대 공용) */
+  private levelUpFx(sprite: Phaser.GameObjects.Sprite, level: number): void {
+    const ring = this.add.circle(sprite.x, sprite.y, 20, 0x000000, 0)
+      .setStrokeStyle(3, 0xffd24a, 0.95).setDepth(20).setScale(0.3);
+    this.tweens.add({ targets: ring, scale: 1.8, alpha: 0, duration: 560, ease: 'Cubic.easeOut', onComplete: () => ring.destroy() });
+    const t = this.add.text(sprite.x, sprite.y - 30, `⬆ LEVEL UP  Lv.${level}`, {
+      fontFamily: UI_FONT, fontSize: '11px', color: '#ffe08a', fontStyle: 'bold',
+      stroke: '#4a2e10', strokeThickness: 3, resolution: TEXT_RES,
+    }).setOrigin(0.5).setDepth(21);
+    this.tweens.add({ targets: t, y: t.y - 16, alpha: 0, duration: 950, ease: 'Sine.easeOut', onComplete: () => t.destroy() });
+    this.tweens.add({ targets: sprite, scaleX: 1.18, scaleY: 1.18, duration: 130, yoyo: true, ease: 'Quad.easeOut' });
+    audio.playSe('success');
+  }
+
+  /** 소소한 변경 알림(무기·펫) — 이모지가 뿅 */
+  private sparkleFx(sprite: Phaser.GameObjects.Sprite, emoji: string): void {
+    const t = this.add.text(sprite.x, sprite.y - 20, emoji, { fontSize: '14px' }).setOrigin(0.5).setDepth(21);
+    this.tweens.add({ targets: t, y: t.y - 12, alpha: 0, scale: 1.4, duration: 520, ease: 'Sine.easeOut', onComplete: () => t.destroy() });
+  }
+
   /** 이름표 = ● 닉 Lv.N + 위에 호칭 */
   private refreshNameTag(): void {
     const lv = this.battleStore.level;
@@ -1173,6 +1206,7 @@ export class StreetScene extends Phaser.Scene {
       this.refreshNameTag();
       this.playerAura.setLevel(this.battleStore.level); // 간지 등급 갱신
       this.syncSelfMeta();                              // 상대에게 레벨 전파
+      this.levelUpFx(this.player, this.battleStore.level);
       this.showBubble(this.player, `🎉 레벨 업! Lv.${this.battleStore.level}`);
       this.motions?.play(this.player, 'win');
       this.cameras.main.flash(160, 255, 240, 180);
