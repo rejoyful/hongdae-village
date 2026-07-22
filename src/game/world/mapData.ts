@@ -45,6 +45,10 @@ export const SOLID_RECTS: Rect[] = [
   { x: 2,  y: 24, w: 3, h: 2 },  // 27 주택골목(서) 창고
   { x: 74, y: 24, w: 3, h: 2 },  // 28 주택골목(동) 창고
   { x: 39, y: 33, w: 5, h: 3 },  // 29 복덕방(부동산)
+  // 오피스 단지 (실제 우리 회사 3동)
+  { x: 28, y: 11, w: 8, h: 7 },  // 30 마인드 포레스트 (인싸이트, 6층)
+  { x: 40, y: 11, w: 6, h: 5 },  // 31 마인드 월드 (학지사)
+  { x: 48, y: 11, w: 6, h: 5 },  // 32 마인드 브릿지 (학지사 에듀)
 ];
 
 /**
@@ -119,9 +123,18 @@ export const BUNGEO_SPOT = { tx: 10, ty: 44 };
 /** 복덕방(부동산) 문 — 밟으면 매물 패널 (전세·월세·매매 계약) */
 export const REALTY_DOOR = { tx: 41, ty: 35 };
 
+/** 회사 건물 3동 입장 문 — 밟으면 CompanyScene (층별 사무실) */
+export type CompanyId = 'forest' | 'world' | 'bridge';
+export const COMPANY_DOORS: Array<{ company: CompanyId; tx: number; ty: number }> = [
+  { company: 'forest', tx: 31, ty: 17 },
+  { company: 'world', tx: 42, ty: 15 },
+  { company: 'bridge', tx: 50, ty: 15 },
+];
+
 /** 개인 공간 문(HOUSE_DOORS)의 roomId → properties.id (1:1). 유형은 서버·오프라인 세트가 결정 */
 export function buildCollision(): CollisionGrid {
   // 건물 + 대형 소품이 솔리드. 문 타일만 뚫어 걸어 들어가게 한다 (밟으면 입장).
   return CollisionGrid.fromRects(MAP_W, MAP_H, [...SOLID_RECTS, ...SOLID_PROPS],
-    [...HOUSE_DOORS, ...SHOP_DOORS, ...CAFE_DOORS, ...INTERIOR_DOORS, REALTY_DOOR]);
+    [...HOUSE_DOORS, ...SHOP_DOORS, ...CAFE_DOORS, ...INTERIOR_DOORS, REALTY_DOOR,
+      ...COMPANY_DOORS]);
 }

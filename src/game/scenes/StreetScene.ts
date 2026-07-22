@@ -3,7 +3,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { TILE, ZOOM, MAP_W, MAP_H, TEXT_RES } from '../config';
 import {
   ZONES, SPAWN_TILE, HOUSE_DOORS, SHOP_DOORS, CAFE_DOORS, INTERIOR_DOORS,
-  BUSKING_SPOT, OMOK_SPOT, BOARD_SPOT, CLAW_SPOT, PHOTO_SPOT, BUNGEO_SPOT, REALTY_DOOR, buildCollision,
+  BUSKING_SPOT, OMOK_SPOT, BOARD_SPOT, CLAW_SPOT, PHOTO_SPOT, BUNGEO_SPOT, REALTY_DOOR,
+  COMPANY_DOORS, buildCollision,
 } from '../world/mapData';
 import { ClawPanel } from '../../ui/clawPanel';
 import { RealtyPanel } from '../../ui/realtyPanel';
@@ -274,6 +275,13 @@ export class StreetScene extends Phaser.Scene {
           this.entering = true;
           audio.playSe('door');
           this.scene.start('interior', { shop: interiorDoor.shop, peer: this.peer, adapter: this.adapter });
+          return;
+        }
+        const companyDoor = COMPANY_DOORS.find((d) => d.tx === tile.tx && d.ty === tile.ty);
+        if (companyDoor && !this.entering) {
+          this.entering = true;
+          audio.playSe('door');
+          this.scene.start('company', { companyId: companyDoor.company, peer: this.peer, adapter: this.adapter });
           return;
         }
         const onBoard = tile.tx === BOARD_SPOT.tx && tile.ty === BOARD_SPOT.ty;
