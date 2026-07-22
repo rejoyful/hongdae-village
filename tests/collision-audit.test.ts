@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildCollision, SOLID_RECTS, SOLID_PROPS, HOUSE_DOORS, SHOP_DOORS, CAFE_DOORS,
   INTERIOR_DOORS, BUSKING_SPOT, OMOK_SPOT, BOARD_SPOT, CLAW_SPOT, PHOTO_SPOT,
-  BUNGEO_SPOT, REALTY_DOOR, COMPANY_DOORS, PETSHOP_DOOR, SPAWN_TILE } from '../src/game/world/mapData';
+  BUNGEO_SPOT, REALTY_DOOR, COMPANY_DOORS, PETSHOP_DOOR, WEAPONSHOP_DOOR, SPAWN_TILE } from '../src/game/world/mapData';
 import { TILE } from '../src/game/config';
 import { stepPlayer } from '../src/game/entities/playerMotion';
 import { worldToTile } from '../src/game/world/grid';
@@ -29,6 +29,7 @@ describe('충돌 정합성 감사', () => {
       ...CAFE_DOORS.map((d) => ({ tx: d.tx, ty: d.ty, kind: 'cafe' })),
       { tx: REALTY_DOOR.tx, ty: REALTY_DOOR.ty, kind: 'realty' },
       { tx: PETSHOP_DOOR.tx, ty: PETSHOP_DOOR.ty, kind: 'petshop' },
+      { tx: WEAPONSHOP_DOOR.tx, ty: WEAPONSHOP_DOOR.ty, kind: 'weaponshop' },
       ...COMPANY_DOORS.map((d) => ({ tx: d.tx, ty: d.ty, kind: `company:${d.company}` })),
       ...INTERIOR_DOORS.map((d) => ({ tx: d.tx, ty: d.ty, kind: `interior:${d.shop}` })),
     ];
@@ -79,7 +80,7 @@ describe('충돌 정합성 감사', () => {
 
   it('건물 벽면은 통과 불가 (뚫린 건물 탐지) — 각 건물 아래에서 위로 걸어도 건물 안으로 못 들어감', () => {
     const doorSet = new Set([
-      ...HOUSE_DOORS, ...SHOP_DOORS, ...CAFE_DOORS, ...INTERIOR_DOORS, REALTY_DOOR, ...COMPANY_DOORS, PETSHOP_DOOR,
+      ...HOUSE_DOORS, ...SHOP_DOORS, ...CAFE_DOORS, ...INTERIOR_DOORS, REALTY_DOOR, ...COMPANY_DOORS, PETSHOP_DOOR, WEAPONSHOP_DOOR,
     ].map((d) => `${d.tx},${d.ty}`));
     const leaky: string[] = [];
     SOLID_RECTS.forEach((r, i) => {

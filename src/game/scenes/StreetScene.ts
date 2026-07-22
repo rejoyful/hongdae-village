@@ -12,6 +12,15 @@ import { PetFollower } from '../pets/petFollower';
 import { adoptPet, fetchOwnedPets } from '../../db/petApi';
 import { petById } from '../pets/pets';
 import { giftIntervalMs, giftShards, giftEmoji } from '../pets/petGift';
+import { WEAPONSHOP_DOOR, HUNT_FIELD } from '../world/mapData';
+import { BattleStore } from '../battle/battleStore';
+import { HuntField } from '../battle/huntField';
+import { maxHpForLevel, totalAtk, xpToNext, FATIGUE_MS } from '../battle/combat';
+import { weaponById } from '../battle/weapons';
+import type { MonsterSpecies } from '../battle/monsters';
+import { BattleHud } from '../../ui/battleHud';
+import { WeaponShopPanel } from '../../ui/weaponShopPanel';
+import { buyWeapon, fetchOwnedWeapons } from '../../db/weaponApi';
 import { ClawPanel } from '../../ui/clawPanel';
 import { RealtyPanel } from '../../ui/realtyPanel';
 import {
@@ -139,6 +148,15 @@ export class StreetScene extends Phaser.Scene {
   private onPetShopTile = false;
   private lastPetAt = 0;
   private petGiftMs = 0;
+  // 전투/레벨업
+  private battleStore = new BattleStore();
+  private hunt: HuntField | null = null;
+  private battleHud: BattleHud | null = null;
+  private weaponShop: WeaponShopPanel | null = null;
+  private onWeaponShopTile = false;
+  private playerHp = 40;
+  private fatigueUntil = 0;
+  private lastHitMs = -9999;
   private properties: Property[] = [];
   private onRealtyTile = false;
   private escHandler: ((e: KeyboardEvent) => void) | null = null;
@@ -229,6 +247,20 @@ export class StreetScene extends Phaser.Scene {
     // 온라인이면 서버 보유 펫을 병합 (기기 간 유지)
     if (this.sb) void fetchOwnedPets(this.sb, this.peer.userId).then((ids) => this.petStore.merge(ids));
 
+    // 사냥터 전투 (마을 밖 = 경의선 숲길 필드) — 근접 자동 전투
+    this.playerHp = maxHpForLevel(this.battleStore.level);
+    this.battleHud = new BattleHud();
+    this.hunt = new HuntField(this,
+      { x: HUNT_FIELD.x * TILE, y: HUNT_FIELD.y * TILE, w: HUNT_FIELD.w * TILE, h: HUNT_FIELD.h * TILE },
+      {
+        getPlayerPos: () => ({ x: this.player.x, y: this.player.y }),
+        getPlayerAtk: () => totalAtk(this.battleStore.level, weaponById(this.battleStore.equippedId()).atk, this.isFatigued()),
+        currentTier: () => this.battleStore.tier,
+        onPlayerHit: (dmg) => this.damagePlayer(dmg),
+        onDefeat: (species) => this.onMonsterDefeat(species),
+      });
+    if (this.sb) void fetchOwnedWeapons(this.sb, this.peer.userId).then((ids) => ids.forEach((id) => this.battleStore.buyWeapon(id)));
+
     // 입력
     const kb = this.input.keyboard!;
     this.keys = {
@@ -277,8 +309,10 @@ export class StreetScene extends Phaser.Scene {
           left: this.keys.A.isDown || !!t?.left,
           right: this.keys.D.isDown || !!t?.right,
         };
+    // 피로 상태면 굉장히 느리게 (부활 직후 패널티)
+    const moveDelta = this.isFatigued() ? delta * 0.5 : delta;
     const next = stepPlayer(
-      { x: this.player.x, y: this.player.y }, input, delta, this.grid, { hw: 8, hh: 11 },
+      { x: this.player.x, y: this.player.y }, input, moveDelta, this.grid, { hw: 8, hh: 11 },
     );
     this.player.setPosition(next.x, next.y);
     this.updateFacing(input);
@@ -314,6 +348,9 @@ export class StreetScene extends Phaser.Scene {
         const onPetShop = tile.tx === PETSHOP_DOOR.tx && tile.ty === PETSHOP_DOOR.ty;
         if (onPetShop && !this.onPetShopTile && this.petShop && !this.petShop.isOpen) this.openPetShop();
         this.onPetShopTile = onPetShop;
+        const onWeaponShop = tile.tx === WEAPONSHOP_DOOR.tx && tile.ty === WEAPONSHOP_DOOR.ty;
+        if (onWeaponShop && !this.onWeaponShopTile && this.weaponShop && !this.weaponShop.isOpen) this.openWeaponShop();
+        this.onWeaponShopTile = onWeaponShop;
         const onBusking = tile.tx === BUSKING_SPOT.tx && tile.ty === BUSKING_SPOT.ty;
         if (onBusking && !this.onBuskingTile && this.busking && !this.busking.isOpen) this.busking.open();
         this.onBuskingTile = onBusking;
@@ -370,6 +407,8 @@ export class StreetScene extends Phaser.Scene {
     { const t = worldToTile(next.x, next.y); this.checkSparkle(t.tx, t.ty); }
     this.pet?.update(next.x, next.y, delta);
     if (moving && !this.anyPanelOpen()) this.tickPetGift(delta);
+    if (!this.anyPanelOpen()) this.hunt?.update(delta);
+    this.tickBattle(delta);
     this.idleBreath?.set(!moving && !this.anyPanelOpen());
 
     // 위치 브로드캐스트 (POS_HZ 스로틀)
@@ -639,6 +678,11 @@ export class StreetScene extends Phaser.Scene {
       onSetActive: (petId) => this.handleSetActivePet(petId),
       onFeed: (petId) => this.handleFeed(petId),
     });
+    this.weaponShop = new WeaponShopPanel({
+      onToggle: (open) => this.setGameKeysEnabled(!open),
+      onBuy: (weaponId) => void this.handleBuyWeapon(weaponId),
+      onEquip: (weaponId) => this.battleStore.equip(weaponId),
+    });
 
     // 활동 스팟 표시 — 통통 튀는 아이콘으로 "여기서 뭔가 된다"를 알린다
     const spot = (t: { tx: number; ty: number }, emoji: string, label: string) => {
@@ -658,6 +702,7 @@ export class StreetScene extends Phaser.Scene {
     spot(PHOTO_SPOT, '📸', '네컷');
     spot(BUNGEO_SPOT, '🐟', '붕어빵');
     spot(PETSHOP_DOOR, '🐾', '펫샵');
+    spot(WEAPONSHOP_DOOR, '⚒️', '대장간');
 
     // 마을을 걸어다니는 행인들 (스펙 §2 NPC 앰비언트)
     this.npcs = new NpcCrowd(this, this.grid, (sprite, text) => this.showBubble(sprite, text));
@@ -730,7 +775,7 @@ export class StreetScene extends Phaser.Scene {
       || (this.shop?.isOpen ?? false) || (this.residentsPanel?.isOpen ?? false)
       || (this.rankingPanel?.isOpen ?? false) || (this.claw?.isOpen ?? false)
       || (this.realty?.isOpen ?? false) || (this.treasure?.isOpen ?? false)
-      || (this.petShop?.isOpen ?? false);
+      || (this.petShop?.isOpen ?? false) || (this.weaponShop?.isOpen ?? false);
   }
 
   /** ESC — 열린 패널 중 하나를 닫는다. 닫았으면 true */
@@ -746,6 +791,7 @@ export class StreetScene extends Phaser.Scene {
       { open: this.claw?.isOpen ?? false, close: () => this.claw!.close() },
       { open: this.realty?.isOpen ?? false, close: () => this.realty!.close() },
       { open: this.petShop?.isOpen ?? false, close: () => this.petShop!.close() },
+      { open: this.weaponShop?.isOpen ?? false, close: () => this.weaponShop!.close() },
       { open: this.treasure?.isOpen ?? false, close: () => this.treasure!.close() },
       { open: this.omok?.isOpen ?? false, close: () => this.omok!.close() },
       { open: this.cafe?.isOpen ?? false, close: () => this.cafe!.close() },
@@ -924,6 +970,91 @@ export class StreetScene extends Phaser.Scene {
   private refreshPetStage(): void {
     const id = this.petStore.activeId();
     this.pet?.setStage(id ? this.petStore.stage(id) : 0);
+  }
+
+  // --- 전투/레벨업 ---
+
+  private isFatigued(): boolean { return this.time.now < this.fatigueUntil; }
+
+  /** 매 프레임 배틀 상태 갱신 — HUD 표시·HP 재생 */
+  private tickBattle(delta: number): void {
+    if (!this.hunt || !this.battleHud) return;
+    const inField = this.hunt.contains(this.player.x, this.player.y);
+    this.battleHud.setVisible(inField || this.isFatigued());
+    // 최근 피격 없고 위험 밖이면 HP 서서히 회복
+    const maxHp = maxHpForLevel(this.battleStore.level);
+    if (this.playerHp < maxHp && this.time.now - this.lastHitMs > 3000) {
+      this.playerHp = Math.min(maxHp, this.playerHp + (8 * delta) / 1000);
+    }
+    const w = weaponById(this.battleStore.equippedId());
+    this.battleHud.set({
+      level: this.battleStore.level, hp: this.playerHp, maxHp,
+      xp: this.battleStore.xp, xpNext: xpToNext(this.battleStore.level),
+      tier: this.battleStore.tier, kills: this.battleStore.killsInTier, quota: this.battleStore.quota,
+      weapon: `${w.emoji} ${w.name}`, fatigued: this.isFatigued(),
+    });
+  }
+
+  /** 몬스터에게 맞음 */
+  private damagePlayer(dmg: number): void {
+    if (this.playerHp <= 0) return;
+    this.playerHp -= dmg;
+    this.lastHitMs = this.time.now;
+    this.cameras.main.shake(90, 0.004);
+    this.player.setTintFill(0xff5a5a);
+    this.time.delayedCall(80, () => this.player.clearTint());
+    if (this.playerHp <= 0) this.playerDie();
+  }
+
+  /** 사망 → 경험치 감소 + 마을 부활 + 피로 상태 */
+  private playerDie(): void {
+    this.battleStore.onDeath();
+    this.playerHp = maxHpForLevel(this.battleStore.level);
+    this.fatigueUntil = this.time.now + FATIGUE_MS;
+    const spawn = tileToWorld(SPAWN_TILE.tx, SPAWN_TILE.ty);
+    this.player.setPosition(spawn.x + TILE / 2, spawn.y + TILE / 2);
+    this.showBubble(this.player, '💫 기절… 마을에서 깨어났어요 (경험치 손실·한동안 피로)');
+    audio.playSe('click');
+  }
+
+  /** 몬스터 처치 → 경험치·조각·레벨업·티어 전진 */
+  private onMonsterDefeat(species: MonsterSpecies): void {
+    const before = this.battleStore.level;
+    const r = this.battleStore.onKill(species.xp);
+    if (species.shard > 0 && Math.random() < 0.5) this.treasureStore.addShards(species.shard);
+    audio.playSe('success');
+    if (r.leveledUp > 0) {
+      this.playerHp = maxHpForLevel(this.battleStore.level); // 레벨업 완전 회복
+      this.showBubble(this.player, `🎉 레벨 업! Lv.${this.battleStore.level}`);
+      this.motions?.play(this.player, 'win');
+      this.cameras.main.flash(160, 255, 240, 180);
+      void before;
+    }
+    if (r.tierUp) {
+      this.showBubble(this.player, `⚔️ 티어 ${r.newTier} 돌파! 더 강한 몬스터가 나타난다…`);
+    }
+  }
+
+  private openWeaponShop(): void {
+    if (this.anyPanelOpen()) return;
+    this.weaponShop!.open(this.battleStore, this.coins, !!this.sb);
+  }
+
+  /** 무기 구매 — 온라인이면 서버 코인 차감(가격 SSOT=서버), 미적용/오프라인은 무료 폴백 */
+  private async handleBuyWeapon(weaponId: string): Promise<void> {
+    if (this.battleStore.isWeaponOwned(weaponId)) { this.battleStore.equip(weaponId); this.weaponShop?.refresh(this.coins); return; }
+    if (this.sb) {
+      const res = await buyWeapon(this.sb, weaponId);
+      if (res.ok) { this.setCoins(res.balance); this.battleStore.buyWeapon(weaponId); }
+      else if (res.reason === 'no-coins') { this.showBubble(this.player, '골드가 부족해요 😢'); this.weaponShop?.refresh(this.coins); return; }
+      else this.battleStore.buyWeapon(weaponId); // 미적용/에러 → 무료 폴백
+    } else {
+      this.battleStore.buyWeapon(weaponId);
+    }
+    this.battleStore.equip(weaponId);
+    audio.playSe('success');
+    this.motions?.play(this.player, 'coin');
+    this.weaponShop?.refresh(this.coins);
   }
 
   /** 새로 해금된 히든 펫을 알린다 */
@@ -1249,6 +1380,9 @@ export class StreetScene extends Phaser.Scene {
     this.claw?.destroy();
     this.realty?.destroy();
     this.petShop?.destroy();
+    this.weaponShop?.destroy();
+    this.hunt?.destroy();
+    this.battleHud?.destroy();
     this.pet?.destroy();
     this.treasure?.destroy();
     this.quests?.destroy();

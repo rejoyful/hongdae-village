@@ -51,6 +51,8 @@ export const SOLID_RECTS: Rect[] = [
   { x: 48, y: 11, w: 6, h: 5 },  // 32 마인드 브릿지 (학지사 에듀)
   // 펫샵 (벽화 골목 남측 빈터 — 밟으면 입양 패널)
   { x: 66, y: 46, w: 6, h: 3 },  // 33 펫샵 멍냥이네
+  // 대장간 (사냥터 남쪽 입구 — 밟으면 무기상점)
+  { x: 8, y: 9, w: 5, h: 2 },    // 34 대장간(무기상점)
 ];
 
 /**
@@ -128,6 +130,12 @@ export const REALTY_DOOR = { tx: 41, ty: 35 };
 /** 펫샵 「멍냥이네」 문 — 밟으면 입양 패널 (SOLID_RECTS[33] 하단 중앙) */
 export const PETSHOP_DOOR = { tx: 68, ty: 48 };
 
+/** 대장간(무기상점) 문 — 밟으면 무기 패널 (SOLID_RECTS[34] 하단 중앙) */
+export const WEAPONSHOP_DOOR = { tx: 10, ty: 10 };
+
+/** 사냥터 영역 (경의선 숲길 = 마을 밖 필드). 이 안에서만 몬스터 출몰·전투 */
+export const HUNT_FIELD = { x: 2, y: 1, w: 76, h: 8 };
+
 /** 회사 건물 3동 입장 문 — 밟으면 CompanyScene (층별 사무실) */
 export type CompanyId = 'forest' | 'world' | 'bridge';
 export const COMPANY_DOORS: Array<{ company: CompanyId; tx: number; ty: number }> = [
@@ -141,5 +149,5 @@ export function buildCollision(): CollisionGrid {
   // 건물 + 대형 소품이 솔리드. 문 타일만 뚫어 걸어 들어가게 한다 (밟으면 입장).
   return CollisionGrid.fromRects(MAP_W, MAP_H, [...SOLID_RECTS, ...SOLID_PROPS],
     [...HOUSE_DOORS, ...SHOP_DOORS, ...CAFE_DOORS, ...INTERIOR_DOORS, REALTY_DOOR,
-      ...COMPANY_DOORS, PETSHOP_DOOR]);
+      ...COMPANY_DOORS, PETSHOP_DOOR, WEAPONSHOP_DOOR]);
 }
