@@ -1,6 +1,6 @@
 /**
- * Enter로 여는 채팅 입력창. 열려 있는 동안 씬이 키보드를 비활성화해야 한다
- * (onToggle 콜백에서 처리 — Phase 1 리뷰가 예고한 WASD 캡처 충돌 해소 지점).
+ * 채팅 입력 — 데스크톱 Enter, 모바일은 전송/닫기 버튼으로 명확히 조작.
+ * 열려 있는 동안 씬이 키보드를 비활성화한다(onToggle). 모바일 키보드 위로 뜨게 배치.
  */
 export class ChatInput {
   private root: HTMLDivElement;
@@ -13,24 +13,29 @@ export class ChatInput {
   }) {
     this.root = document.createElement('div');
     this.root.className = 'hv-chat';
-    this.input = document.createElement('input');
-    this.input.type = 'text';
-    this.input.maxLength = 80;
-    this.input.placeholder = '메시지 입력 후 Enter (Esc 닫기)';
-    this.root.appendChild(this.input);
+    this.root.innerHTML = `
+      <input type="text" maxlength="80" placeholder="메시지 입력…" enterkeyhint="send" />
+      <button class="hv-chat-send" type="button">전송</button>
+      <button class="hv-chat-close" type="button" aria-label="닫기">✕</button>`;
+    this.input = this.root.querySelector('input')!;
     document.body.appendChild(this.root);
 
+    const send = () => {
+      const text = this.input.value;
+      this.input.value = '';
+      this.close();
+      this.opts.onSend(text);
+    };
     this.input.addEventListener('keydown', (e) => {
       e.stopPropagation(); // 게임(window) 키 리스너와 분리
-      if (e.key === 'Enter') {
-        const text = this.input.value;
-        this.input.value = '';
-        this.close();
-        this.opts.onSend(text);
-      } else if (e.key === 'Escape') {
-        this.input.value = '';
-        this.close();
-      }
+      if (e.key === 'Enter') send();
+      else if (e.key === 'Escape') { this.input.value = ''; this.close(); }
+    });
+    // 폼 제출(모바일 키보드 '전송'/'return')도 처리
+    this.input.addEventListener('input', (e) => e.stopPropagation());
+    this.root.querySelector('.hv-chat-send')!.addEventListener('click', (e) => { e.preventDefault(); send(); });
+    this.root.querySelector('.hv-chat-close')!.addEventListener('click', (e) => {
+      e.preventDefault(); this.input.value = ''; this.close();
     });
   }
 
@@ -39,7 +44,7 @@ export class ChatInput {
   open(): void {
     if (this.opened) return;
     this.opened = true;
-    this.root.style.display = 'block';
+    this.root.classList.add('open');
     this.opts.onToggle(true);
     setTimeout(() => this.input.focus(), 0);
   }
@@ -47,7 +52,7 @@ export class ChatInput {
   close(): void {
     if (!this.opened) return;
     this.opened = false;
-    this.root.style.display = 'none';
+    this.root.classList.remove('open');
     this.input.blur();
     this.opts.onToggle(false);
   }

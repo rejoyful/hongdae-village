@@ -37,6 +37,8 @@ import { screenToTile } from '../input/pointer';
 import { POS_HZ, INTERP_DELAY_MS, sanitizeChat, type EmoteKind } from '../../net/protocol';
 import type { NetworkAdapter, PeerState } from '../../net/NetworkAdapter';
 import { ChatInput } from '../../ui/chatInput';
+import { ChatFeed } from '../../ui/chatFeed';
+import { OnlineList } from '../../ui/onlineList';
 import { EmoteWheel, EMOTE_EMOJI } from '../../ui/emoteWheel';
 import { GameHud } from '../../ui/gameHud';
 import type { QuestStore } from '../questProgress';
@@ -64,12 +66,22 @@ interface StreetData {
 interface Remote {
   sprite: Phaser.GameObjects.Sprite;
   label: Phaser.GameObjects.Text;
+  ring: Phaser.GameObjects.Ellipse;
   track: RemoteTrack;
   charKey: string;
   lastF: 0 | 1 | 2 | 3;
+  nick: string;
 }
 
 interface Bubble { c: Phaser.GameObjects.Container; owner: Phaser.GameObjects.Sprite; until: number }
+
+/** 말풍선 종류별 색 — NPC(크림), 원격 유저(파랑), 나(초록) */
+const BUBBLE_STYLE = {
+  npc: { border: 0x4a2c12, fill: 0xfff8e4, text: '#4a2e14' },
+  user: { border: 0x2a5a8a, fill: 0xdcecff, text: '#1a3a5a' },
+  me: { border: 0x2a6a3a, fill: 0xdcf2dc, text: '#173a1e' },
+} as const;
+type BubbleKind = keyof typeof BUBBLE_STYLE;
 
 const WASD = [
   Phaser.Input.Keyboard.KeyCodes.W, Phaser.Input.Keyboard.KeyCodes.A,
@@ -80,6 +92,7 @@ export class StreetScene extends Phaser.Scene {
   private grid!: CollisionGrid;
   private player!: Phaser.GameObjects.Sprite;
   private playerLabel!: Phaser.GameObjects.Text;
+  private playerRing!: Phaser.GameObjects.Ellipse;
   private keys!: Record<'W' | 'A' | 'S' | 'D', Phaser.Input.Keyboard.Key>;
 
   private peer!: PeerState;
@@ -87,6 +100,8 @@ export class StreetScene extends Phaser.Scene {
   private remotes = new Map<string, Remote>();
   private bubbles: Bubble[] = [];
   private chat: ChatInput | null = null;
+  private chatFeed: ChatFeed | null = null;
+  private onlineList: OnlineList | null = null;
   private emotes: EmoteWheel | null = null;
   private customize: CustomizePanel | null = null;
   private shop: ShopPanel | null = null;
@@ -182,9 +197,12 @@ export class StreetScene extends Phaser.Scene {
     // 로컬 플레이어 (커스터마이징 외형)
     const spawn = tileToWorld(this.spawnTile.tx, this.spawnTile.ty);
     this.charKey = ensureCharacter(this, this.peer.appearance);
+    // 실제 유저는 발밑 링으로 NPC와 구분 (나=초록)
+    this.playerRing = this.add.ellipse(spawn.x + TILE / 2, spawn.y + TILE / 2 + 12, 26, 10, 0x4ec86a, 0.55)
+      .setStrokeStyle(2, 0x2a6a3a, 0.9).setDepth(9);
     this.player = this.add.sprite(spawn.x + TILE / 2, spawn.y + TILE / 2, this.charKey, 0)
       .setOrigin(0.5, 0.66).setDepth(10); // 발이 충돌 박스 바닥에 오게
-    this.playerLabel = this.makeNameLabel(this.peer.nickname).setDepth(11);
+    this.playerLabel = this.makeNameLabel(this.peer.nickname, 'me').setDepth(11);
 
     // 입력
     const kb = this.input.keyboard!;
@@ -333,6 +351,7 @@ export class StreetScene extends Phaser.Scene {
         const moved = Math.abs(p.x - r.sprite.x) + Math.abs(p.y - r.sprite.y) > 0.4;
         r.sprite.setPosition(p.x, p.y);
         r.label.setPosition(p.x, p.y - 26);
+        r.ring.setPosition(p.x, p.y + 12);
         const ak = `${r.charKey}-walk-${r.lastF}`;
         if (moved) {
           if (r.sprite.anims.currentAnim?.key !== ak || !r.sprite.anims.isPlaying) r.sprite.play(ak);
@@ -343,8 +362,9 @@ export class StreetScene extends Phaser.Scene {
       }
     }
 
-    // 라벨·말풍선 위치 추종 및 만료 처리
+    // 라벨·링·말풍선 위치 추종 및 만료 처리
     this.playerLabel.setPosition(this.player.x, this.player.y - 26);
+    this.playerRing.setPosition(this.player.x, this.player.y + 12);
     this.bubbles = this.bubbles.filter((b) => {
       if (now >= b.until || !b.owner.active) { b.c.destroy(); return false; }
       b.c.setPosition(b.owner.x, b.owner.y - 38);
@@ -404,7 +424,9 @@ export class StreetScene extends Phaser.Scene {
       r.charKey = ensureCharacter(this, peer.appearance);
       r.sprite.stop();
       r.sprite.setTexture(r.charKey, r.lastF * FRAMES_PER_DIR);
-      r.label.setText(peer.nickname);
+      r.nick = peer.nickname;
+      r.label.setText(`● ${peer.nickname}`);
+      this.refreshOnline();
     });
     a.onPeerLeave((id) => this.removeRemote(id));
     a.onPos((id, m, at) => {
@@ -415,7 +437,10 @@ export class StreetScene extends Phaser.Scene {
     });
     a.onChat((id, m) => {
       const r = this.remotes.get(id);
-      if (r) this.showBubble(r.sprite, m.t);
+      if (r) {
+        this.showBubble(r.sprite, m.t, 'user');
+        this.chatFeed?.push(r.nick, m.t, 'user');
+      }
     });
     a.onEmote((id, m) => {
       const r = this.remotes.get(id);
@@ -428,10 +453,15 @@ export class StreetScene extends Phaser.Scene {
     if (this.remotes.has(peer.userId)) return;
     const spawn = tileToWorld(SPAWN_TILE.tx, SPAWN_TILE.ty);
     const charKey = ensureCharacter(this, peer.appearance);
+    // 원격 유저 발밑 링 (파랑) — NPC와 구분
+    const ring = this.add.ellipse(spawn.x + TILE / 2, spawn.y + TILE / 2 + 12, 26, 10, 0x5aa0e0, 0.5)
+      .setStrokeStyle(2, 0x2a5a8a, 0.9).setDepth(9);
     const sprite = this.add.sprite(spawn.x + TILE / 2, spawn.y + TILE / 2, charKey, 0)
       .setOrigin(0.5, 0.66).setDepth(10);
-    const label = this.makeNameLabel(peer.nickname).setDepth(11);
-    this.remotes.set(peer.userId, { sprite, label, track: new RemoteTrack(), charKey, lastF: 0 });
+    const label = this.makeNameLabel(peer.nickname, 'user').setDepth(11);
+    this.remotes.set(peer.userId, { sprite, label, ring, track: new RemoteTrack(), charKey, lastF: 0, nick: peer.nickname });
+    this.chatFeed?.push('', `${peer.nickname}님이 입장했어요`, 'system');
+    this.refreshOnline();
   }
 
   private removeRemote(userId: string): void {
@@ -443,7 +473,15 @@ export class StreetScene extends Phaser.Scene {
     });
     r.sprite.destroy();
     r.label.destroy();
+    r.ring.destroy();
     this.remotes.delete(userId);
+    this.chatFeed?.push('', `${r.nick}님이 나갔어요`, 'system');
+    this.refreshOnline();
+  }
+
+  /** 좌상단 접속자 목록 갱신 (나 + 원격 닉네임) */
+  private refreshOnline(): void {
+    this.onlineList?.render([...this.remotes.values()].map((r) => r.nick));
   }
 
   private updateFacing(input: MoveInput): void {
@@ -456,11 +494,16 @@ export class StreetScene extends Phaser.Scene {
   // --- UI (채팅·이모트·힌트) ---
 
   private setupUi(): void {
+    // 접속자 목록(좌상단) + 전체 채팅 피드 — 멀티일 때만 의미, 오프라인도 나 표시
+    this.onlineList = new OnlineList(this.peer.nickname);
+    this.chatFeed = new ChatFeed();
+
     this.chat = new ChatInput({
       onSend: (raw) => {
         const text = sanitizeChat(raw);
         if (!text) return;
-        this.showBubble(this.player, text);
+        this.showBubble(this.player, text, 'me');
+        this.chatFeed?.push(this.peer.nickname, text, 'me');
         this.adapter?.sendChat({ t: text });
       },
       onToggle: (open) => this.setGameKeysEnabled(!open),
@@ -1003,30 +1046,33 @@ export class StreetScene extends Phaser.Scene {
     Object.values(this.keys).forEach((k) => k.reset());
   }
 
-  private makeNameLabel(name: string): Phaser.GameObjects.Text {
-    return this.add.text(0, 0, name, {
-      fontFamily: UI_FONT, fontSize: '10px', color: '#4a2e14', backgroundColor: '#f6ecd0',
-      padding: { x: 4, y: 2 }, resolution: TEXT_RES,
-    }).setOrigin(0.5, 1).setAlpha(0.95);
+  /** 이름표 — 실제 유저(me/user)는 색을 달리해 NPC와 구분 */
+  private makeNameLabel(name: string, kind: 'me' | 'user' = 'user'): Phaser.GameObjects.Text {
+    const bg = kind === 'me' ? '#2a6a3a' : '#2a5a8a';
+    return this.add.text(0, 0, `● ${name}`, {
+      fontFamily: UI_FONT, fontSize: '10px', color: '#ffffff', backgroundColor: bg,
+      padding: { x: 5, y: 2 }, resolution: TEXT_RES,
+    }).setOrigin(0.5, 1).setAlpha(0.98);
   }
 
-  private showBubble(owner: Phaser.GameObjects.Sprite, text: string): void {
+  private showBubble(owner: Phaser.GameObjects.Sprite, text: string, kind: BubbleKind = 'npc'): void {
     // 같은 주인의 기존 말풍선은 교체
     this.bubbles = this.bubbles.filter((b) => {
       if (b.owner === owner) { b.c.destroy(); return false; }
       return true;
     });
+    const st = BUBBLE_STYLE[kind];
     const t = this.add.text(0, 0, text, {
-      fontFamily: UI_FONT, fontSize: '11px', color: '#4a2e14', wordWrap: { width: 150 }, align: 'center',
+      fontFamily: UI_FONT, fontSize: '11px', color: st.text, wordWrap: { width: 150 }, align: 'center',
       resolution: TEXT_RES,
     }).setOrigin(0.5);
     const bounds = t.getBounds();
     const w = bounds.width + 16, h = bounds.height + 10;
     const bg = this.add.graphics();
-    bg.fillStyle(0x4a2c12, 1).fillRoundedRect(-w / 2 - 1.5, -h / 2 - 1.5, w + 3, h + 3, 8);
-    bg.fillStyle(0xfff8e4, 1).fillRoundedRect(-w / 2, -h / 2, w, h, 7);
-    bg.fillStyle(0x4a2c12, 1).fillTriangle(-4, h / 2 + 4.5, 5, h / 2 + 4.5, 0.5, h / 2 - 2);
-    bg.fillStyle(0xfff8e4, 1).fillTriangle(-2.5, h / 2 + 3, 3.5, h / 2 + 3, 0.5, h / 2 - 2);
+    bg.fillStyle(st.border, 1).fillRoundedRect(-w / 2 - 1.5, -h / 2 - 1.5, w + 3, h + 3, 8);
+    bg.fillStyle(st.fill, 1).fillRoundedRect(-w / 2, -h / 2, w, h, 7);
+    bg.fillStyle(st.border, 1).fillTriangle(-4, h / 2 + 4.5, 5, h / 2 + 4.5, 0.5, h / 2 - 2);
+    bg.fillStyle(st.fill, 1).fillTriangle(-2.5, h / 2 + 3, 3.5, h / 2 + 3, 0.5, h / 2 - 2);
     const c = this.add.container(owner.x, owner.y - 32, [bg, t]).setDepth(20);
     // 뿅 하고 등장
     c.setScale(0.6);
@@ -1037,6 +1083,8 @@ export class StreetScene extends Phaser.Scene {
   private teardown(): void {
     void this.adapter?.disconnect();
     this.chat?.destroy();
+    this.chatFeed?.destroy();
+    this.onlineList?.destroy();
     this.emotes?.destroy();
     this.customize?.destroy();
     this.shop?.destroy();
