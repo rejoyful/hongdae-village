@@ -11,6 +11,7 @@ import { PetStore } from '../pets/petStore';
 import { PetFollower } from '../pets/petFollower';
 import { adoptPet, fetchOwnedPets } from '../../db/petApi';
 import { petById } from '../pets/pets';
+import { giftIntervalMs, giftShards, giftEmoji } from '../pets/petGift';
 import { ClawPanel } from '../../ui/clawPanel';
 import { RealtyPanel } from '../../ui/realtyPanel';
 import {
@@ -137,6 +138,7 @@ export class StreetScene extends Phaser.Scene {
   private pet: PetFollower | null = null;
   private onPetShopTile = false;
   private lastPetAt = 0;
+  private petGiftMs = 0;
   private properties: Property[] = [];
   private onRealtyTile = false;
   private escHandler: ((e: KeyboardEvent) => void) | null = null;
@@ -367,6 +369,7 @@ export class StreetScene extends Phaser.Scene {
     this.residents?.update(next.x, next.y);
     { const t = worldToTile(next.x, next.y); this.checkSparkle(t.tx, t.ty); }
     this.pet?.update(next.x, next.y, delta);
+    if (moving && !this.anyPanelOpen()) this.tickPetGift(delta);
     this.idleBreath?.set(!moving && !this.anyPanelOpen());
 
     // 위치 브로드캐스트 (POS_HZ 스로틀)
@@ -900,6 +903,22 @@ export class StreetScene extends Phaser.Scene {
     this.showBubble(this.player, `${s?.emoji ?? '🐾'} 쓰담쓰담~ 🥰 (친밀도 ${aff})`);
     this.refreshPetStage();
     this.announceUnlocks();
+  }
+
+  /** 데리고 걷다 보면 펫이 가끔 보물 조각을 물어다 준다 (친밀도↑ → 자주·후하게) */
+  private tickPetGift(delta: number): void {
+    const id = this.petStore.activeId();
+    if (!id) { this.petGiftMs = 0; return; }
+    this.petGiftMs += delta;
+    if (this.petGiftMs < giftIntervalMs(this.petStore.affinity(id))) return;
+    this.petGiftMs = 0;
+    const n = giftShards(this.petStore.stage(id));
+    this.treasureStore.addShards(n);
+    const emoji = giftEmoji();
+    this.pet?.giftFx(emoji);
+    const s = petById(id);
+    this.showBubble(this.player, `${s?.emoji ?? '🐾'} 선물이에요! ${emoji} 조각 +${n} 💠`);
+    audio.playSe('success');
   }
 
   private refreshPetStage(): void {
