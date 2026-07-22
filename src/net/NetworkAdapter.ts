@@ -8,6 +8,7 @@ export interface PeerState {
   appearance: Appearance;
   pet?: string | null; // 동행 펫 id (없으면 null) — 상대에게도 보이게
   level?: number;      // 전투 레벨 — 이름표·간지 오라 동기
+  weapon?: string;     // 장착 무기 id — 상대 캐릭터·정보창에 표시
 }
 
 /**
