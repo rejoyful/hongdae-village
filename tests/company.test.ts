@@ -12,9 +12,21 @@ describe('회사 건물 3동', () => {
     expect(COMPANIES.bridge.org).toBe('학지사 에듀');
   });
 
-  it('마인드 포레스트는 6층까지 있다', () => {
-    expect(COMPANIES.forest.floors.length).toBe(6);
+  it('마인드 포레스트·월드 모두 6층까지 있다', () => {
     expect(COMPANIES.forest.floors.map((f) => f.level)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(COMPANIES.world.floors.map((f) => f.level)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  it('엘리베이터는 1~5층만, 6층은 계단으로만 오간다', () => {
+    for (const c of [COMPANIES.forest, COMPANIES.world]) {
+      for (const f of c.floors) {
+        if (f.level <= 5) expect(f.elevator, `${c.name} ${f.level}층 엘베`).toBeDefined();
+        else expect(f.elevator, `${c.name} 6층 엘베 없어야`).toBeUndefined();
+      }
+      // 5층엔 6층행 계단(up), 6층엔 5층행 계단(down)
+      expect(c.floors[4]!.up, `${c.name} 5층 up`).toBeDefined();
+      expect(c.floors[5]!.down, `${c.name} 6층 down`).toBeDefined();
+    }
   });
 
   it('6층은 AX기획실, 병렬 회의실 3개(입구부터 에너지·시너지·라운지)', () => {
@@ -40,6 +52,9 @@ describe('회사 건물 3동', () => {
         for (const m of f.meetings) check(m.door.tx, m.door.ty, `meeting ${m.name} door`);
         if (f.up) check(f.up.tx, f.up.ty, 'up-stair');
         if (f.down) check(f.down.tx, f.down.ty, 'down-stair');
+        if (f.elevator) check(f.elevator.tx, f.elevator.ty, 'elevator');
+        if (f.clockDesk) check(f.clockDesk.tx, f.clockDesk.ty, 'clock-desk');
+        if (f.draftDesk) check(f.draftDesk.tx, f.draftDesk.ty, 'draft-desk');
       }
     }
     expect(bad, bad.join('\n')).toEqual([]);
