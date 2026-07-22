@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { ensurePet } from '../art/petArt';
+import { petTarget } from './petFollowMath';
 
 /**
  * 플레이어를 졸졸 따라다니는 펫. 위치 이력 버퍼를 두어 몇 프레임 뒤처져 따라오고,
@@ -12,6 +13,7 @@ export class PetFollower {
   private trail: Array<{ x: number; y: number }> = [];
   private readonly lag = 16;
   private t = 0;
+  private placed = false;
 
   constructor(private readonly scene: Phaser.Scene, initial: string | null) {
     this.setSpecies(initial);
@@ -28,6 +30,7 @@ export class PetFollower {
       this.sprite.setTexture(key);
     }
     this.trail = [];
+    this.placed = false; // 다음 update에서 플레이어 옆으로 스냅
   }
 
   /** 성장 단계에 따라 머리 위 하트 표시 (단짝 2 / 영혼의단짝 3) */
@@ -63,7 +66,15 @@ export class PetFollower {
     this.t += delta;
     this.trail.push({ x: px, y: py });
     if (this.trail.length > this.lag + 1) this.trail.shift();
-    const target = this.trail.length > this.lag ? this.trail[0]! : { x: px, y: py + 6 };
+    // 지연 버퍼가 차면 뒤처져 따라오고, 정지 상태(겹침)면 옆자리로
+    const target = petTarget(px, py, this.trail.length > this.lag ? this.trail[0]! : null);
+    // 첫 프레임(소환 직후)은 이동 없이 바로 옆에 놓는다 — 맵 가로지르기 방지
+    if (!this.placed) {
+      this.placed = true;
+      this.sprite.setPosition(target.x, target.y);
+      if (this.heart) this.heart.setPosition(target.x, target.y - 20);
+      return;
+    }
 
     const prevX = this.sprite.x;
     const nx = Phaser.Math.Linear(this.sprite.x, target.x, 0.2);
