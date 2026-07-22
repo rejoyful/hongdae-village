@@ -136,6 +136,7 @@ export class StreetScene extends Phaser.Scene {
   private petStore = new PetStore();
   private pet: PetFollower | null = null;
   private onPetShopTile = false;
+  private lastPetAt = 0;
   private properties: Property[] = [];
   private onRealtyTile = false;
   private escHandler: ((e: KeyboardEvent) => void) | null = null;
@@ -222,6 +223,7 @@ export class StreetScene extends Phaser.Scene {
 
     // 동행 펫 (펫샵에서 입양) — 플레이어를 졸졸 따라온다
     this.pet = new PetFollower(this, this.petStore.activeId());
+    this.refreshPetStage();
     // 온라인이면 서버 보유 펫을 병합 (기기 간 유지)
     if (this.sb) void fetchOwnedPets(this.sb, this.peer.userId).then((ids) => this.petStore.merge(ids));
 
@@ -236,6 +238,9 @@ export class StreetScene extends Phaser.Scene {
     // 집 문을 클릭하면 입장 (이동은 WASD·조이스틱 — 오해를 주던 클릭 마커는 제거, P2-2)
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       const cam = this.cameras.main;
+      // 따라다니는 펫을 클릭하면 쓰다듬기 (동물의 숲 감성)
+      const wp = cam.getWorldPoint(p.x, p.y);
+      if (this.pet?.contains(wp.x, wp.y) && !this.anyPanelOpen()) { this.pettingActivePet(); return; }
       const { tx, ty } = screenToTile(p.x, p.y, {
         scrollX: cam.scrollX, scrollY: cam.scrollY, zoom: cam.zoom,
         width: cam.width, height: cam.height,
@@ -629,6 +634,7 @@ export class StreetScene extends Phaser.Scene {
       onToggle: (open) => this.setGameKeysEnabled(!open),
       onAdopt: (petId) => void this.handleAdopt(petId),
       onSetActive: (petId) => this.handleSetActivePet(petId),
+      onFeed: (petId) => this.handleFeed(petId),
     });
 
     // 활동 스팟 표시 — 통통 튀는 아이콘으로 "여기서 뭔가 된다"를 알린다
@@ -833,11 +839,12 @@ export class StreetScene extends Phaser.Scene {
     this.petShop!.open(this.petStore, this.coins, !!this.sb);
   }
 
-  /** 입양 — 온라인이면 서버 코인 차감(가격 SSOT=서버), 미적용/오프라인은 무료 코스메틱 폴백 */
+  /** 입양 — 온라인이면 서버 코인 차감(가격 SSOT=서버). 미적용/오프라인/희귀는 무료 코스메틱 폴백 */
   private async handleAdopt(petId: string): Promise<void> {
     const s = petById(petId);
     if (!s || this.petStore.isOwned(petId)) return;
-    if (this.sb) {
+    // 희귀(히든) 펫은 발견 보상 — 서버 청구 없이 로컬 무료 입양
+    if (!s.rare && this.sb) {
       const res = await adoptPet(this.sb, petId);
       if (res.ok) {
         this.setCoins(res.balance);
@@ -848,22 +855,70 @@ export class StreetScene extends Phaser.Scene {
         this.petShop?.refresh(this.coins);
         return;
       } else {
-        // 서버 미적용(no-rpc)/에러 → 무료 입양 폴백
-        this.petStore.adopt(petId);
+        this.petStore.adopt(petId); // 서버 미적용(no-rpc)/에러 → 무료 폴백
       }
     } else {
-      this.petStore.adopt(petId); // 오프라인 무료 입양
+      this.petStore.adopt(petId); // 오프라인 or 희귀 무료 입양
     }
     // 처음 들인 펫은 바로 데리고 다닌다
     if (!this.petStore.activeId()) this.handleSetActivePet(petId);
     this.showBubble(this.player, `${s.emoji} ${s.name} 입양 완료! 🎉`);
     audio.playSe('success');
+    this.announceUnlocks();
     this.petShop?.refresh(this.coins);
   }
 
   private handleSetActivePet(petId: string | null): void {
     this.petStore.setActive(petId);
     this.pet?.setSpecies(petId);
+    this.refreshPetStage();
+  }
+
+  /** 먹이 주기 — 하루 1회, 친밀도 상승 + 히든 해금 체크 */
+  private handleFeed(petId: string): void {
+    const s = petById(petId);
+    const aff = this.petStore.feed(petId);
+    if (aff < 0) { this.showBubble(this.player, '오늘은 이미 배불러요 🍚'); return; }
+    if (s) this.showBubble(this.player, `${s.emoji} 냠냠! 친밀도 ${aff} 💛`);
+    audio.playSe('success');
+    this.refreshPetStage();
+    this.announceUnlocks();
+    this.petShop?.refresh(this.coins);
+  }
+
+  /** 동행 펫 쓰다듬기 — 하트 연출 + 소량 친밀도 (3초 쿨다운) */
+  private pettingActivePet(): void {
+    const id = this.petStore.activeId();
+    if (!id) return;
+    const now = this.time.now;
+    if (now - this.lastPetAt < 3000) { this.pet?.petFx(); return; }
+    this.lastPetAt = now;
+    const aff = this.petStore.pet(id);
+    this.pet?.petFx();
+    audio.playSe('pop');
+    const s = petById(id);
+    this.showBubble(this.player, `${s?.emoji ?? '🐾'} 쓰담쓰담~ 🥰 (친밀도 ${aff})`);
+    this.refreshPetStage();
+    this.announceUnlocks();
+  }
+
+  private refreshPetStage(): void {
+    const id = this.petStore.activeId();
+    this.pet?.setStage(id ? this.petStore.stage(id) : 0);
+  }
+
+  /** 새로 해금된 히든 펫을 알린다 */
+  private announceUnlocks(): void {
+    const newly = this.petStore.checkUnlocks();
+    for (const id of newly) {
+      const s = petById(id);
+      if (s) {
+        this.showBubble(this.player, `✨ 히든 친구 「${s.name}」 발견! 펫샵에서 만나요`);
+        this.motions?.play(this.player, 'win');
+        audio.playSe('success');
+      }
+    }
+    if (newly.length && this.petShop?.isOpen) this.petShop.refresh(this.coins);
   }
 
   private async handleLease(id: number, deal: DealType): Promise<void> {
