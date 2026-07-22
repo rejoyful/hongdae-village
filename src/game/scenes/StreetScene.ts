@@ -17,6 +17,8 @@ import { BattleStore } from '../battle/battleStore';
 import { HuntField } from '../battle/huntField';
 import { maxHpForLevel, totalAtk, xpToNext, FATIGUE_MS } from '../battle/combat';
 import { weaponById } from '../battle/weapons';
+import { titleForLevel, isTitleUpAt } from '../battle/titles';
+import { ensureWeaponSprite } from '../art/weaponArt';
 import type { MonsterSpecies } from '../battle/monsters';
 import { BattleHud } from '../../ui/battleHud';
 import { WeaponShopPanel } from '../../ui/weaponShopPanel';
@@ -157,6 +159,8 @@ export class StreetScene extends Phaser.Scene {
   private playerHp = 40;
   private fatigueUntil = 0;
   private lastHitMs = -9999;
+  private weaponSprite: Phaser.GameObjects.Sprite | null = null;
+  private playerTitle!: Phaser.GameObjects.Text;
   private properties: Property[] = [];
   private onRealtyTile = false;
   private escHandler: ((e: KeyboardEvent) => void) | null = null;
@@ -240,6 +244,11 @@ export class StreetScene extends Phaser.Scene {
     this.player = this.add.sprite(spawn.x + TILE / 2, spawn.y + TILE / 2, this.charKey, 0)
       .setOrigin(0.5, 0.66).setDepth(10); // 발이 충돌 박스 바닥에 오게
     this.playerLabel = this.makeNameLabel(this.peer.nickname, 'me').setDepth(11);
+    // 이름 위 레벨 호칭
+    this.playerTitle = this.add.text(spawn.x, spawn.y, '', {
+      fontFamily: UI_FONT, fontSize: '9px', color: '#ffe08a', fontStyle: 'bold',
+      stroke: '#3a2410', strokeThickness: 2.5, resolution: TEXT_RES,
+    }).setOrigin(0.5, 1).setDepth(11).setAlpha(0.98);
 
     // 동행 펫 (펫샵에서 입양) — 플레이어를 졸졸 따라온다
     this.pet = new PetFollower(this, this.petStore.activeId());
@@ -258,8 +267,11 @@ export class StreetScene extends Phaser.Scene {
         currentTier: () => this.battleStore.tier,
         onPlayerHit: (dmg) => this.damagePlayer(dmg),
         onDefeat: (species) => this.onMonsterDefeat(species),
+        onSwing: () => this.swingWeapon(),
       });
-    if (this.sb) void fetchOwnedWeapons(this.sb, this.peer.userId).then((ids) => ids.forEach((id) => this.battleStore.buyWeapon(id)));
+    this.refreshNameTag();
+    this.refreshWeaponSprite();
+    if (this.sb) void fetchOwnedWeapons(this.sb, this.peer.userId).then((ids) => { ids.forEach((id) => this.battleStore.buyWeapon(id)); });
 
     // 입력
     const kb = this.input.keyboard!;
@@ -439,7 +451,9 @@ export class StreetScene extends Phaser.Scene {
 
     // 라벨·링·말풍선 위치 추종 및 만료 처리
     this.playerLabel.setPosition(this.player.x, this.player.y - 26);
+    this.playerTitle.setPosition(this.player.x, this.player.y - 38);
     this.playerRing.setPosition(this.player.x, this.player.y + 12);
+    this.positionWeaponSprite();
     this.bubbles = this.bubbles.filter((b) => {
       if (now >= b.until || !b.owner.active) { b.c.destroy(); return false; }
       b.c.setPosition(b.owner.x, b.owner.y - 38);
@@ -681,7 +695,7 @@ export class StreetScene extends Phaser.Scene {
     this.weaponShop = new WeaponShopPanel({
       onToggle: (open) => this.setGameKeysEnabled(!open),
       onBuy: (weaponId) => void this.handleBuyWeapon(weaponId),
-      onEquip: (weaponId) => this.battleStore.equip(weaponId),
+      onEquip: (weaponId) => { this.battleStore.equip(weaponId); this.refreshWeaponSprite(); },
     });
 
     // 활동 스팟 표시 — 통통 튀는 아이콘으로 "여기서 뭔가 된다"를 알린다
@@ -976,6 +990,50 @@ export class StreetScene extends Phaser.Scene {
 
   private isFatigued(): boolean { return this.time.now < this.fatigueUntil; }
 
+  /** 이름표 = ● 닉 Lv.N + 위에 호칭 */
+  private refreshNameTag(): void {
+    const lv = this.battleStore.level;
+    this.playerLabel.setText(`● ${this.peer.nickname}  Lv.${lv}`);
+    this.playerTitle.setText(`〈${titleForLevel(lv)}〉`);
+  }
+
+  /** 장착 무기 스프라이트 생성/교체 (맨손이면 숨김) */
+  private refreshWeaponSprite(): void {
+    const key = ensureWeaponSprite(this, this.battleStore.equippedId());
+    if (!key) { this.weaponSprite?.destroy(); this.weaponSprite = null; return; }
+    if (!this.weaponSprite) {
+      this.weaponSprite = this.add.sprite(this.player.x, this.player.y, key)
+        .setOrigin(0.5, 0.85).setDepth(11).setScale(1.0);
+    } else {
+      this.weaponSprite.setTexture(key);
+    }
+  }
+
+  /** 손에 쥔 무기를 방향에 맞게 배치 (뒤를 보면 등 뒤로) */
+  private positionWeaponSprite(): void {
+    const w = this.weaponSprite;
+    if (!w) return;
+    const f = this.facing; // 0하 1우 2좌 3상
+    const sideLeft = f === 2;
+    w.setFlipX(sideLeft);
+    w.setDepth(f === 3 ? 9 : 11); // 위를 보면 캐릭터 뒤
+    const dx = sideLeft ? -9 : 9;
+    w.setPosition(this.player.x + dx, this.player.y - (f === 3 ? 12 : 6));
+    if (!w.getData('swinging')) w.setAngle(sideLeft ? -25 : 25);
+  }
+
+  /** 몬스터를 벨 때 무기 스윙 연출 */
+  private swingWeapon(): void {
+    const w = this.weaponSprite;
+    if (!w || w.getData('swinging')) return;
+    w.setData('swinging', true);
+    const base = this.facing === 2 ? -25 : 25;
+    this.tweens.add({
+      targets: w, angle: base - 90, duration: 110, yoyo: true, ease: 'Quad.easeOut',
+      onComplete: () => { w.setData('swinging', false); w.setAngle(base); },
+    });
+  }
+
   /** 매 프레임 배틀 상태 갱신 — HUD 표시·HP 재생 */
   private tickBattle(delta: number): void {
     if (!this.hunt || !this.battleHud) return;
@@ -1025,10 +1083,14 @@ export class StreetScene extends Phaser.Scene {
     audio.playSe('success');
     if (r.leveledUp > 0) {
       this.playerHp = maxHpForLevel(this.battleStore.level); // 레벨업 완전 회복
+      this.refreshNameTag();
       this.showBubble(this.player, `🎉 레벨 업! Lv.${this.battleStore.level}`);
       this.motions?.play(this.player, 'win');
       this.cameras.main.flash(160, 255, 240, 180);
-      void before;
+      // 새 호칭 승격 알림
+      for (let l = before + 1; l <= this.battleStore.level; l++) {
+        if (isTitleUpAt(l)) this.showBubble(this.player, `🏅 새 호칭 「${titleForLevel(l)}」 획득!`);
+      }
     }
     if (r.tierUp) {
       this.showBubble(this.player, `⚔️ 티어 ${r.newTier} 돌파! 더 강한 몬스터가 나타난다…`);
@@ -1042,7 +1104,7 @@ export class StreetScene extends Phaser.Scene {
 
   /** 무기 구매 — 온라인이면 서버 코인 차감(가격 SSOT=서버), 미적용/오프라인은 무료 폴백 */
   private async handleBuyWeapon(weaponId: string): Promise<void> {
-    if (this.battleStore.isWeaponOwned(weaponId)) { this.battleStore.equip(weaponId); this.weaponShop?.refresh(this.coins); return; }
+    if (this.battleStore.isWeaponOwned(weaponId)) { this.battleStore.equip(weaponId); this.refreshWeaponSprite(); this.weaponShop?.refresh(this.coins); return; }
     if (this.sb) {
       const res = await buyWeapon(this.sb, weaponId);
       if (res.ok) { this.setCoins(res.balance); this.battleStore.buyWeapon(weaponId); }
@@ -1052,6 +1114,7 @@ export class StreetScene extends Phaser.Scene {
       this.battleStore.buyWeapon(weaponId);
     }
     this.battleStore.equip(weaponId);
+    this.refreshWeaponSprite();
     audio.playSe('success');
     this.motions?.play(this.player, 'coin');
     this.weaponShop?.refresh(this.coins);

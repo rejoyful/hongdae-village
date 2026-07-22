@@ -20,6 +20,7 @@ export interface HuntCallbacks {
   currentTier: () => number;
   onPlayerHit: (dmg: number) => void;   // 씬이 HP·사망 처리
   onDefeat: (species: MonsterSpecies) => void; // 씬이 경험치·조각·티어 처리
+  onSwing?: (targetX: number) => void;  // 씬이 든 무기 스윙 연출
 }
 
 const TARGET_COUNT = 9;       // 필드에 유지할 몬스터 수
@@ -153,6 +154,7 @@ export class HuntField {
     if (nearest && this.swingCd <= 0) {
       this.swingCd = PLAYER_SWING_MS;
       const dmg = Math.max(1, Math.round(this.cb.getPlayerAtk()));
+      this.cb.onSwing?.(nearest.sprite.x);
       this.swingFx(p.x, p.y, nearest.sprite.x);
       this.hurt(nearest, dmg);
       if (nearest.hp <= 0) {
