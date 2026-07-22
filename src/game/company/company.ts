@@ -20,8 +20,11 @@ export interface CompanyFloor {
   meetings: CompanyMeeting[]; // 회의실 (병렬 구획)
   npcs: CompanyNpc[];
   spots: CompanySpot[];
-  up?: { tx: number; ty: number };   // 위층 계단 (있으면)
-  down?: { tx: number; ty: number };  // 아래층 계단 (1층은 없음 → 로비 문으로 거리)
+  up?: { tx: number; ty: number };   // 위층 계단 (5→6 전용)
+  down?: { tx: number; ty: number };  // 아래층 계단 (6→5 전용)
+  elevator?: { tx: number; ty: number }; // 엘리베이터 (1~5층만, 6층은 없음)
+  clockDesk?: { tx: number; ty: number }; // 출퇴근 체크 (1층 로비)
+  draftDesk?: { tx: number; ty: number };  // 결재함 (기안 미니게임, AX기획실)
 }
 
 export interface CompanyDef {
@@ -89,60 +92,101 @@ const forest6: CompanyFloor = {
     { tx: 12, ty: 2, label: '라운지룸', lines: ['🛋️ 편하게 브레인스토밍', '커피 한 잔의 여유', '캐주얼 미팅'] },
     { tx: 13, ty: 6, label: '탕비실', lines: ['☕ 커피 리필', '간식 충전소', '오늘의 원두는 케냐'] },
   ],
-  down: { tx: 13, ty: 9 },
+  down: { tx: 13, ty: 9 },       // 6층은 엘리베이터 없음 — 계단으로만 5층
+  draftDesk: { tx: 11, ty: 7 },  // 결재함 (기안 미니게임) — 계단과 떨어뜨림
 };
 
-/** 1~5층 로비/부서 (간단 구성 — 계단으로 6층까지) */
-function forestFloor(level: number, name: string, spotLabel: string, lines: string[]): CompanyFloor {
-  return {
+/**
+ * 1~5층 로비/부서 — 엘리베이터(1~5층 이동). 5층만 6층행 계단(up)을 추가로 둔다.
+ * (6층은 엘리베이터가 없어 5층에서 계단으로만 올라간다)
+ */
+function officeFloor(
+  level: number, name: string, spotLabel: string, lines: string[],
+  opts: { emojiA?: string } = {},
+): CompanyFloor {
+  const floor: CompanyFloor = {
     level, name, w: 12, h: 9,
     solids: [{ x: 2, y: 2, w: 3, h: 1 }, { x: 7, y: 2, w: 3, h: 1 }],
     meetings: [],
     npcs: [
-      { tx: 3, ty: 4, name: `${level}층 직원`, role: name, appearance: emp(level % 4, 1, 2, '8ab8a8'),
+      { tx: 3, ty: 4, name: `${name} 담당`, role: name, appearance: emp(level % 4, 1, 2, opts.emojiA ?? '8ab8a8'),
         lines: [`${name}입니다`, ...lines] },
-      { tx: 8, ty: 4, name: `${level}층 직원`, role: name, appearance: emp((level + 1) % 4, 3, 1, 'a8c8e0'),
-        lines: lines },
+      { tx: 8, ty: 4, name: `${name} 담당`, role: name, appearance: emp((level + 1) % 4, 3, 1, 'a8c8e0'),
+        lines },
     ],
     spots: [{ tx: 6, ty: 3, label: spotLabel, lines }],
-    up: { tx: 10, ty: 6 },
-    down: level === 1 ? undefined : { tx: 1, ty: 6 },
+    elevator: { tx: 10, ty: 6 },   // 엘리베이터 (1~5층)
   };
+  if (level === 1) floor.clockDesk = { tx: 2, ty: 6 };  // 로비 출퇴근 체크
+  if (level === 5) floor.up = { tx: 1, ty: 6 };          // 5→6층 계단 (6층은 엘베 없음)
+  return floor;
 }
 
 const MIND_FOREST: CompanyDef = {
   id: 'forest', name: '마인드 포레스트', org: '인싸이트', color: 0x4a7a5a,
   floors: [
-    forestFloor(1, '로비·안내', '안내 데스크', ['어서오세요, 인싸이트입니다', '방문 목적을 알려주세요', '6층은 AX기획실이에요']),
-    forestFloor(2, '심리검사 연구', '연구실', ['검사 개발 중이에요', '타당화 연구 진행 중', '규준 데이터 분석해요']),
-    forestFloor(3, '검사 제작', '제작실', ['문항 다듬는 중', '채점 로직 검토', '온라인 검사 전환 작업']),
-    forestFloor(4, '상담·교육', '교육실', ['워크숍 준비 중', '상담사 연수 진행', '해석 매뉴얼 작업']),
-    forestFloor(5, '경영지원', '경영지원실', ['회계 마감 중', '채용 진행해요', '복지 개선 논의 중']),
+    officeFloor(1, '로비·안내', '안내 데스크', ['어서오세요, 인싸이트입니다', '방문 목적을 알려주세요', '6층은 AX기획실이에요']),
+    officeFloor(2, '심리검사 연구', '연구실', ['검사 개발 중이에요', '타당화 연구 진행 중', '규준 데이터 분석해요']),
+    officeFloor(3, '검사 제작', '제작실', ['문항 다듬는 중', '채점 로직 검토', '온라인 검사 전환 작업']),
+    officeFloor(4, '상담·교육', '교육실', ['워크숍 준비 중', '상담사 연수 진행', '해석 매뉴얼 작업']),
+    officeFloor(5, '경영지원', '경영지원실', ['회계 마감 중', '채용 진행해요', '복지 개선 논의 중']),
     forest6,
   ],
 };
 
 // ── 마인드 월드 (학지사) — 출판사 ──
 
-const MIND_WORLD: CompanyDef = {
-  id: 'world', name: '마인드 월드', org: '학지사', color: 0x5a6ab0,
-  floors: [{
-    level: 1, name: '학지사 출판', w: 13, h: 9,
-    solids: [{ x: 2, y: 2, w: 9, h: 1 }, { x: 2, y: 5, w: 9, h: 1 }],
+/** 학지사(출판) 층 — 엘리베이터 1~5층, 5층에 6층행 계단 */
+function worldFloor(level: number, name: string, spotLabel: string, lines: string[], role: string): CompanyFloor {
+  const floor: CompanyFloor = {
+    level, name, w: 12, h: 9,
+    solids: [{ x: 2, y: 2, w: 3, h: 1 }, { x: 7, y: 2, w: 3, h: 1 }],
     meetings: [],
     npcs: [
-      { tx: 3, ty: 4, name: '편집장', role: '편집', appearance: emp(1, 5, 1, '6e5c4c'),
-        lines: ['이 원고 교정 봤어요', '표지 시안 골라요', '학술서는 정확성이 생명'] },
-      { tx: 7, ty: 4, name: '디자이너', role: '북디자인', appearance: emp(2, 3, 5, 'c8a8d8'),
-        lines: ['조판 다시 볼게요', '서체가 중요하죠', '판형 정했어요'] },
-      { tx: 9, ty: 7, name: '영업', role: '영업', appearance: emp(0, 1, 2, 'd8b86e'),
-        lines: ['대학 교재 채택됐어요', '서점 배본 확인 중', '신간 홍보해요'] },
+      { tx: 3, ty: 4, name: `${role}`, role, appearance: emp(level % 4, 5, 1, '6e5c4c'),
+        lines: [`${name}입니다`, ...lines] },
+      { tx: 8, ty: 4, name: `${role}`, role, appearance: emp((level + 2) % 4, 3, 5, 'c8a8d8'), lines },
     ],
-    spots: [
-      { tx: 6, ty: 3, label: '편집부', lines: ['📚 원고 교정 중', '학술서 편집', '정확한 지식을 책으로'] },
-      { tx: 6, ty: 6, label: '서가', lines: ['📖 신간 진열대', '베스트셀러 코너', '심리학 전문서'] },
-    ],
-  }],
+    spots: [{ tx: 6, ty: 3, label: spotLabel, lines }],
+    elevator: { tx: 10, ty: 6 },
+  };
+  if (level === 1) floor.clockDesk = { tx: 2, ty: 6 };
+  if (level === 5) floor.up = { tx: 1, ty: 6 };
+  return floor;
+}
+
+const world6: CompanyFloor = {
+  level: 6, name: '임원실·출판기획', w: 13, h: 10,
+  solids: [{ x: 4, y: 1, w: 1, h: 4 }, { x: 9, y: 1, w: 1, h: 4 }],
+  meetings: [
+    { name: '대표이사실', rect: { x: 1, y: 1, w: 3, h: 4 }, door: { tx: 2, ty: 5 } },
+    { name: '기획회의실', rect: { x: 5, y: 1, w: 4, h: 4 }, door: { tx: 6, ty: 5 } },
+  ],
+  npcs: [
+    { tx: 3, ty: 7, name: '대표', role: '경영', appearance: emp(1, 5, 1, '4a4e5c'),
+      lines: ['좋은 책이 좋은 회사를 만들어요', '올해 신간 라인업 좋네요', '독자를 먼저 생각합시다'] },
+    { tx: 6, ty: 7, name: '출판기획', role: '기획', appearance: emp(2, 1, 4, '9cd8a0'),
+      lines: ['시리즈 기획 중이에요', '베스트셀러 감이 와요', '저자 미팅 다녀왔어요'] },
+    { tx: 9, ty: 7, name: '편집주간', role: '편집총괄', appearance: emp(0, 3, 2, 'd8b86e'),
+      lines: ['교정 일정 조율 중', '표지 최종 컨펌', '학술 검수 철저히'] },
+  ],
+  spots: [
+    { tx: 2, ty: 2, label: '대표이사실', lines: ['👔 경영 회의 중', '큰 그림을 봅니다', '올해 목표 점검'] },
+    { tx: 7, ty: 2, label: '기획회의실', lines: ['📋 신간 기획 회의', '라인업 확정', '독자 트렌드 분석'] },
+  ],
+  down: { tx: 11, ty: 8 }, // 6층 엘베 없음 — 계단으로 5층
+};
+
+const MIND_WORLD: CompanyDef = {
+  id: 'world', name: '마인드 월드', org: '학지사', color: 0x5a6ab0,
+  floors: [
+    worldFloor(1, '로비·영업', '안내 데스크', ['어서오세요, 학지사입니다', '신간 문의 도와드려요', '6층은 임원실이에요'], '영업'),
+    worldFloor(2, '편집부', '편집부', ['원고 교정 중', '학술서는 정확성이 생명', '오탈자 잡아요'], '편집장'),
+    worldFloor(3, '북디자인·제작', '디자인실', ['조판 다시 볼게요', '서체가 중요하죠', '판형 정했어요'], '디자이너'),
+    worldFloor(4, '마케팅', '마케팅실', ['신간 홍보 중', 'SNS 반응 좋아요', '북토크 준비해요'], '마케터'),
+    worldFloor(5, '물류·관리', '관리실', ['서점 배본 확인', '재고 정리 중', '정산 마감이에요'], '관리'),
+    world6,
+  ],
 };
 
 // ── 마인드 브릿지 (학지사 에듀) — 교육 ──

@@ -9,6 +9,12 @@ import { makeTexture } from '../art/pixelCanvas';
 import { ROOM_PAL, PAL } from '../art/palette';
 import { TouchControls, isTouchDevice } from '../../ui/touchControls';
 import type { NetworkAdapter, PeerState } from '../../net/NetworkAdapter';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { ElevatorPanel } from '../../ui/elevatorPanel';
+import { DraftPanel } from '../../ui/draftPanel';
+import { workStatus, seoulHourNow } from '../company/worklife';
+import { fetchCoins } from '../../db/economyApi';
+import type { GameHud } from '../../ui/gameHud';
 
 interface CompanyData {
   companyId: CompanyId;
@@ -36,7 +42,13 @@ export class CompanyScene extends Phaser.Scene {
   private bubbles: Bubble[] = [];
   private npcSprites: Array<{ sprite: Phaser.GameObjects.Sprite; lines: string[]; last: number; idx: number }> = [];
   private onSpotTile = -1;
+  private onStairTile = false;
   private switching = false;
+  private sb: SupabaseClient | null = null;
+  private elev: ElevatorPanel | null = null;
+  private draft: DraftPanel | null = null;
+  private onDeskTile = '';
+  private escHandler: ((e: KeyboardEvent) => void) | null = null;
 
   constructor() { super('company'); }
 
@@ -48,6 +60,7 @@ export class CompanyScene extends Phaser.Scene {
     this.arrive = data.arrive ?? null;
     this.peer = data.peer;
     this.adapter = data.adapter ?? null;
+    this.sb = (this.registry.get('sb') as SupabaseClient | undefined) ?? null;
     this.bubbles = [];
     this.npcSprites = [];
     this.onSpotTile = -1;
@@ -74,22 +87,30 @@ export class CompanyScene extends Phaser.Scene {
         fontSize: '9px', color: '#3a4a6a', fontStyle: 'bold', resolution: TEXT_RES,
       }).setOrigin(0.5, 0).setDepth(1).setAlpha(0.7);
     }
-    // 층·부서 안내
+    // 층·부서 + 근무 상태 안내 (실시간 서울시각)
     const def = COMPANIES[this.companyId];
-    this.add.text(doorTx * TILE + TILE / 2, 6, `${def.name} ${f.level}F · ${f.name}`, {
+    const st = workStatus(seoulHourNow());
+    this.add.text(doorTx * TILE + TILE / 2, 4, `${def.name} ${f.level}F · ${f.name}`, {
       fontSize: '8px', color: '#fff2d8', backgroundColor: '#3a4a6a', padding: { x: 4, y: 2 }, resolution: TEXT_RES,
-    }).setOrigin(0.5, 0).setDepth(12).setAlpha(0.9);
+    }).setOrigin(0.5, 0).setDepth(12).setAlpha(0.95);
+    this.add.text(doorTx * TILE + TILE / 2, 18, st.headline, {
+      fontSize: '7px', color: '#243040', backgroundColor: st.isOvertime ? '#e8b04c' : '#cfe0f2',
+      padding: { x: 4, y: 2 }, resolution: TEXT_RES,
+    }).setOrigin(0.5, 0).setDepth(12).setAlpha(0.95);
 
-    // 계단 표시
-    const stair = (t: { tx: number; ty: number }, label: string) => {
+    // 계단·엘리베이터·데스크 마커
+    const marker = (t: { tx: number; ty: number }, emoji: string, label: string, bg = '#5c4432') => {
       const w = tileToWorld(t.tx, t.ty);
-      this.add.text(w.x + TILE / 2, w.y + TILE / 2, '🪜', { fontSize: '15px' }).setOrigin(0.5).setDepth(2);
+      this.add.text(w.x + TILE / 2, w.y + TILE / 2, emoji, { fontSize: '15px' }).setOrigin(0.5).setDepth(2);
       this.add.text(w.x + TILE / 2, w.y + TILE, label, {
-        fontSize: '7px', color: '#fff2d8', backgroundColor: '#5c4432', padding: { x: 2, y: 1 }, resolution: TEXT_RES,
+        fontSize: '7px', color: '#fff2d8', backgroundColor: bg, padding: { x: 2, y: 1 }, resolution: TEXT_RES,
       }).setOrigin(0.5, 0).setDepth(12);
     };
-    if (f.up) stair(f.up, '위층');
-    if (f.down) stair(f.down, '아래층');
+    if (f.up) marker(f.up, '🪜', '6층 계단');
+    if (f.down) marker(f.down, '🪜', '5층 계단');
+    if (f.elevator) marker(f.elevator, '🛗', '엘리베이터', '#3a4a6a');
+    if (f.clockDesk) marker(f.clockDesk, '⏰', '출퇴근', '#3a5a3a');
+    if (f.draftDesk) marker(f.draftDesk, '📝', '결재함', '#5a3a3a');
 
     // 사람들 (자리·이름표·폴짝)
     for (const npc of f.npcs) {
@@ -110,8 +131,13 @@ export class CompanyScene extends Phaser.Scene {
       this.tweens.add({ targets: icon, y: w.y - 8, duration: 640, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     }
 
-    // 플레이어 스폰: 도착 지정 있으면 그곳, 없으면 하단 문 안쪽
+    // 플레이어 스폰: 도착 지정 있으면 그곳(계단·엘베 위), 없으면 하단 문 안쪽
     const spawnT = this.arrive ?? { tx: doorTx, ty: f.h - 2 };
+    // 도착 타일에서 즉시 재트리거 방지 (엣지 트리거 초기화)
+    const isStair = (t: { tx: number; ty: number }) =>
+      (!!f.up && f.up.tx === t.tx && f.up.ty === t.ty) || (!!f.down && f.down.tx === t.tx && f.down.ty === t.ty);
+    this.onStairTile = isStair(spawnT);
+    this.onDeskTile = f.elevator && f.elevator.tx === spawnT.tx && f.elevator.ty === spawnT.ty ? 'elev' : '';
     const spawn = tileToWorld(spawnT.tx, spawnT.ty);
     this.charKey = ensureCharacter(this, this.peer.appearance);
     this.player = this.add.sprite(spawn.x + TILE / 2, spawn.y + TILE / 2, this.charKey, 3 * FRAMES_PER_DIR)
@@ -129,17 +155,43 @@ export class CompanyScene extends Phaser.Scene {
     if (isTouchDevice()) this.touch = new TouchControls();
     this.hint = document.createElement('div');
     this.hint.className = 'hv-hint';
-    this.hint.textContent = f.up || f.down
-      ? `${def.name} ${f.level}F · 🪜계단으로 층 이동 · 아래 문으로 나가기`
-      : `${def.name} · ✨앞에서 구경 · 아래 문으로 나가기`;
+    this.hint.textContent = f.elevator
+      ? `${def.name} ${f.level}F · 🛗엘베(1~5층)·🪜계단(6층) · 문으로 나가기`
+      : `${def.name} ${f.level}F · 🪜계단으로 5층 · 문으로 나가기`;
     document.body.appendChild(this.hint);
+
+    // 엘리베이터·기안 결재 패널
+    this.elev = new ElevatorPanel({
+      onToggle: (o) => this.setKeys(!o),
+      onPick: (lv) => this.goToFloor(lv),
+    });
+    this.draft = new DraftPanel({
+      onToggle: (o) => this.setKeys(!o),
+      onDone: (correct) => this.onDraftDone(correct),
+    });
+
+    this.escHandler = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (this.elev?.isOpen) { this.elev.close(); e.stopPropagation(); }
+      else if (this.draft?.isOpen) { this.draft.close(); e.stopPropagation(); }
+    };
+    document.addEventListener('keydown', this.escHandler);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.touch?.destroy(); this.touch = null;
       this.hint?.remove(); this.hint = null;
+      this.elev?.destroy(); this.elev = null;
+      this.draft?.destroy(); this.draft = null;
+      if (this.escHandler) document.removeEventListener('keydown', this.escHandler);
       for (const b of this.bubbles) b.c.destroy();
       this.bubbles = [];
     });
+  }
+
+  private setKeys(enabled: boolean): void {
+    const kb = this.input.keyboard!;
+    kb.enabled = enabled;
+    Object.values(this.keys).forEach((k) => k.reset());
   }
 
   update(_t: number, delta: number): void {
@@ -161,9 +213,28 @@ export class CompanyScene extends Phaser.Scene {
     const tile = worldToTile(next.x, next.y);
     const f = this.floor;
 
-    // 계단 → 층 이동
-    if (f.up && tile.tx === f.up.tx && tile.ty === f.up.ty) { this.goFloor(f.level + 1, 'down'); return; }
-    if (f.down && tile.tx === f.down.tx && tile.ty === f.down.ty) { this.goFloor(f.level - 1, 'up'); return; }
+    // 계단 → 층 이동 (5↔6층 전용, 엣지 트리거 — 도착 즉시 재이동 방지)
+    const onUp = !!f.up && tile.tx === f.up.tx && tile.ty === f.up.ty;
+    const onDown = !!f.down && tile.tx === f.down.tx && tile.ty === f.down.ty;
+    if ((onUp || onDown) && !this.onStairTile) {
+      this.onStairTile = true;
+      if (onUp) this.goFloor(f.level + 1, 'down'); else this.goFloor(f.level - 1, 'up');
+      return;
+    }
+    this.onStairTile = onUp || onDown;
+
+    // 엘리베이터·출퇴근·결재 데스크 (밟는 순간 1회)
+    const deskAt = (t?: { tx: number; ty: number }) => t && t.tx === tile.tx && t.ty === tile.ty;
+    let desk = '';
+    if (deskAt(f.elevator)) desk = 'elev';
+    else if (deskAt(f.clockDesk)) desk = 'clock';
+    else if (deskAt(f.draftDesk)) desk = 'draft';
+    if (desk && desk !== this.onDeskTile) {
+      if (desk === 'elev' && this.elev && !this.elev.isOpen) this.elev.open(f.level);
+      else if (desk === 'clock') this.clockCheck();
+      else if (desk === 'draft' && this.draft && !this.draft.isOpen) this.draft.open(f.level * 7 + Math.floor(this.time.now / 60000));
+    }
+    this.onDeskTile = desk;
 
     // 상호작용 스팟
     const spotIdx = f.spots.findIndex((sp) => sp.tx === tile.tx && sp.ty === tile.ty);
@@ -205,8 +276,41 @@ export class CompanyScene extends Phaser.Scene {
     if (!target) return;
     this.switching = true;
     const s = arriveStair === 'up' ? target.up : target.down;
-    const arrive = s ? { tx: s.tx, ty: s.ty + 1 } : undefined; // 계단 한 칸 아래로 내려서 스폰
+    const arrive = s ? { tx: s.tx, ty: s.ty } : undefined; // 계단 위로 도착 (엣지 트리거로 재이동 방지)
     this.scene.restart({ companyId: this.companyId, level, arrive, peer: this.peer, adapter: this.adapter });
+  }
+
+  /** 엘리베이터로 특정 층(1~5)으로 이동 — 그 층 엘베 옆으로 스폰 */
+  private goToFloor(level: number): void {
+    const def = COMPANIES[this.companyId];
+    const target = def.floors.find((f) => f.level === level);
+    if (!target || this.switching) return;
+    this.switching = true;
+    const e = target.elevator;
+    const arrive = e ? { tx: e.tx, ty: e.ty } : undefined; // 엘베 앞 도착 (재오픈 방지)
+    this.scene.restart({ companyId: this.companyId, level, arrive, peer: this.peer, adapter: this.adapter });
+  }
+
+  /** 출퇴근 체크 — 시간대별 안내 + (퇴근 가능 시) 근무 급여 정산 */
+  private clockCheck(): void {
+    const st = workStatus(seoulHourNow());
+    this.showBubble(this.player, st.headline);
+    if (st.canClockOut) void this.awardWork(st.isOvertime ? 'overtime' : 'work');
+  }
+
+  private onDraftDone(correct: number): void {
+    this.showBubble(this.player, correct >= 3 ? '기안 결재 완료! 팀장님 흐뭇 😎' : '결재 마감! 재검토 건은 다음에…');
+    if (correct > 0) void this.awardWork('draft');
+  }
+
+  /** 근무 보상 — earn_activity RPC(0010). 미적용/오프라인 시 연출만 */
+  private async awardWork(kind: 'work' | 'overtime' | 'draft'): Promise<void> {
+    if (!this.sb) return;
+    const { data } = await this.sb.rpc('earn_activity', { p_kind: kind });
+    if (typeof data === 'number' && data >= 0) {
+      const hud = this.registry.get('hud') as GameHud | undefined;
+      hud?.setCoins(await fetchCoins(this.sb, this.peer.userId));
+    }
   }
 
   private makeFloorBg(): string {

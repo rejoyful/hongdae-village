@@ -669,3 +669,48 @@
 .realty-actions button.danger { background: linear-gradient(#e89a8a, #d87a6a); color: #fff; border-color: #8a3a2a; box-shadow: 0 2px 0 #8a3a2a; }
 .realty-actions .rent-due { font-size: 11px; font-weight: 800; color: #c4453a; background: #ffe0d8; padding: 3px 8px; border-radius: 999px; }
 .realty-empty { text-align: center; color: #8a6a3c; font-size: 12px; padding: 30px 0; }
+
+/* ── 엘리베이터 패널 ── */
+.hv-elev { position: fixed; inset: 0; z-index: 19; display: flex; align-items: center; justify-content: center;
+  background: rgba(15,18,26,0.6); font-family: system-ui, sans-serif; }
+.elev-frame {
+  background: linear-gradient(#3a4a6a, #2a3a56); border: 3px solid #1a2438; border-radius: 14px;
+  padding: 16px 18px; width: min(280px, 88vw); box-shadow: 0 0 0 3px #6a7a9a inset, 0 12px 28px rgba(0,0,0,.5);
+}
+.elev-head { color: #cfe0f2; font-weight: 800; font-size: 15px; text-align: center; }
+.elev-head span { display: block; font-size: 10px; font-weight: 600; opacity: .7; margin-top: 3px; }
+.elev-buttons { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 14px 0; }
+.elev-buttons button {
+  aspect-ratio: 1; border: 2px solid #1a2438; border-radius: 10px; cursor: pointer;
+  background: linear-gradient(#e7edf6, #c4d0e0); color: #2a3a56; font-weight: 900; font-size: 18px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 3px 0 #6a7a9a;
+}
+.elev-buttons button small { font-size: 9px; font-weight: 700; }
+.elev-buttons button.cur { background: linear-gradient(#f2c25c, #e8a83c); }
+.elev-buttons button:active { transform: translateY(2px); box-shadow: 0 1px 0 #6a7a9a; }
+.elev-close { width: 100%; padding: 9px; border: 0; border-radius: 8px; background: #6a7a9a; color: #fff;
+  font-weight: 800; cursor: pointer; }
+
+/* ── 기안 결재 미니게임 ── */
+.hv-draft { position: fixed; inset: 0; z-index: 19; display: flex; align-items: center; justify-content: center;
+  background: rgba(15,18,26,0.6); font-family: system-ui, sans-serif; }
+.draft-card {
+  background: linear-gradient(#f2ede0, #e6dfcc); border: 3px solid #8a7d5a; border-radius: 14px;
+  padding: 16px 18px; width: min(360px, 92vw); box-shadow: 0 12px 28px rgba(0,0,0,.5);
+}
+.draft-head { color: #5a4d2a; font-weight: 900; font-size: 15px; display: flex; justify-content: space-between; align-items: center; }
+.draft-head span { font-size: 12px; background: #8a7d5a; color: #fff; padding: 2px 10px; border-radius: 999px; }
+.draft-doc { position: relative; background: #fff; border: 2px solid #c8bd98; border-radius: 8px; padding: 18px 14px 14px; margin: 14px 0; }
+.draft-stamp { position: absolute; top: -10px; left: 12px; background: #c45c50; color: #fff; font-size: 10px; font-weight: 800; padding: 2px 10px; border-radius: 4px; transform: rotate(-4deg); }
+.draft-title { font-size: 15px; font-weight: 800; color: #2a2620; margin: 4px 0 8px; }
+.draft-hint { font-size: 12px; color: #8a7d5a; margin: 0; }
+.draft-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.draft-actions button { padding: 12px 0; border: 2px solid #5a4d2a; border-radius: 10px; font-weight: 900; font-size: 15px; cursor: pointer; box-shadow: 0 3px 0 #5a4d2a; }
+.draft-actions .a-승인 { background: linear-gradient(#9cd8a0, #5aa668); color: #143a1e; }
+.draft-actions .a-반려 { background: linear-gradient(#e89a8a, #d86a5a); color: #4a1410; }
+.draft-actions .a-보류 { background: linear-gradient(#f2d88a, #e0b84c); color: #4a3810; }
+.draft-actions button:active { transform: translateY(2px); box-shadow: 0 1px 0 #5a4d2a; }
+.draft-close, .draft-ok { width: 100%; margin-top: 12px; padding: 9px; border: 0; border-radius: 8px; background: #8a7d5a; color: #fff; font-weight: 800; cursor: pointer; }
+.draft-result { text-align: center; padding: 12px 0; }
+.draft-score { font-size: 34px; font-weight: 900; color: #5aa668; }
+.draft-result p { font-size: 13px; color: #5a4d2a; margin: 8px 0 0; }
