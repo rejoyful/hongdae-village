@@ -44,6 +44,7 @@ export const SOLID_RECTS: Rect[] = [
   { x: 60, y: 49, w: 5, h: 3 },  // 26 벽화골목 갤러리
   { x: 2,  y: 24, w: 3, h: 2 },  // 27 주택골목(서) 창고
   { x: 74, y: 24, w: 3, h: 2 },  // 28 주택골목(동) 창고
+  { x: 39, y: 33, w: 5, h: 3 },  // 29 복덕방(부동산)
 ];
 
 /**
@@ -115,8 +116,12 @@ export const PHOTO_SPOT = { tx: 72, ty: 44 };
 /** 붕어빵 포차 — 포차 골목 (간식, 하트 회복 연출) */
 export const BUNGEO_SPOT = { tx: 10, ty: 44 };
 
+/** 복덕방(부동산) 문 — 밟으면 매물 패널 (전세·월세·매매 계약) */
+export const REALTY_DOOR = { tx: 41, ty: 35 };
+
+/** 개인 공간 문(HOUSE_DOORS)의 roomId → properties.id (1:1). 유형은 서버·오프라인 세트가 결정 */
 export function buildCollision(): CollisionGrid {
   // 건물 + 대형 소품이 솔리드. 문 타일만 뚫어 걸어 들어가게 한다 (밟으면 입장).
   return CollisionGrid.fromRects(MAP_W, MAP_H, [...SOLID_RECTS, ...SOLID_PROPS],
-    [...HOUSE_DOORS, ...SHOP_DOORS, ...CAFE_DOORS, ...INTERIOR_DOORS]);
+    [...HOUSE_DOORS, ...SHOP_DOORS, ...CAFE_DOORS, ...INTERIOR_DOORS, REALTY_DOOR]);
 }

@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 import { TILE } from '../config';
 import {
   ZONES, SOLID_RECTS, HOUSE_DOORS, SHOP_DOORS, CAFE_DOORS, INTERIOR_DOORS,
-  CLAW_SPOT, PHOTO_SPOT, BUNGEO_SPOT, FOOD_TRUCKS,
+  CLAW_SPOT, PHOTO_SPOT, BUNGEO_SPOT, FOOD_TRUCKS, REALTY_DOOR,
 } from '../world/mapData';
 import type { Rect, CollisionGrid } from '../world/grid';
 import { PAL } from './palette';
@@ -332,7 +332,7 @@ export function buildStreetArt(scene: Phaser.Scene, mapW: number, mapH: number, 
   const glowKey = makeDoorGlow(scene);
   const allDoors = [
     ...HOUSE_DOORS.map((d) => ({ tx: d.tx, ty: d.ty })),
-    ...SHOP_DOORS, ...CAFE_DOORS,
+    ...SHOP_DOORS, ...CAFE_DOORS, REALTY_DOOR,
     ...INTERIOR_DOORS.map((d) => ({ tx: d.tx, ty: d.ty })),
   ];
   for (const d of allDoors) {
@@ -344,6 +344,13 @@ export function buildStreetArt(scene: Phaser.Scene, mapW: number, mapH: number, 
   drawHongdaeProps(scene);
   drawDensity(scene);
   drawInteractables(scene);
+
+  // 복덕방 간판
+  const rr = SOLID_RECTS[29]!;
+  scene.add.rectangle(rr.x * T + 6, rr.y * T + 8, rr.w * T - 12, 14, PAL.signBg).setOrigin(0).setDepth(3);
+  scene.add.text((rr.x + rr.w / 2) * T, rr.y * T + 15, '복덕방 부동산', {
+    fontSize: '9px', color: '#f2d8a8', fontStyle: 'bold',
+  }).setOrigin(0.5).setDepth(3);
 }
 
 /** 바닥 데칼 산개 — 통행 가능한 타일에만 낙엽·맨홀·얼룩·꽃잎을 흩뿌려 빈 공간을 채운다 */
