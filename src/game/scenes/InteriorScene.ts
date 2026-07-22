@@ -9,6 +9,7 @@ import { ROOM_PAL, PAL } from '../art/palette';
 import { makeTexture } from '../art/pixelCanvas';
 import type { NetworkAdapter, PeerState } from '../../net/NetworkAdapter';
 import { TouchControls, isTouchDevice } from '../../ui/touchControls';
+import { ExitButton } from '../../ui/exitButton';
 
 interface InteriorData { shop: InteriorShop; peer: PeerState; adapter: NetworkAdapter | null }
 
@@ -26,6 +27,7 @@ export class InteriorScene extends Phaser.Scene {
   private charKey = '';
   private touch: TouchControls | null = null;
   private hint: HTMLDivElement | null = null;
+  private exitBtn: ExitButton | null = null;
   private bubbles: Bubble[] = [];
   private npcSprites: Array<{ sprite: Phaser.GameObjects.Sprite; lines: string[]; last: number; idx: number }> = [];
   private onSpotTile = -1;
@@ -121,19 +123,36 @@ export class InteriorScene extends Phaser.Scene {
       this.tweens.add({ targets: icon, y: w.y - 8, duration: 640, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     }
 
+    // 출구 표시 — 하단 중앙 문 위에 매트 + "▼ 나가기" 라벨 (어디로 나가는지 명확히)
+    const exitW = tileToWorld(Math.floor(this.def.w / 2), this.def.h - 1);
+    this.add.rectangle(exitW.x + TILE / 2, exitW.y + TILE - 3, TILE - 6, 5, 0x6ee87c, 0.6).setDepth(1);
+    this.add.text(exitW.x + TILE / 2, exitW.y - 2, '▼ 나가기', {
+      fontFamily: UI_FONT, fontSize: '9px', color: '#fff2d8', backgroundColor: '#2a6a3a',
+      padding: { x: 4, y: 2 }, resolution: TEXT_RES,
+    }).setOrigin(0.5, 1).setDepth(12).setAlpha(0.95);
+
     this.hint = document.createElement('div');
     this.hint.className = 'hv-hint';
-    this.hint.textContent = `${this.def.name} · ✨앞에 서면 구경 · 아래 문으로 나가기`;
+    this.hint.textContent = `${this.def.name} · ✨앞에 서면 구경`;
     document.body.appendChild(this.hint);
+    this.exitBtn = new ExitButton(() => this.exitToStreet());
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.touch?.destroy();
       this.touch = null;
       this.hint?.remove();
       this.hint = null;
+      this.exitBtn?.destroy();
+      this.exitBtn = null;
       for (const b of this.bubbles) b.c.destroy();
       this.bubbles = [];
     });
+  }
+
+  private exitToStreet(): void {
+    const door = INTERIOR_DOORS.find((d) => d.shop === this.def.id);
+    const spawnTile = door ? { tx: door.tx, ty: door.ty + 1 } : undefined;
+    this.scene.start('street', { peer: this.peer, adapter: this.adapter, spawnTile });
   }
 
   update(_t: number, delta: number): void {
@@ -189,12 +208,8 @@ export class InteriorScene extends Phaser.Scene {
       return true;
     });
 
-    // 문 밟으면 거리로 (들어온 상가 문 앞)
-    if (tile.tx === Math.floor(this.def.w / 2) && tile.ty === this.def.h - 1) {
-      const door = INTERIOR_DOORS.find((d) => d.shop === this.def.id);
-      const spawnTile = door ? { tx: door.tx, ty: door.ty + 1 } : undefined;
-      this.scene.start('street', { peer: this.peer, adapter: this.adapter, spawnTile });
-    }
+    // 하단 중앙 문(출구 매트)을 밟으면 거리로
+    if (tile.tx === Math.floor(this.def.w / 2) && tile.ty === this.def.h - 1) this.exitToStreet();
   }
 
   private showBubble(owner: Phaser.GameObjects.Sprite, text: string): void {

@@ -42,13 +42,13 @@ const BAR_BUTTONS: Array<{ act: keyof BarActions; icon: string; label: string }>
 
 export class GameHud {
   private root: HTMLDivElement;
-  private heartsEl: HTMLDivElement;
   private coinsEl: HTMLDivElement;
   private clockEl: HTMLDivElement;
   private settingsEl: HTMLDivElement;
   private barEl: HTMLDivElement;
   private clockTimer: number;
-  private prevHearts = -1;
+  private questDone = 0;
+  private questTotal = 5;
   private coins = 0;
 
   constructor(private readonly opts: HudBase) {
@@ -56,7 +56,6 @@ export class GameHud {
     this.root = document.createElement('div');
     this.root.className = 'hv-hud';
     this.root.innerHTML = `
-      <div class="hv-hud-hearts" title="오늘의 퀘스트 진행"></div>
       <div class="hv-hud-top-right">
         <div class="hv-hud-coins"><img src="${icons.coin}" alt=""> <b>…</b></div>
         <div class="hv-hud-clock">…</div>
@@ -88,12 +87,10 @@ export class GameHud {
       </div>`;
     document.body.appendChild(this.root);
 
-    this.heartsEl = this.root.querySelector('.hv-hud-hearts')!;
     this.coinsEl = this.root.querySelector('.hv-hud-coins')!;
     this.clockEl = this.root.querySelector('.hv-hud-clock')!;
     this.settingsEl = this.root.querySelector('.hv-hud-settings')!;
     this.barEl = this.root.querySelector('.hv-hud-bar')!;
-    this.setHearts(0, 5);
     this.tickClock();
     this.clockTimer = window.setInterval(() => this.tickClock(), 20_000);
 
@@ -139,6 +136,7 @@ export class GameHud {
       });
     });
     this.barEl.classList.remove('hidden'); // display은 CSS(데스크톱 flex / 모바일 grid)가 결정
+    this.applyQuestBadge();
   }
 
   /** 거리 씬 이탈(방·인테리어 입장) 시 액션 바 제거 — 상태·설정은 유지 */
@@ -154,14 +152,27 @@ export class GameHud {
 
   get lastCoins(): number { return this.coins; }
 
-  /** 하트 = 오늘의 퀘스트 달성 수 — 새로 채워진 하트는 통통 튄다 */
+  /** 오늘의 퀘스트 진행 — 퀘스트 버튼에 배지로 표시 (하트 대체) */
   setHearts(done: number, total: number): void {
-    const icons = pixelIcons();
-    const bumped = this.prevHearts >= 0 && done > this.prevHearts;
-    this.heartsEl.innerHTML = Array.from({ length: total }, (_, i) =>
-      `<img class="${i < done ? 'on' : 'off'} ${bumped && i === done - 1 ? 'bump' : ''}"
-        src="${i < done ? icons.heart : icons.heartEmpty}" alt="">`).join('');
-    this.prevHearts = done;
+    this.questDone = done;
+    this.questTotal = total;
+    this.applyQuestBadge();
+  }
+
+  /** 퀘스트 버튼에 진행 배지 부착 (바가 장착돼 있을 때만) */
+  private applyQuestBadge(): void {
+    const btn = this.barEl.querySelector<HTMLButtonElement>('[data-act="onQuest"]');
+    if (!btn) return;
+    let badge = btn.querySelector<HTMLSpanElement>('.hud-badge');
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'hud-badge';
+      btn.appendChild(badge);
+    }
+    const done = this.questDone === this.questTotal && this.questTotal > 0;
+    badge.textContent = done ? '✓' : `${this.questDone}/${this.questTotal}`;
+    badge.classList.toggle('done', done);
+    badge.classList.toggle('active', this.questDone > 0);
   }
 
   private tickClock(): void {
