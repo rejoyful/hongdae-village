@@ -1,4 +1,14 @@
 /* 홍대마을 HTML 오버레이 — 게임 캔버스 위에 뜨는 DOM UI */
+/* ── 디자인 토큰 (SSOT: docs/STYLE_GUIDE.md §2.1). 신규 UI는 이 변수를 재사용한다 ── */
+:root {
+  --wood-lite: #e7bd7f;   --wood: #d9a45b;      --wood-dark: #5c3a1c;
+  --wood-edge: #6e4522;   --paper: #f2dcae;     --paper-2: #e0c088;
+  --ink: #4a2e14;         --cream: #fff2d8;     --accent: #e8a83c;
+  --sub: #8a6a3c;         --frame-a: #b07a46;   --frame-b: #96613a;
+  --gold-a: #f2c25c;      --gold-b: #e8a83c;    --office: #3a4a6a;
+  /* 희귀도 (게임 아트와 동기) */
+  --rar-common: #8ca0b0;  --rar-rare: #5aa668;  --rar-epic: #a86ad0;  --rar-legendary: #e8a83c;
+}
 .hv-panel {
   position: fixed; inset: 0; z-index: 20;
   display: flex; align-items: center; justify-content: center;
