@@ -5,16 +5,8 @@ import { stepPlayer, type MoveInput } from './playerMotion';
 import { ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
 import { randomAppearance } from '../art/appearance';
 import { seeded } from '../art/pixelCanvas';
-
-/** NPC 혼잣말 풀 — 홍대 감성 (스펙 §2 "배경의 숨결") */
-export const NPC_MENTS = [
-  '오늘 하늘 좀 봐…', '이 골목 카페가 진짜 맛집인데', '버스킹 소리 좋다',
-  '숲길 산책이나 할까', '떡볶이 먹고 싶다', '주말인데 사람 많네',
-  '이 동네 참 좋아', '사진 찍기 좋은 날이야', '고양이다!',
-  '새 앨범 나왔대', '전시 보러 갈까', '커피 한 잔 해야지',
-  '벚꽃 언제 피지?', '오늘도 평화롭다~', '저 집 옥탑방 부럽다',
-  '홍대는 밤이 진짜지', '요즘 뜨는 노래 뭐지', '살랑살랑 바람 좋네',
-] as const;
+import { pickLine, cohortForIndex, slotForHour, type Cohort } from './npcChatter';
+import { seoulHour } from '../world/timeOfDay';
 
 interface Npc {
   sprite: Phaser.GameObjects.Sprite;
@@ -23,6 +15,7 @@ interface Npc {
   waitUntil: number;
   facing: 0 | 1 | 2 | 3;
   speed: number;
+  cohort: Cohort;
 }
 
 /** 걸어다니는 앰비언트 NPC 무리 — 랜덤 외형·배회·가끔 혼잣말 */
@@ -81,8 +74,8 @@ export class NpcCrowd {
       waitUntil: this.scene.time.now + this.rnd() * 3000,
       facing: 0,
       speed: 0.45 + this.rnd() * 0.35, // 사람마다 걸음 속도 다르게 (플레이어 대비 배율)
+      cohort: cohortForIndex(i), // 세대 배정 (말투 다양화)
     });
-    void i;
   }
 
   update(delta: number): void {
@@ -95,9 +88,10 @@ export class NpcCrowd {
         if (!t) { n.waitUntil = now + 2000; continue; }
         const w = tileToWorld(t.tx, t.ty);
         n.target = { x: w.x + TILE / 2, y: w.y + TILE / 2 };
-        // 출발하며 가끔 혼잣말 + 아기자기한 제자리 폴짝
+        // 출발하며 가끔 혼잣말 (세대·시간대 반영) + 아기자기한 제자리 폴짝
         if (this.rnd() < 0.22) {
-          this.onBubble(n.sprite, NPC_MENTS[Math.floor(this.rnd() * NPC_MENTS.length)]!);
+          const slot = slotForHour(seoulHour());
+          this.onBubble(n.sprite, pickLine(n.cohort, slot, this.rnd));
           const baseY = n.sprite.y;
           this.scene.tweens.add({
             targets: n.sprite, y: baseY - 5, duration: 150, yoyo: true,

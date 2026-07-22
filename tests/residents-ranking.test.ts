@@ -67,7 +67,11 @@ describe('생활 포인트·랭킹', () => {
 });
 
 describe('맵 데이터 회귀', () => {
-  it('SOLID_RECTS 브랜드 상가 4곳 인덱스(19~22)가 유지된다', () => {
-    expect(SOLID_RECTS.length).toBe(23);
+  it('브랜드 상가 4곳이 인덱스 19~22에 유지된다 (BUILDING_PLACEMENT 매핑 보존)', () => {
+    // 인덱스 0~3 테두리, 19~22 = Apple/GS25/CU/세븐일레븐. 채움 건물은 23~ 뒤에 추가.
+    expect(SOLID_RECTS.length).toBeGreaterThanOrEqual(23);
+    expect(SOLID_RECTS[19]).toEqual({ x: 6, y: 28, w: 10, h: 3 });   // Apple
+    expect(SOLID_RECTS[20]).toEqual({ x: 20, y: 28, w: 6, h: 3 });   // GS25
+    expect(SOLID_RECTS[22]).toEqual({ x: 58, y: 28, w: 6, h: 3 });   // 세븐일레븐
   });
 });

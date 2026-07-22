@@ -3,8 +3,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { TILE, ZOOM, MAP_W, MAP_H, TEXT_RES } from '../config';
 import {
   ZONES, SPAWN_TILE, HOUSE_DOORS, SHOP_DOORS, CAFE_DOORS, INTERIOR_DOORS,
-  BUSKING_SPOT, OMOK_SPOT, BOARD_SPOT, buildCollision,
+  BUSKING_SPOT, OMOK_SPOT, BOARD_SPOT, CLAW_SPOT, PHOTO_SPOT, BUNGEO_SPOT, buildCollision,
 } from '../world/mapData';
+import { ClawPanel } from '../../ui/clawPanel';
 import { NpcCrowd } from '../entities/npcAmbient';
 import { OmokPanel } from '../../ui/omokPanel';
 import { QuestPanel } from '../../ui/questPanel';
@@ -90,6 +91,11 @@ export class StreetScene extends Phaser.Scene {
   private onBuskingTile = false;
   private onOmokTile = false;
   private onBoardTile = false;
+  private onClawTile = false;
+  private onPhotoTile = false;
+  private onBungeoTile = false;
+  private claw: ClawPanel | null = null;
+  private escHandler: ((e: KeyboardEvent) => void) | null = null;
   private forestMs = 0;
   private hud: GameHud | null = null;
   private questStore!: QuestStore;
@@ -140,8 +146,8 @@ export class StreetScene extends Phaser.Scene {
   create(): void {
     this.grid = buildCollision();
 
-    // 거리 아트 (바닥·건물·문·간판·소품)
-    buildStreetArt(this, MAP_W, MAP_H);
+    // 거리 아트 (바닥·건물·문·간판·소품·바닥 데칼)
+    buildStreetArt(this, MAP_W, MAP_H, this.grid);
     for (const z of ZONES) {
       const p = tileToWorld(z.rect.x, z.rect.y);
       this.add.text(p.x + 8, p.y + 8, z.name, {
@@ -242,6 +248,15 @@ export class StreetScene extends Phaser.Scene {
         const onOmok = tile.tx === OMOK_SPOT.tx && tile.ty === OMOK_SPOT.ty;
         if (onOmok && !this.onOmokTile && this.omok && !this.omok.isOpen) this.omok.open();
         this.onOmokTile = onOmok;
+        const onClaw = tile.tx === CLAW_SPOT.tx && tile.ty === CLAW_SPOT.ty;
+        if (onClaw && !this.onClawTile && this.claw && !this.claw.isOpen && !this.anyPanelOpen()) this.claw.open();
+        this.onClawTile = onClaw;
+        const onPhoto = tile.tx === PHOTO_SPOT.tx && tile.ty === PHOTO_SPOT.ty;
+        if (onPhoto && !this.onPhotoTile) { this.takePhoto(); }
+        this.onPhotoTile = onPhoto;
+        const onBungeo = tile.tx === BUNGEO_SPOT.tx && tile.ty === BUNGEO_SPOT.ty;
+        if (onBungeo && !this.onBungeoTile) { this.eatBungeo(); }
+        this.onBungeoTile = onBungeo;
         const interiorDoor = INTERIOR_DOORS.find((d) => d.tx === tile.tx && d.ty === tile.ty);
         if (interiorDoor && !this.entering) {
           this.entering = true;
@@ -432,6 +447,13 @@ export class StreetScene extends Phaser.Scene {
     kb.on('keydown-G', () => void this.openDex());
     kb.on('keydown-M', () => this.openMap());
     kb.on('keydown-Q', () => this.openQuests());
+    kb.on('keydown-R', () => this.openRanking());
+    kb.on('keydown-P', () => this.openResidents());
+    // ESC로 열린 패널 닫기 — 패널이 Phaser 키보드를 끄므로 document 레벨에서 처리
+    this.escHandler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { if (this.closeTopPanel()) e.stopPropagation(); }
+    };
+    document.addEventListener('keydown', this.escHandler);
 
     this.shop = new ShopPanel({
       buyEnabled: !!this.sb,
@@ -465,21 +487,33 @@ export class StreetScene extends Phaser.Scene {
       },
       onWin: () => void this.handleOmokWin(),
     });
+    this.claw = new ClawPanel(this.peer.userId, {
+      onToggle: (open) => this.setGameKeysEnabled(!open),
+      onWin: (prize) => { this.showBubble(this.player, `${prize} 획득! 🎉`); this.motions?.play(this.player, 'win'); },
+    });
     this.quests = new QuestPanel({
       online: !!this.sb,
       onToggle: (open) => this.setGameKeysEnabled(!open),
       onClaim: (questId) => void this.handleQuestClaim(questId),
     });
 
-    // 활동 스팟 표시
-    const spot = (t: { tx: number; ty: number }, emoji: string) => {
+    // 활동 스팟 표시 — 통통 튀는 아이콘으로 "여기서 뭔가 된다"를 알린다
+    const spot = (t: { tx: number; ty: number }, emoji: string, label: string) => {
       const w = tileToWorld(t.tx, t.ty);
-      this.add.text(w.x + TILE / 2, w.y + TILE / 2, emoji, { fontSize: '14px' })
-        .setOrigin(0.5).setDepth(2).setAlpha(0.9);
+      const icon = this.add.text(w.x + TILE / 2, w.y - 4, emoji, { fontSize: '16px' })
+        .setOrigin(0.5, 1).setDepth(12).setAlpha(0.95);
+      this.add.text(w.x + TILE / 2, w.y + TILE + 2, label, {
+        fontSize: '8px', color: '#fff2d8', backgroundColor: '#7a5220',
+        padding: { x: 3, y: 1 }, resolution: TEXT_RES,
+      }).setOrigin(0.5, 0).setDepth(12).setAlpha(0.9);
+      this.tweens.add({ targets: icon, y: w.y - 10, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     };
-    spot(BUSKING_SPOT, '🎸');
-    spot(OMOK_SPOT, '⚫');
-    spot(BOARD_SPOT, '📋');
+    spot(BUSKING_SPOT, '🎸', '버스킹');
+    spot(OMOK_SPOT, '⚫', '오목');
+    spot(BOARD_SPOT, '📋', '퀘스트');
+    spot(CLAW_SPOT, '🕹️', '인형뽑기');
+    spot(PHOTO_SPOT, '📸', '네컷');
+    spot(BUNGEO_SPOT, '🐟', '붕어빵');
 
     // 마을을 걸어다니는 행인들 (스펙 §2 NPC 앰비언트)
     this.npcs = new NpcCrowd(this, this.grid, (sprite, text) => this.showBubble(sprite, text));
@@ -548,7 +582,42 @@ export class StreetScene extends Phaser.Scene {
       || (this.bag?.isOpen ?? false) || (this.dex?.isOpen ?? false)
       || (this.mapPanel?.isOpen ?? false) || (this.quests?.isOpen ?? false)
       || (this.shop?.isOpen ?? false) || (this.residentsPanel?.isOpen ?? false)
-      || (this.rankingPanel?.isOpen ?? false);
+      || (this.rankingPanel?.isOpen ?? false) || (this.claw?.isOpen ?? false);
+  }
+
+  /** ESC — 열린 패널 중 하나를 닫는다. 닫았으면 true */
+  private closeTopPanel(): boolean {
+    const closers: Array<{ open: boolean; close: () => void }> = [
+      { open: this.bag?.isOpen ?? false, close: () => this.bag!.close() },
+      { open: this.dex?.isOpen ?? false, close: () => this.dex!.close() },
+      { open: this.mapPanel?.isOpen ?? false, close: () => this.mapPanel!.close() },
+      { open: this.residentsPanel?.isOpen ?? false, close: () => this.residentsPanel!.close() },
+      { open: this.rankingPanel?.isOpen ?? false, close: () => this.rankingPanel!.close() },
+      { open: this.quests?.isOpen ?? false, close: () => this.quests!.close() },
+      { open: this.shop?.isOpen ?? false, close: () => this.shop!.close() },
+      { open: this.claw?.isOpen ?? false, close: () => this.claw!.close() },
+      { open: this.omok?.isOpen ?? false, close: () => this.omok!.close() },
+      { open: this.cafe?.isOpen ?? false, close: () => this.cafe!.close() },
+      { open: this.busking?.isOpen ?? false, close: () => this.busking!.close() },
+      { open: this.customize?.isOpen ?? false, close: () => this.customize!.close() },
+    ];
+    const top = closers.find((c) => c.open);
+    if (top) { top.close(); return true; }
+    return false;
+  }
+
+  /** 네컷 포토부스 — 프로필 인사 연출 (실시간 시간대 문구) */
+  private takePhoto(): void {
+    const slot = ['📸 인생네컷 찰칵!', '📸 갬성샷 득템~', '📸 최고의 한 컷 ✨'];
+    this.showBubble(this.player, slot[Math.floor(Date.now() / 1000) % slot.length]!);
+    this.motions?.play(this.player, 'greet');
+    audio.playSe('success');
+  }
+
+  /** 붕어빵 포차 — 따끈한 간식 (하트 회복 연출) */
+  private eatBungeo(): void {
+    this.showBubble(this.player, '🐟 붕어빵 호호… 따끈해!');
+    this.motions?.play(this.player, 'coin');
   }
 
   private openResidents(): void {
@@ -808,6 +877,7 @@ export class StreetScene extends Phaser.Scene {
     this.cafe?.destroy();
     this.busking?.destroy();
     this.omok?.destroy();
+    this.claw?.destroy();
     this.quests?.destroy();
     this.npcs?.destroy();
     this.residents?.destroy();
@@ -820,6 +890,7 @@ export class StreetScene extends Phaser.Scene {
     this.mapPanel?.destroy();
     this.residentsPanel?.destroy();
     this.rankingPanel?.destroy();
+    if (this.escHandler) document.removeEventListener('keydown', this.escHandler);
     this.hint?.remove();
   }
 }

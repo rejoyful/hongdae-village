@@ -600,3 +600,43 @@
   background: linear-gradient(#e7bd7f, #d9a45b); border: 3px solid #5c3a1c;
   box-shadow: 0 3px 0 rgba(74, 46, 20, .6), 0 0 0 2px #f2dcae inset;
 }
+
+/* ── 인형뽑기 ── */
+.hv-claw {
+  position: fixed; inset: 0; z-index: 18;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(15, 12, 10, 0.6); font-family: system-ui, sans-serif;
+}
+.hv-claw-card {
+  background: linear-gradient(#e07a9a, #c85a7c); color: #fff;
+  border: 3px solid #8a3a54; border-radius: 16px; width: min(380px, 92vw); padding: 16px 18px;
+  box-shadow: 0 0 0 3px #ffd0e0 inset, 0 14px 30px rgba(0,0,0,.5);
+}
+.hv-claw-head { display: flex; align-items: center; gap: 10px; }
+.hv-claw-head h2 { margin: 0; font-size: 16px; flex: 1; text-shadow: 0 2px 0 #8a3a54; }
+.hv-claw-head span { font-size: 12px; font-weight: 800; background: #fff; color: #c85a7c; padding: 3px 10px; border-radius: 999px; }
+.hv-claw-head .close { border: 0; background: transparent; color: #fff; font-size: 16px; cursor: pointer; font-weight: 900; }
+.hv-claw-machine {
+  position: relative; height: 150px; margin: 12px 0; border-radius: 12px;
+  background: linear-gradient(#ffe0ec, #ffd0e0); border: 3px solid #8a3a54; overflow: hidden;
+}
+.hv-claw-machine .rail { position: absolute; top: 8px; left: 6%; right: 6%; height: 6px; background: #8a3a54; border-radius: 3px; }
+.hv-claw-machine .crane { position: absolute; top: -4px; transform: translateX(-50%); font-size: 22px; transition: none; }
+.hv-claw-machine .doll {
+  position: absolute; bottom: 10px; transform: translateX(-50%); font-size: 30px;
+}
+.hv-claw-machine .doll::after {
+  content: ''; position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%);
+  width: var(--tol, 8%); min-width: 20px; height: 4px; background: #6ee87c; border-radius: 2px;
+}
+.hv-claw-msg { text-align: center; font-size: 13px; font-weight: 800; min-height: 18px; margin: 4px 0 10px; text-shadow: 0 1px 0 #8a3a54; }
+.hv-claw-collection { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin-bottom: 12px; min-height: 22px; }
+.hv-claw-collection span { background: #fff; color: #c85a7c; font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 999px; }
+.hv-claw-collection i { color: #ffe0ec; font-size: 12px; }
+.hv-claw-btn {
+  width: 100%; padding: 12px; border: 3px solid #8a3a54; border-radius: 12px;
+  background: linear-gradient(#fff2a0, #f2c25c); color: #8a3a10; font-weight: 900; font-size: 15px;
+  cursor: pointer; box-shadow: 0 4px 0 #a06428;
+}
+.hv-claw-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #a06428; }
+@media (max-width: 700px) { .hv-claw-machine { height: 130px; } }
