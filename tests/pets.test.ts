@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   petStage, evalUnlocks, PET_STAGES, AFFINITY_MAX, BASE_SPECIES, RARE_SPECIES,
 } from '../src/game/pets/pets';
+import { petTarget, PET_REST } from '../src/game/pets/petFollowMath';
 
 // 노드 환경엔 localStorage가 없다 — 최소 shim
 class MemStorage {
@@ -40,6 +41,25 @@ describe('펫 성장·해금 (순수 로직)', () => {
     expect(evalUnlocks({ maxAffinity: 0, ownedBase: 4, feeds: 0 })).not.toContain('rainbowdog');
     expect(evalUnlocks({ maxAffinity: 0, ownedBase: 0, feeds: 20 })).toContain('starbunny');
     expect(evalUnlocks({ maxAffinity: 0, ownedBase: 0, feeds: 19 })).not.toContain('starbunny');
+  });
+});
+
+describe('펫 팔로워 위치 — 플레이어와 겹치지 않는다', () => {
+  it('정지 상태(지연 버퍼 없음)면 플레이어 옆자리로 밀어낸다', () => {
+    const t = petTarget(300, 200, null);
+    expect(t).toEqual({ x: 300 + PET_REST.dx, y: 200 + PET_REST.dy });
+    // 실제로 떨어져 있어 겹치지 않음
+    expect(Math.hypot(t.x - 300, t.y - 200)).toBeGreaterThanOrEqual(PET_REST.gap);
+  });
+
+  it('지연 좌표가 플레이어와 겹칠 만큼 가까우면 옆자리로 보정한다', () => {
+    const t = petTarget(300, 200, { x: 302, y: 201 }); // 거의 겹침
+    expect(t).toEqual({ x: 300 + PET_REST.dx, y: 200 + PET_REST.dy });
+  });
+
+  it('이동 중(충분히 뒤처짐)이면 지연 좌표를 그대로 따라간다', () => {
+    const lagged = { x: 260, y: 200 }; // 40px 뒤
+    expect(petTarget(300, 200, lagged)).toEqual(lagged);
   });
 });
 
