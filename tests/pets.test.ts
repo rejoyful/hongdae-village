@@ -135,3 +135,37 @@ describe('PetStore (localStorage shim)', () => {
     expect(s.checkUnlocks()).toContain('goldcat');
   });
 });
+
+describe('계정 동기 — 스냅샷/복원', () => {
+  beforeEach(() => {
+    (globalThis as unknown as { localStorage: MemStorage }).localStorage = new MemStorage();
+  });
+
+  it('PetStore: 다른 기기(빈 로컬)에서 스냅샷을 복원하면 펫·친밀도가 살아난다', async () => {
+    const { PetStore } = await import('../src/game/pets/petStore');
+    const a = new PetStore();
+    a.adopt('dog'); a.setActive('dog'); a.feed('dog');
+    const snap = JSON.parse(JSON.stringify(a.snapshot())); // 서버 왕복 흉내(직렬화)
+    (globalThis as unknown as { localStorage: MemStorage }).localStorage = new MemStorage(); // 새 기기
+    const b = new PetStore();
+    expect(b.isOwned('dog')).toBe(false);
+    b.hydrate(snap);
+    expect(b.isOwned('dog')).toBe(true);
+    expect(b.activeId()).toBe('dog');
+    expect(b.affinity('dog')).toBe(a.affinity('dog'));
+  });
+
+  it('BattleStore: 레벨·무기가 복원된다', async () => {
+    const { BattleStore } = await import('../src/game/battle/battleStore');
+    const a = new BattleStore();
+    a.onKill(1000); a.buyWeapon('steel'); a.equip('steel');
+    const snap = JSON.parse(JSON.stringify(a.snapshot()));
+    (globalThis as unknown as { localStorage: MemStorage }).localStorage = new MemStorage();
+    const b = new BattleStore();
+    expect(b.level).toBe(1);
+    b.hydrate(snap);
+    expect(b.level).toBe(a.level);
+    expect(b.equippedId()).toBe('steel');
+    expect(b.isWeaponOwned('steel')).toBe(true);
+  });
+});

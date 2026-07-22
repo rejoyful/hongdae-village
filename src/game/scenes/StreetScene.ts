@@ -25,6 +25,7 @@ import type { MonsterSpecies } from '../battle/monsters';
 import { BattleHud } from '../../ui/battleHud';
 import { WeaponShopPanel } from '../../ui/weaponShopPanel';
 import { buyWeapon, fetchOwnedWeapons } from '../../db/weaponApi';
+import { loadGameState, saveGameState, type GameSnapshot } from '../../db/gameSync';
 import { saveLastPos, loadLastPos } from '../world/lastPos';
 import { ClawPanel } from '../../ui/clawPanel';
 import { RealtyPanel } from '../../ui/realtyPanel';
@@ -172,6 +173,8 @@ export class StreetScene extends Phaser.Scene {
   private fatigueUntil = 0;
   private lastHitMs = -9999;
   private lastHuntRewardMs = -9999;
+  private syncReady = false;
+  private lastSyncSaveMs = 0;
   private weaponSprite: Phaser.GameObjects.Sprite | null = null;
   private playerTitle!: Phaser.GameObjects.Text;
   private playerAura!: PlayerAura;
@@ -352,6 +355,7 @@ export class StreetScene extends Phaser.Scene {
     this.scale.on('resize', this.onResize, this);
 
     this.setupUi();
+    void this.initSync();
     if (this.adapter) this.wireAdapter(this.adapter);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.teardown());
@@ -468,6 +472,11 @@ export class StreetScene extends Phaser.Scene {
     if (moving && !this.anyPanelOpen()) this.tickPetGift(delta);
     if (!this.anyPanelOpen()) this.hunt?.update(delta);
     this.tickBattle(delta);
+    // 진행 데이터 주기 저장 (계정 동기) — 복원 완료 후에만
+    if (this.syncReady && this.sb && this.time.now - this.lastSyncSaveMs > 8000) {
+      this.lastSyncSaveMs = this.time.now;
+      void saveGameState(this.sb, this.peer.userId, this.buildSnapshot());
+    }
     if (this.minimap && this.time.now - this.lastMinimapMs > 200) {
       this.lastMinimapMs = this.time.now;
       this.minimap.update(worldToTile(next.x, next.y), this.remoteTiles());
@@ -1128,6 +1137,46 @@ export class StreetScene extends Phaser.Scene {
 
   private isFatigued(): boolean { return this.time.now < this.fatigueUntil; }
 
+  // --- 계정 동기 (레벨·펫·보물·퀘스트를 기기 간 유지) ---
+
+  private buildSnapshot(): GameSnapshot {
+    return {
+      v: 1,
+      battle: this.battleStore.snapshot(),
+      pets: this.petStore.snapshot(),
+      treasure: this.treasureStore.snapshot(),
+      quests: this.questStore.snapshot(),
+    };
+  }
+
+  /** 로그인 시: 서버 스냅샷이 있으면 복원(계정 우선), 없으면 현재 로컬을 서버에 올린다 */
+  private async initSync(): Promise<void> {
+    if (!this.sb) { this.syncReady = true; return; }
+    const snap = await loadGameState(this.sb, this.peer.userId);
+    if (snap) {
+      if (snap.battle) this.battleStore.hydrate(snap.battle);
+      if (snap.pets) this.petStore.hydrate(snap.pets);
+      if (snap.treasure) this.treasureStore.hydrate(snap.treasure);
+      if (snap.quests) this.questStore.hydrate(snap.quests);
+      this.refreshAfterSync();
+    } else {
+      await saveGameState(this.sb, this.peer.userId, this.buildSnapshot());
+    }
+    this.syncReady = true;
+    this.lastSyncSaveMs = this.time.now;
+  }
+
+  /** 서버 복원 후 파생 UI·연출 갱신 */
+  private refreshAfterSync(): void {
+    this.refreshNameTag();
+    this.playerAura?.setLevel(this.battleStore.level);
+    this.refreshWeaponSprite();
+    this.pet?.setSpecies(this.petStore.activeId());
+    this.refreshPetStage();
+    this.refreshHearts();
+    this.syncSelfMeta();
+  }
+
   /** 복원해도 안전한 스폰 타일인지 (지도 안·비장애물·씬전환문 아님) */
   private safeSpawn(tx: number, ty: number): boolean {
     if (tx < 1 || ty < 1 || tx >= MAP_W - 1 || ty >= MAP_H - 1) return false;
@@ -1633,6 +1682,7 @@ export class StreetScene extends Phaser.Scene {
     this.motions?.destroy();
     this.idleBreath?.destroy();
     this.touch?.destroy();
+    if (this.syncReady && this.sb) void saveGameState(this.sb, this.peer.userId, this.buildSnapshot());
     this.hud?.unmountActions(); // HUD는 싱글턴 — 액션 바만 내리고 상태·설정은 유지
     this.bag?.destroy();
     this.dex?.destroy();

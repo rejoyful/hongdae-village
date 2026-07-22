@@ -43,6 +43,21 @@ export class PetStore {
     try { localStorage.setItem(KEY, JSON.stringify(this.state)); } catch { /* 무시 */ }
   }
 
+  /** 서버 동기 — 스냅샷/복원 */
+  snapshot(): PetState { return this.state; }
+  hydrate(raw: unknown): void {
+    const r = (raw ?? {}) as Record<string, unknown>;
+    this.state = {
+      owned: Array.isArray(r.owned) ? (r.owned as unknown[]).filter((x): x is string => typeof x === 'string') : [],
+      active: typeof r.active === 'string' ? r.active : null,
+      affinity: r.affinity && typeof r.affinity === 'object' ? r.affinity as Record<string, number> : {},
+      fedDay: r.fedDay && typeof r.fedDay === 'object' ? r.fedDay as Record<string, string> : {},
+      feeds: Number.isFinite(r.feeds) ? r.feeds as number : 0,
+      unlocked: Array.isArray(r.unlocked) ? (r.unlocked as unknown[]).filter((x): x is string => typeof x === 'string') : [],
+    };
+    this.save();
+  }
+
   owned(): string[] { return [...this.state.owned]; }
   isOwned(id: string): boolean { return this.state.owned.includes(id); }
   activeId(): string | null { return this.state.active; }
