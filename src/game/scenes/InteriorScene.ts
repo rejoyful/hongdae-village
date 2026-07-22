@@ -12,7 +12,9 @@ import { TouchControls, isTouchDevice } from '../../ui/touchControls';
 
 interface InteriorData { shop: InteriorShop; peer: PeerState; adapter: NetworkAdapter | null }
 
-/** 상가 내부 — AI 백드롭 + 근사 충돌 + 문으로 거리 복귀 */
+interface Bubble { c: Phaser.GameObjects.Container; owner: Phaser.GameObjects.Sprite; until: number }
+
+/** 상가 내부 — AI 백드롭 + 근사 충돌 + 사람·상호작용 + 문으로 거리 복귀 */
 export class InteriorScene extends Phaser.Scene {
   private def!: InteriorDef;
   private peer!: PeerState;
@@ -24,6 +26,9 @@ export class InteriorScene extends Phaser.Scene {
   private charKey = '';
   private touch: TouchControls | null = null;
   private hint: HTMLDivElement | null = null;
+  private bubbles: Bubble[] = [];
+  private npcSprites: Array<{ sprite: Phaser.GameObjects.Sprite; lines: string[]; last: number; idx: number }> = [];
+  private onSpotTile = -1;
 
   constructor() { super('interior'); }
 
@@ -93,9 +98,32 @@ export class InteriorScene extends Phaser.Scene {
 
     if (isTouchDevice()) this.touch = new TouchControls();
 
+    // 인테리어 사람들 (알바·손님) — 이름표 + 제자리 폴짝
+    for (const npc of this.def.npcs) {
+      const key = ensureCharacter(this, npc.appearance);
+      const w = tileToWorld(npc.tx, npc.ty);
+      const s = this.add.sprite(w.x + TILE / 2, w.y + TILE / 2, key, 0).setOrigin(0.5, 0.66).setDepth(9);
+      this.add.text(s.x, s.y - 24, npc.name, {
+        fontSize: '8px', color: '#fff2d8', backgroundColor: '#7a5220', padding: { x: 3, y: 1 },
+      }).setOrigin(0.5, 1).setDepth(11).setAlpha(0.95);
+      this.tweens.add({ targets: s, y: s.y - 3, duration: 1300, yoyo: true, repeat: -1,
+        ease: 'Sine.easeInOut', delay: (npc.name.length * 173) % 1000 });
+      this.npcSprites.push({ sprite: s, lines: npc.lines, last: -6000, idx: 0 });
+    }
+
+    // 상호작용 스팟 표시 (통통 튀는 라벨)
+    for (const sp of this.def.spots) {
+      const w = tileToWorld(sp.tx, sp.ty);
+      const icon = this.add.text(w.x + TILE / 2, w.y - 2, '✨', { fontSize: '12px' }).setOrigin(0.5, 1).setDepth(12);
+      this.add.text(w.x + TILE / 2, w.y + TILE, sp.label, {
+        fontSize: '7px', color: '#fff2d8', backgroundColor: '#5c4432', padding: { x: 2, y: 1 },
+      }).setOrigin(0.5, 0).setDepth(12).setAlpha(0.9);
+      this.tweens.add({ targets: icon, y: w.y - 8, duration: 640, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    }
+
     this.hint = document.createElement('div');
     this.hint.className = 'hv-hint';
-    this.hint.textContent = `${this.def.name} · 아래 문으로 나가기`;
+    this.hint.textContent = `${this.def.name} · ✨앞에 서면 구경 · 아래 문으로 나가기`;
     document.body.appendChild(this.hint);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -103,6 +131,8 @@ export class InteriorScene extends Phaser.Scene {
       this.touch = null;
       this.hint?.remove();
       this.hint = null;
+      for (const b of this.bubbles) b.c.destroy();
+      this.bubbles = [];
     });
   }
 
@@ -132,12 +162,57 @@ export class InteriorScene extends Phaser.Scene {
       this.player.setFrame(this.facing * FRAMES_PER_DIR);
     }
 
-    // 문 밟으면 거리로 (들어온 상가 문 앞)
+    // 상호작용 스팟: 밟는 순간 테마 대사 (건물 성격별 재미요소)
     const tile = worldToTile(next.x, next.y);
+    const spotIdx = this.def.spots.findIndex((sp) => sp.tx === tile.tx && sp.ty === tile.ty);
+    if (spotIdx !== -1 && spotIdx !== this.onSpotTile) {
+      const sp = this.def.spots[spotIdx]!;
+      this.showBubble(this.player, sp.lines[Math.floor(Math.random() * sp.lines.length)]!);
+    }
+    this.onSpotTile = spotIdx;
+
+    // 사람 근처면 말 걸기 (쿨다운)
+    const now = this.time.now;
+    for (const n of this.npcSprites) {
+      const d = Math.abs(n.sprite.x - next.x) + Math.abs(n.sprite.y - next.y);
+      if (d < TILE * 1.6 && now - n.last > 5000) {
+        n.last = now;
+        this.showBubble(n.sprite, n.lines[n.idx % n.lines.length]!);
+        n.idx++;
+      }
+    }
+
+    // 말풍선 추종·만료
+    this.bubbles = this.bubbles.filter((b) => {
+      if (now >= b.until || !b.owner.active) { b.c.destroy(); return false; }
+      b.c.setPosition(b.owner.x, b.owner.y - 30);
+      return true;
+    });
+
+    // 문 밟으면 거리로 (들어온 상가 문 앞)
     if (tile.tx === Math.floor(this.def.w / 2) && tile.ty === this.def.h - 1) {
       const door = INTERIOR_DOORS.find((d) => d.shop === this.def.id);
       const spawnTile = door ? { tx: door.tx, ty: door.ty + 1 } : undefined;
       this.scene.start('street', { peer: this.peer, adapter: this.adapter, spawnTile });
     }
+  }
+
+  private showBubble(owner: Phaser.GameObjects.Sprite, text: string): void {
+    this.bubbles = this.bubbles.filter((b) => {
+      if (b.owner === owner) { b.c.destroy(); return false; }
+      return true;
+    });
+    const t = this.add.text(0, 0, text, {
+      fontSize: '11px', color: '#4a2e14', wordWrap: { width: 150 }, align: 'center', resolution: 2,
+    }).setOrigin(0.5);
+    const b = t.getBounds();
+    const w = b.width + 16, h = b.height + 10;
+    const bg = this.add.graphics();
+    bg.fillStyle(0x4a2c12, 1).fillRoundedRect(-w / 2 - 1.5, -h / 2 - 1.5, w + 3, h + 3, 8);
+    bg.fillStyle(0xfff8e4, 1).fillRoundedRect(-w / 2, -h / 2, w, h, 7);
+    const c = this.add.container(owner.x, owner.y - 30, [bg, t]).setDepth(20);
+    c.setScale(0.6);
+    this.tweens.add({ targets: c, scale: 1, duration: 160, ease: 'Back.easeOut' });
+    this.bubbles.push({ c, owner, until: this.time.now + 3500 });
   }
 }

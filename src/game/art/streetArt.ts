@@ -1,7 +1,10 @@
 import type Phaser from 'phaser';
 import { TILE } from '../config';
-import { ZONES, SOLID_RECTS, HOUSE_DOORS } from '../world/mapData';
-import type { Rect } from '../world/grid';
+import {
+  ZONES, SOLID_RECTS, HOUSE_DOORS, SHOP_DOORS, CAFE_DOORS, INTERIOR_DOORS,
+  CLAW_SPOT, PHOTO_SPOT, BUNGEO_SPOT,
+} from '../world/mapData';
+import type { Rect, CollisionGrid } from '../world/grid';
 import { PAL } from './palette';
 import { makeTexture, seeded, type Px } from './pixelCanvas';
 import { BUILDING_PLACEMENT } from './assetManifest';
@@ -307,8 +310,9 @@ export function drawHongdaeProps(scene: Phaser.Scene): void {
 }
 
 /** 거리 전체 아트 배치 (씬 create에서 1회 호출) */
-export function buildStreetArt(scene: Phaser.Scene, mapW: number, mapH: number): void {
+export function buildStreetArt(scene: Phaser.Scene, mapW: number, mapH: number, grid?: CollisionGrid): void {
   scene.add.image(0, 0, makeStreetGround(scene, mapW, mapH)).setOrigin(0).setDepth(0);
+  if (grid) scatterDecals(scene, mapW, mapH, grid);
   SOLID_RECTS.forEach((r, i) => {
     if (i < 4) return; // 테두리 벽 스킵 (지도 밖)
     // AI 아트 자산이 로드돼 있으면 우선 사용, 없으면 프로시저럴 폴백
@@ -323,11 +327,150 @@ export function buildStreetArt(scene: Phaser.Scene, mapW: number, mapH: number):
       img.setDisplaySize(r.w * T, r.h * T);
     }
   });
+  // 모든 출입구에 보이는 문을 그린다 (입구가 안 보여 헷갈리던 문제 보완)
   const doorKey = makeDoorTexture(scene);
-  for (const d of HOUSE_DOORS) {
+  const glowKey = makeDoorGlow(scene);
+  const allDoors = [
+    ...HOUSE_DOORS.map((d) => ({ tx: d.tx, ty: d.ty })),
+    ...SHOP_DOORS, ...CAFE_DOORS,
+    ...INTERIOR_DOORS.map((d) => ({ tx: d.tx, ty: d.ty })),
+  ];
+  for (const d of allDoors) {
+    scene.add.image(d.tx * T + T / 2, d.ty * T + T, glowKey).setOrigin(0.5, 1).setDepth(1);
     scene.add.image(d.tx * T, d.ty * T, doorKey).setOrigin(0).setDepth(2);
   }
   drawShops(scene);
   drawStreetProps(scene);
   drawHongdaeProps(scene);
+  drawDensity(scene);
+  drawInteractables(scene);
+}
+
+/** 바닥 데칼 산개 — 통행 가능한 타일에만 낙엽·맨홀·얼룩·꽃잎을 흩뿌려 빈 공간을 채운다 */
+function scatterDecals(scene: Phaser.Scene, mapW: number, mapH: number, grid: CollisionGrid): void {
+  makeTexture(scene, 'dc-leaf', 8, 8, (d) => { d.rect(2, 1, 3, 5, 0xb8a06a); d.rect(3, 0, 1, 7, 0x8a7048); });
+  makeTexture(scene, 'dc-manhole', 20, 14, (d) => {
+    d.rect(0, 2, 20, 10, 0x5c5650); d.rect(2, 3, 16, 8, 0x6e6a64);
+    for (let i = 3; i < 17; i += 3) d.rect(i, 4, 1, 6, 0x4a463c);
+  });
+  makeTexture(scene, 'dc-crack', 16, 10, (d) => {
+    d.rect(1, 5, 6, 1, 0x4a463c, 0.5); d.rect(6, 3, 5, 1, 0x4a463c, 0.5); d.rect(9, 5, 6, 1, 0x4a463c, 0.5);
+  });
+  makeTexture(scene, 'dc-petal', 6, 6, (d) => { d.rect(1, 1, 4, 4, 0xe8a0b8, 0.85); d.rect(2, 2, 2, 2, 0xf2c0d0); });
+  makeTexture(scene, 'dc-puddle', 18, 10, (d) => { d.rect(0, 2, 18, 6, 0x8aa0a8, 0.35); d.rect(3, 3, 10, 3, 0xb8c8cc, 0.3); });
+
+  const keys = ['dc-leaf', 'dc-crack', 'dc-petal', 'dc-leaf', 'dc-manhole', 'dc-puddle', 'dc-leaf', 'dc-petal'];
+  const rnd = seeded(90210);
+  let placed = 0;
+  for (let i = 0; i < 900 && placed < 240; i++) {
+    const tx = 1 + Math.floor(rnd() * (mapW - 2));
+    const ty = 1 + Math.floor(rnd() * (mapH - 2));
+    if (grid.isSolid(tx, ty)) continue;              // 건물·소품 위엔 안 놓음
+    const key = keys[Math.floor(rnd() * keys.length)]!;
+    scene.add.image(tx * T + T / 2 + (rnd() - 0.5) * 16, ty * T + T / 2 + (rnd() - 0.5) * 16, key)
+      .setOrigin(0.5).setDepth(1).setAlpha(0.5 + rnd() * 0.35);
+    placed++;
+  }
+}
+
+/** 빈 골목을 채우는 밀도 패스 — 화분·자전거·포차 등불·꽃밭·입간판 (장식) */
+function drawDensity(scene: Phaser.Scene): void {
+  makeTexture(scene, 'planter', 18, 16, (d) => {       // 화분
+    d.rect(2, 8, 14, 8, 0xb08050); d.rect(2, 8, 14, 2, 0x8a6038);
+    d.rect(4, 0, 4, 9, 0x5aa668); d.rect(9, 1, 4, 8, 0x4a9658); d.rect(6, 3, 5, 5, 0x6ab878);
+  });
+  makeTexture(scene, 'lantern', 12, 20, (d) => {       // 포차 등불
+    d.rect(5, 0, 2, 6, 0x3a2a20);
+    d.rect(1, 6, 10, 12, 0xd85a4a); d.rect(1, 6, 10, 2, 0xc4453a); d.rect(1, 15, 10, 2, 0xc4453a);
+    d.rect(4, 9, 4, 6, 0xffe0b0, 0.6);
+  });
+  makeTexture(scene, 'flowerbed', T, 12, (d) => {      // 꽃밭
+    d.rect(0, 4, T, 8, 0x4a7a3a);
+    for (let i = 0; i < 6; i++) d.rect(2 + i * 5, 2 + (i % 2) * 2, 3, 3, [0xe86a8a, 0xf2c25c, 0xc8a8d8][i % 3]!);
+  });
+  makeTexture(scene, 'bicycle', 22, 16, (d) => {       // 자전거
+    d.rect(1, 10, 6, 5, 0x3a3a40); d.rect(15, 10, 6, 5, 0x3a3a40);
+    d.rect(4, 12, 14, 1, 0x8a8a92); d.rect(6, 6, 10, 2, 0x6a8ac8);
+    d.rect(15, 4, 2, 8, 0x8a8a92); d.rect(4, 8, 2, 5, 0x8a8a92);
+  });
+  makeTexture(scene, 'standee', 16, 24, (d) => {       // 홍보 입간판
+    d.rect(3, 0, 10, 18, 0xf0e8d8); d.rect(3, 0, 10, 4, 0x7fb8a8);
+    d.rect(5, 6, 6, 1, 0x5c5650); d.rect(5, 9, 6, 1, 0x5c5650); d.rect(5, 12, 4, 1, 0x5c5650);
+    d.rect(6, 18, 2, 6, 0x8a7d6e); d.rect(8, 18, 2, 6, 0x8a7d6e);
+  });
+
+  const img = (key: string, tx: number, ty: number) =>
+    scene.add.image(tx * T + T / 2, ty * T + T, key).setOrigin(0.5, 1).setDepth(2);
+
+  // 주택 골목(서·동) — 화분·자전거로 생활감
+  const homeSpots: Array<[string, number, number]> = [
+    ['planter', 10, 14], ['planter', 19, 13], ['bicycle', 10, 18], ['planter', 4, 25],
+    ['planter', 64, 14], ['bicycle', 64, 18], ['planter', 73, 13], ['planter', 72, 25],
+    ['flowerbed', 25, 24], ['flowerbed', 54, 24],
+  ];
+  // 포차 골목 — 등불·화분·입간판
+  const pojangSpots: Array<[string, number, number]> = [
+    ['lantern', 4, 44], ['lantern', 7, 44], ['lantern', 17, 45], ['standee', 14, 52],
+    ['planter', 3, 52], ['bicycle', 20, 51], ['lantern', 20, 45],
+  ];
+  // 벽화 골목 — 화분·꽃밭·입간판
+  const muralSpots: Array<[string, number, number]> = [
+    ['planter', 69, 45], ['flowerbed', 74, 45], ['standee', 62, 45], ['planter', 76, 48],
+    ['flowerbed', 60, 52], ['bicycle', 76, 52],
+  ];
+  // 숲길 — 꽃밭 산책로 가장자리
+  const forestSpots: Array<[string, number, number]> = [
+    ['flowerbed', 8, 3], ['flowerbed', 34, 7], ['flowerbed', 60, 3], ['flowerbed', 70, 7], ['planter', 45, 3],
+  ];
+  for (const [k, tx, ty] of [...homeSpots, ...pojangSpots, ...muralSpots, ...forestSpots]) img(k, tx, ty);
+}
+
+/** 문 앞 바닥 발광 매트 — 여기가 입구임을 알린다 */
+function makeDoorGlow(scene: Phaser.Scene): string {
+  const key = 'door-glow';
+  if (scene.textures.exists(key)) return key;
+  makeTexture(scene, key, T, 10, (d) => {
+    d.rect(2, 2, T - 4, 6, PAL.winGlassWarm, 0.5);
+    d.rect(4, 3, T - 8, 4, PAL.winGlassWarm, 0.35);
+  });
+  return key;
+}
+
+/** 인형뽑기·네컷·붕어빵 기계 — 몸체는 SOLID_PROPS로 통행 불가, 앞 타일이 트리거 */
+function drawInteractables(scene: Phaser.Scene): void {
+  makeTexture(scene, 'claw', T, Math.floor(T * 1.6), (d) => {   // 인형뽑기
+    d.rect(2, 2, T - 4, T + 8, 0xe07a9a);
+    d.rect(5, 6, T - 10, 22, 0xffe0ec, 0.85);           // 유리창
+    d.rect(8, 10, 6, 6, 0xf2c25c); d.rect(17, 14, 6, 6, 0x7fb8e0); // 인형들
+    d.rect(12, 8, 3, 6, 0x8a8a92);                       // 크레인
+    d.rect(4, T + 10, T - 8, 10, 0xc45c7a);              // 하단 조작부
+    d.rect(9, T + 13, 6, 4, 0x3a2a30);
+  });
+  makeTexture(scene, 'photobooth', T, Math.floor(T * 1.7), (d) => { // 네컷 포토부스
+    d.rect(1, 1, T - 2, T + 12, 0x3a3346);
+    d.rect(4, 5, T - 8, 18, 0x8ac8e0, 0.7);             // 화면
+    d.rect(6, 26, T - 12, 3, 0xf2d8a8);                 // 커튼봉
+    d.rect(6, 29, 9, T - 14, 0xd85a7c, 0.85);           // 커튼
+    d.rect(T - 15, 29, 9, T - 14, 0xd85a7c, 0.85);
+    d.rect(11, 12, 10, 8, 0x2a2430);                    // 카메라
+  });
+  makeTexture(scene, 'bungeo', T + 8, T, (d) => {        // 붕어빵 포차
+    d.rect(0, T - 16, T + 8, 14, 0x8a5a3c);             // 카트
+    d.rect(2, 2, T + 4, 12, 0xc4453a);                  // 천막
+    d.rect(2, 2, T + 4, 3, 0xf0e8d8);
+    d.rect(6, T - 14, 8, 6, 0xe8b04c); d.rect(18, T - 14, 8, 6, 0xe8b04c); // 붕어빵
+    d.rect(30, T - 14, 6, 6, 0xe8b04c);
+  });
+
+  const claw = SOLID_PROPS_BODY(CLAW_SPOT);      // 트리거 위 몸체 타일
+  scene.add.image(claw.x * T + T / 2, claw.y * T + T, 'claw').setOrigin(0.5, 1).setDepth(2);
+  const photo = SOLID_PROPS_BODY(PHOTO_SPOT);
+  scene.add.image(photo.x * T + T / 2, photo.y * T + T, 'photobooth').setOrigin(0.5, 1).setDepth(2);
+  const bung = SOLID_PROPS_BODY(BUNGEO_SPOT);
+  scene.add.image(bung.x * T + T / 2, bung.y * T + T, 'bungeo').setOrigin(0.5, 1).setDepth(2);
+}
+
+/** 스팟 바로 위(북쪽) 타일 = 기계 몸체 위치 (SOLID_PROPS와 일치) */
+function SOLID_PROPS_BODY(spot: { tx: number; ty: number }): { x: number; y: number } {
+  return { x: spot.tx, y: spot.ty - 1 };
 }
