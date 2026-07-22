@@ -3,6 +3,7 @@ import { TILE } from '../config';
 import {
   ZONES, SOLID_RECTS, HOUSE_DOORS, SHOP_DOORS, CAFE_DOORS, INTERIOR_DOORS,
   CLAW_SPOT, PHOTO_SPOT, BUNGEO_SPOT, FOOD_TRUCKS, REALTY_DOOR, COMPANY_DOORS, PETSHOP_DOOR,
+  WEAPONSHOP_DOOR, HUNT_FIELD,
 } from '../world/mapData';
 import { COMPANIES } from '../company/company';
 import type { Rect, CollisionGrid } from '../world/grid';
@@ -333,7 +334,7 @@ export function buildStreetArt(scene: Phaser.Scene, mapW: number, mapH: number, 
   const glowKey = makeDoorGlow(scene);
   const allDoors = [
     ...HOUSE_DOORS.map((d) => ({ tx: d.tx, ty: d.ty })),
-    ...SHOP_DOORS, ...CAFE_DOORS, REALTY_DOOR, PETSHOP_DOOR,
+    ...SHOP_DOORS, ...CAFE_DOORS, REALTY_DOOR, PETSHOP_DOOR, WEAPONSHOP_DOOR,
     ...INTERIOR_DOORS.map((d) => ({ tx: d.tx, ty: d.ty })),
     ...COMPANY_DOORS.map((d) => ({ tx: d.tx, ty: d.ty })),
   ];
@@ -360,6 +361,18 @@ export function buildStreetArt(scene: Phaser.Scene, mapW: number, mapH: number, 
   scene.add.text((ps.x + ps.w / 2) * T, ps.y * T + 15, '🐾 멍냥이네', {
     fontSize: '9px', color: '#ffe0ec', fontStyle: 'bold',
   }).setOrigin(0.5).setDepth(3);
+
+  // 대장간(무기상점) 간판
+  const wp = SOLID_RECTS[34]!;
+  scene.add.rectangle(wp.x * T + 4, wp.y * T + 6, wp.w * T - 8, 13, 0x4a3a2a).setOrigin(0).setDepth(3);
+  scene.add.text((wp.x + wp.w / 2) * T, wp.y * T + 12, '⚒️ 대장간', {
+    fontSize: '9px', color: '#f2d8a8', fontStyle: 'bold',
+  }).setOrigin(0.5).setDepth(3);
+
+  // 사냥터 표지판 (숲길 = 마을 밖 필드)
+  scene.add.text((HUNT_FIELD.x + HUNT_FIELD.w / 2) * T, (HUNT_FIELD.y + HUNT_FIELD.h) * T - 4, '🗡️ 사냥터 — 몬스터 출몰!', {
+    fontSize: '10px', color: '#ffd0c0', backgroundColor: '#5a2a2a', padding: { x: 6, y: 2 }, fontStyle: 'bold',
+  }).setOrigin(0.5, 1).setDepth(6).setAlpha(0.92);
 
   // 회사 건물 3동 간판 (오피스 단지)
   const companies: Array<[number, string]> = [

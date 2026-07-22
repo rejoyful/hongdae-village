@@ -7,6 +7,17 @@ import { randomAppearance } from '../art/appearance';
 import { seeded } from '../art/pixelCanvas';
 import { pickLine, cohortForIndex, slotForHour, type Cohort } from './npcChatter';
 import { seoulHour } from '../world/timeOfDay';
+import { HUNT_FIELD } from '../world/mapData';
+
+/** 사냥터 안으로 들어간 행인은 겁먹고 도망친다 */
+const FLEE_LINES = ['꺄악! 몬스터다!', '사, 사람 살려!', '여긴 위험해!', '도망쳐!!', '으악 살려줘요!'];
+/** 사냥터 근처 행인의 모험가/전투 잡담 (MMORPG 롤) */
+const HUNT_LINES = ['용사님 화이팅!', '사냥터는 위험하다던데…', '나도 레벨 좀 올려볼까', '대장간에서 검 하나 사야겠어', '저 위에 강한 놈이 나왔대', '무기 없인 못 버텨'];
+
+function inField(tx: number, ty: number): boolean {
+  return tx >= HUNT_FIELD.x && tx < HUNT_FIELD.x + HUNT_FIELD.w
+    && ty >= HUNT_FIELD.y && ty < HUNT_FIELD.y + HUNT_FIELD.h;
+}
 
 interface Npc {
   sprite: Phaser.GameObjects.Sprite;
@@ -16,6 +27,8 @@ interface Npc {
   facing: 0 | 1 | 2 | 3;
   speed: number;
   cohort: Cohort;
+  fleeSpeed: number;
+  fledMsgAt: number;
 }
 
 /** 걸어다니는 앰비언트 NPC 무리 — 랜덤 외형·배회·가끔 혼잣말 */
@@ -77,15 +90,29 @@ export class NpcCrowd {
       facing: 0,
       speed: 0.45 + this.rnd() * 0.35, // 사람마다 걸음 속도 다르게 (플레이어 대비 배율)
       cohort: cohortForIndex(i), // 세대 배정 (말투 다양화)
+      fleeSpeed: 1, fledMsgAt: 0,
     });
   }
 
   update(delta: number): void {
     const now = this.scene.time.now;
     for (const n of this.npcs) {
+      const cur = worldToTile(n.sprite.x, n.sprite.y);
+      // 사냥터 안에 들어가면 겁먹고 남쪽(마을)으로 도망
+      if (inField(cur.tx, cur.ty)) {
+        const w = tileToWorld(cur.tx, HUNT_FIELD.y + HUNT_FIELD.h + 2);
+        n.target = { x: w.x + TILE / 2, y: w.y + TILE / 2 };
+        n.fleeSpeed = 1.9;
+        if (now - n.fledMsgAt > 4000) {
+          this.onBubble(n.sprite, FLEE_LINES[Math.floor(this.rnd() * FLEE_LINES.length)]!);
+          n.fledMsgAt = now;
+        }
+      } else {
+        n.fleeSpeed = 1;
+      }
+
       if (!n.target) {
         if (now < n.waitUntil) continue;
-        const cur = worldToTile(n.sprite.x, n.sprite.y);
         const t = this.randomWalkableTile(cur.tx, cur.ty);
         if (!t) { n.waitUntil = now + 2000; continue; }
         const w = tileToWorld(t.tx, t.ty);
@@ -93,7 +120,12 @@ export class NpcCrowd {
         // 출발하며 가끔 혼잣말 (세대·시간대 반영) + 아기자기한 제자리 폴짝
         if (this.rnd() < 0.22) {
           const slot = slotForHour(seoulHour());
-          this.onBubble(n.sprite, pickLine(n.cohort, slot, this.rnd));
+          // 사냥터 근처면 모험가 잡담, 아니면 평소 세대 말투
+          const nearField = cur.ty < HUNT_FIELD.y + HUNT_FIELD.h + 4;
+          const line = nearField && this.rnd() < 0.6
+            ? HUNT_LINES[Math.floor(this.rnd() * HUNT_LINES.length)]!
+            : pickLine(n.cohort, slot, this.rnd);
+          this.onBubble(n.sprite, line);
           const baseY = n.sprite.y;
           this.scene.tweens.add({
             targets: n.sprite, y: baseY - 5, duration: 150, yoyo: true,
@@ -121,7 +153,7 @@ export class NpcCrowd {
       else if (input.up) n.facing = 3;
 
       const next = stepPlayer(
-        { x: n.sprite.x, y: n.sprite.y }, input, delta * n.speed, this.grid, { hw: 8, hh: 11 },
+        { x: n.sprite.x, y: n.sprite.y }, input, delta * n.speed * n.fleeSpeed, this.grid, { hw: 8, hh: 11 },
       );
       // 막혀서 못 움직이면 목적지 포기
       if (Math.abs(next.x - n.sprite.x) < 0.01 && Math.abs(next.y - n.sprite.y) < 0.01) {
