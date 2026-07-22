@@ -41,11 +41,17 @@ class AudioEngine {
 
   /** 첫 사용자 제스처에서 호출 — 오토플레이 정책 준수 */
   unlock(): void {
-    if (this.ctx) return;
+    if (this.ctx) {
+      // iOS Safari 등: 컨텍스트가 suspended로 남을 수 있어 제스처마다 재개 시도 (P3-4)
+      if (this.ctx.state === 'suspended') void this.ctx.resume();
+      return;
+    }
     try {
       const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!Ctx) return;
       this.ctx = new Ctx();
+      // 생성 직후 suspended면 즉시 재개 (iOS Safari 안전망)
+      if (this.ctx.state === 'suspended') void this.ctx.resume();
       this.bgmGain = this.ctx.createGain();
       this.bgmGain.gain.value = this.prefs.bgm * 0.5;
       this.bgmGain.connect(this.ctx.destination);
@@ -67,6 +73,9 @@ class AudioEngine {
     this.persist();
     this.seGain?.gain.setTargetAtTime(v, this.ctx?.currentTime ?? 0, 0.05);
   }
+
+  /** BGM이 실제로 재생 가능한 상태(running)인지 — unlock 재시도 종료 판단용 */
+  isRunning(): boolean { return this.ctx?.state === 'running'; }
 
   setVib(on: boolean): void { this.prefs.vib = on; this.persist(); }
 
@@ -190,13 +199,20 @@ class AudioEngine {
 
 export const audio = new AudioEngine();
 
-/** 첫 포인터/키 입력에서 한 번만 오디오 잠금 해제 */
+/**
+ * 사용자 입력에서 오디오 잠금 해제. 컨텍스트가 정상 running이 되면 리스너 제거.
+ * iOS Safari는 첫 제스처 후에도 suspended로 남을 수 있어 running 확인 전까지 계속 시도 (P3-4).
+ */
 export function installAudioUnlock(): void {
-  const once = () => {
+  const tryUnlock = () => {
     audio.unlock();
-    window.removeEventListener('pointerdown', once);
-    window.removeEventListener('keydown', once);
+    if (audio.isRunning()) {
+      window.removeEventListener('pointerdown', tryUnlock);
+      window.removeEventListener('keydown', tryUnlock);
+      window.removeEventListener('touchend', tryUnlock);
+    }
   };
-  window.addEventListener('pointerdown', once);
-  window.addEventListener('keydown', once);
+  window.addEventListener('pointerdown', tryUnlock);
+  window.addEventListener('keydown', tryUnlock);
+  window.addEventListener('touchend', tryUnlock);
 }

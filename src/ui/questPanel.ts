@@ -23,10 +23,11 @@ export class QuestPanel {
 
   get isOpen(): boolean { return this.opened; }
 
-  open(progress: Map<string, number>): void {
+  open(progress: Map<string, number>, claimed?: string[]): void {
     if (this.opened) return;
     this.opened = true;
     this.progress = progress;
+    if (claimed) this.claimed = new Set(claimed); // 지속 저장된 수령 상태 반영 (P2-3)
     this.root.style.display = 'flex';
     this.render();
     this.opts.onToggle(true);

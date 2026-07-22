@@ -3,37 +3,39 @@ import { pixelIcons } from './pixelIcons';
 import pkg from '../../package.json';
 
 /**
- * 게임형 HUD (레퍼런스 UI 적용) — 좌상단 하트(오늘의 퀘스트 진행),
- * 우상단 코인·시계, 하단 나무 아이콘 바, 설정 팝업(BGM/SE 슬라이더·진동·데이터).
+ * 게임형 HUD — 세션 싱글턴(main에서 1회 생성, 씬 전환에도 유지, P2-1).
+ * 항상 표시: 좌상단 하트(퀘스트 진행), 우상단 코인·시계·설정.
+ * 거리에서만: 하단 9버튼 액션 바 (mountActions/unmountActions).
  */
-export interface HudActions {
+export interface HudBase {
+  nickname: string;
+  onLogout?: () => void;
+  onResetData: () => void;
+}
+
+/** 거리 씬이 제공하는 액션 바 콜백 (씬 재진입마다 새로 배선) */
+export interface BarActions {
   onBag: () => void;
   onDex: () => void;
   onMap: () => void;
-  onQuest: () => void;
   onResidents: () => void;
   onRanking: () => void;
+  onQuest: () => void;
   onCustomize: () => void;
   onChat: () => void;
   onEmote: () => void;
-  /** 온라인일 때만 제공 — 설정 패널의 로그아웃 버튼 */
-  onLogout?: () => void;
-  /** 도감·주민 기록 초기화 */
-  onResetData: () => void;
-  nickname: string;
 }
 
-const BAR_BUTTONS: Array<{ act: string; icon: string; label: string }> = [
-  { act: 'bag', icon: 'bag', label: '소지품' },
-  { act: 'dex', icon: 'book', label: '가이드북' },
-  { act: 'map', icon: 'map', label: '지도' },
-  { act: 'residents', icon: 'people', label: '주민' },
-  { act: 'ranking', icon: 'trophy', label: '랭킹' },
-  { act: 'quest', icon: 'scroll', label: '퀘스트' },
-  { act: 'customize', icon: 'shirt', label: '꾸미기' },
-  { act: 'chat', icon: 'chat', label: '채팅' },
-  { act: 'emote', icon: 'smile', label: '이모트' },
-  { act: 'settings', icon: 'gear', label: '설정' },
+const BAR_BUTTONS: Array<{ act: keyof BarActions; icon: string; label: string }> = [
+  { act: 'onBag', icon: 'bag', label: '소지품' },
+  { act: 'onDex', icon: 'book', label: '가이드북' },
+  { act: 'onMap', icon: 'map', label: '지도' },
+  { act: 'onResidents', icon: 'people', label: '주민' },
+  { act: 'onRanking', icon: 'trophy', label: '랭킹' },
+  { act: 'onQuest', icon: 'scroll', label: '퀘스트' },
+  { act: 'onCustomize', icon: 'shirt', label: '꾸미기' },
+  { act: 'onChat', icon: 'chat', label: '채팅' },
+  { act: 'onEmote', icon: 'smile', label: '이모트' },
 ];
 
 export class GameHud {
@@ -42,9 +44,12 @@ export class GameHud {
   private coinsEl: HTMLDivElement;
   private clockEl: HTMLDivElement;
   private settingsEl: HTMLDivElement;
+  private barEl: HTMLDivElement;
   private clockTimer: number;
+  private prevHearts = -1;
+  private coins = 0;
 
-  constructor(private readonly opts: HudActions) {
+  constructor(private readonly opts: HudBase) {
     const icons = pixelIcons();
     this.root = document.createElement('div');
     this.root.className = 'hv-hud';
@@ -53,13 +58,9 @@ export class GameHud {
       <div class="hv-hud-top-right">
         <div class="hv-hud-coins"><img src="${icons.coin}" alt=""> <b>…</b></div>
         <div class="hv-hud-clock">…</div>
+        <button class="hv-hud-gear" title="설정"><img src="${icons.gear}" alt=""></button>
       </div>
-      <div class="hv-hud-bar">
-        ${BAR_BUTTONS.map((b) => `
-          <button data-act="${b.act}" title="${b.label}">
-            <img class="ico" src="${icons[b.icon]}" alt=""><span class="lbl">${b.label}</span>
-          </button>`).join('')}
-      </div>
+      <div class="hv-hud-bar" style="display:none"></div>
       <div class="hv-hud-settings" style="display:none">
         <div class="card">
           <h3>⚙️ 설정</h3>
@@ -74,7 +75,7 @@ export class GameHud {
             <button class="btn-reset">기록 초기화</button></div>
           <div class="guide">
             <b>조작 방법</b>
-            <span>WASD/패드 이동 · 문 밟으면 입장</span>
+            <span>WASD/조이스틱 이동 · 문 밟으면 입장</span>
             <span>Enter 채팅 · E 이모트 · C 꾸미기</span>
             <span>B 소지품 · G 가이드북 · M 지도 · Q 퀘스트</span>
           </div>
@@ -89,21 +90,14 @@ export class GameHud {
     this.coinsEl = this.root.querySelector('.hv-hud-coins')!;
     this.clockEl = this.root.querySelector('.hv-hud-clock')!;
     this.settingsEl = this.root.querySelector('.hv-hud-settings')!;
+    this.barEl = this.root.querySelector('.hv-hud-bar')!;
     this.setHearts(0, 5);
     this.tickClock();
     this.clockTimer = window.setInterval(() => this.tickClock(), 20_000);
 
-    const handlers: Record<string, () => void> = {
-      bag: opts.onBag, dex: opts.onDex, map: opts.onMap, quest: opts.onQuest,
-      residents: opts.onResidents, ranking: opts.onRanking,
-      customize: opts.onCustomize, chat: opts.onChat, emote: opts.onEmote,
-      settings: () => this.toggleSettings(),
-    };
-    this.root.querySelectorAll<HTMLButtonElement>('[data-act]').forEach((b) => {
-      b.addEventListener('click', () => { audio.playSe('click'); handlers[b.dataset.act!]!(); });
+    this.root.querySelector('.hv-hud-gear')!.addEventListener('click', () => {
+      audio.playSe('click'); this.toggleSettings();
     });
-
-    // 설정 컨트롤
     this.settingsEl.querySelector('.close-x')!.addEventListener('click', () => this.toggleSettings());
     this.settingsEl.addEventListener('click', (e) => {
       if (e.target === this.settingsEl) this.toggleSettings();
@@ -125,17 +119,40 @@ export class GameHud {
       if (on) audio.vibrate(40);
     });
     this.settingsEl.querySelector('.btn-reset')!.addEventListener('click', () => {
-      if (confirm('도감·주민 기록을 초기화할까요? (코인·소지품은 유지)')) opts.onResetData();
+      if (confirm('도감·주민·퀘스트 기록을 초기화할까요? (코인·소지품은 유지)')) opts.onResetData();
     });
   }
 
+  /** 거리 씬 진입 시 하단 액션 바 장착 (콜백은 매번 새로 배선) */
+  mountActions(actions: BarActions): void {
+    const icons = pixelIcons();
+    this.barEl.innerHTML = BAR_BUTTONS.map((b) => `
+      <button data-act="${b.act}" title="${b.label}">
+        <img class="ico" src="${icons[b.icon]}" alt=""><span class="lbl">${b.label}</span>
+      </button>`).join('');
+    this.barEl.querySelectorAll<HTMLButtonElement>('[data-act]').forEach((el) => {
+      el.addEventListener('click', () => {
+        audio.playSe('click');
+        actions[el.dataset.act as keyof BarActions]();
+      });
+    });
+    this.barEl.style.display = 'flex';
+  }
+
+  /** 거리 씬 이탈(방·인테리어 입장) 시 액션 바 제거 — 상태·설정은 유지 */
+  unmountActions(): void {
+    this.barEl.style.display = 'none';
+    this.barEl.innerHTML = '';
+  }
+
   setCoins(v: number): void {
+    this.coins = v;
     this.coinsEl.querySelector('b')!.textContent = v.toLocaleString();
   }
 
-  private prevHearts = -1;
+  get lastCoins(): number { return this.coins; }
 
-  /** 하트 = 오늘의 퀘스트 달성 수 (총 5개) — 새로 채워진 하트는 통통 튄다 */
+  /** 하트 = 오늘의 퀘스트 달성 수 — 새로 채워진 하트는 통통 튄다 */
   setHearts(done: number, total: number): void {
     const icons = pixelIcons();
     const bumped = this.prevHearts >= 0 && done > this.prevHearts;
