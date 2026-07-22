@@ -27,19 +27,21 @@ export class NpcCrowd {
     private readonly scene: Phaser.Scene,
     private readonly grid: CollisionGrid,
     private readonly onBubble: (sprite: Phaser.GameObjects.Sprite, text: string) => void,
-    count = 70,
+    count = 100,
     seed = 20260721,
   ) {
     this.rnd = seeded(seed);
     for (let i = 0; i < count; i++) this.spawn(i);
   }
 
-  /** 실제 홍대처럼 광장·메인 스트리트에 인파가 몰리게 스폰 가중치 */
+  /** 실제 홍대처럼 광장·메인 스트리트에 인파가 몰리게 스폰 가중치 (2차 패스: 광장 집중 강화) */
   private denseZone(): { x: number; y: number; w: number; h: number } | null {
     const r = this.rnd();
-    if (r < 0.4) return { x: 28, y: 37, w: 24, h: 18 };  // 역 광장
-    if (r < 0.7) return { x: 1, y: 28, w: 78, h: 8 };    // 메인 스트리트
-    if (r < 0.82) return { x: 1, y: 1, w: 78, h: 8 };    // 숲길
+    if (r < 0.42) return { x: 28, y: 38, w: 24, h: 14 };  // 역 광장 (핵심 인파)
+    if (r < 0.68) return { x: 1, y: 28, w: 78, h: 8 };    // 메인 스트리트
+    if (r < 0.80) return { x: 1, y: 37, w: 22, h: 16 };   // 포차 골목
+    if (r < 0.90) return { x: 57, y: 37, w: 22, h: 16 };  // 벽화 골목
+    if (r < 0.96) return { x: 1, y: 1, w: 78, h: 8 };     // 숲길
     return null; // 나머지는 마을 전체
   }
 

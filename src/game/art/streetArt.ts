@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 import { TILE } from '../config';
 import {
   ZONES, SOLID_RECTS, HOUSE_DOORS, SHOP_DOORS, CAFE_DOORS, INTERIOR_DOORS,
-  CLAW_SPOT, PHOTO_SPOT, BUNGEO_SPOT,
+  CLAW_SPOT, PHOTO_SPOT, BUNGEO_SPOT, FOOD_TRUCKS,
 } from '../world/mapData';
 import type { Rect, CollisionGrid } from '../world/grid';
 import { PAL } from './palette';
@@ -468,6 +468,19 @@ function drawInteractables(scene: Phaser.Scene): void {
   scene.add.image(photo.x * T + T / 2, photo.y * T + T, 'photobooth').setOrigin(0.5, 1).setDepth(2);
   const bung = SOLID_PROPS_BODY(BUNGEO_SPOT);
   scene.add.image(bung.x * T + T / 2, bung.y * T + T, 'bungeo').setOrigin(0.5, 1).setDepth(2);
+
+  // 광장 푸드트럭 (몸체 SOLID_PROPS, 2×1 타일)
+  makeTexture(scene, 'foodtruck', T * 2, Math.floor(T * 1.4), (d) => {
+    d.rect(0, 12, T * 2, 26, 0xf2e2c8);                 // 차체
+    d.rect(0, 2, T * 2, 12, 0xd85a4a);                  // 어닝
+    for (let i = 0; i < 4; i++) d.rect(i * 16 + 2, 2, 8, 12, 0xf0e8d8);
+    d.rect(6, 18, 22, 12, 0x8ac8e0, 0.7);               // 판매창
+    d.rect(34, 20, 16, 8, 0x5c5044);                    // 메뉴판
+    d.rect(8, 38, 10, 6, 0x2e2620); d.rect(46, 38, 10, 6, 0x2e2620); // 바퀴
+  });
+  for (const ft of FOOD_TRUCKS) {
+    scene.add.image(ft.tx * T, (ft.ty + 1) * T, 'foodtruck').setOrigin(0, 1).setDepth(2);
+  }
 }
 
 /** 스팟 바로 위(북쪽) 타일 = 기계 몸체 위치 (SOLID_PROPS와 일치) */
