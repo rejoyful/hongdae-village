@@ -37,6 +37,22 @@ export class BattleStore {
 
   private save(): void { try { localStorage.setItem(KEY, JSON.stringify(this.s)); } catch { /* 무시 */ } }
 
+  /** 서버 동기 — 스냅샷/복원 */
+  snapshot(): BattleState { return this.s; }
+  hydrate(raw: unknown): void {
+    const r = (raw ?? {}) as Record<string, unknown>;
+    this.s = {
+      level: Number.isFinite(r.level) && (r.level as number) >= 1 ? r.level as number : 1,
+      xp: Number.isFinite(r.xp) && (r.xp as number) >= 0 ? r.xp as number : 0,
+      tier: Number.isFinite(r.tier) && (r.tier as number) >= 1 ? Math.min(r.tier as number, MAX_TIER) : 1,
+      killsInTier: Number.isFinite(r.killsInTier) && (r.killsInTier as number) >= 0 ? r.killsInTier as number : 0,
+      totalKills: Number.isFinite(r.totalKills) ? r.totalKills as number : 0,
+      weapons: Array.isArray(r.weapons) && r.weapons.length ? (r.weapons as unknown[]).filter((x): x is string => typeof x === 'string') : ['fist'],
+      equipped: typeof r.equipped === 'string' ? r.equipped : 'fist',
+    };
+    this.save();
+  }
+
   progress(): Progress { return { level: this.s.level, xp: this.s.xp }; }
   get level(): number { return this.s.level; }
   get xp(): number { return this.s.xp; }

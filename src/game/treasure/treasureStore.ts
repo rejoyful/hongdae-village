@@ -19,6 +19,10 @@ export class TreasureStore {
   get(): TreasureState { return this.state; }
   get shards(): number { return this.state.shards; }
 
+  /** 서버 동기 — 스냅샷/복원 */
+  snapshot(): TreasureState { return this.state; }
+  hydrate(raw: unknown): void { this.state = normalizeTreasure(raw, todaySeoul()); this.persist(); }
+
   isFound(spotId: string): boolean { return this.state.found.includes(spotId); }
 
   /** 스팟 채집 — 오늘 처음이면 조각 획득. 반환 획득 조각(0=이미) */

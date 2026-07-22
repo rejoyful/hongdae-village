@@ -72,6 +72,10 @@ export class QuestStore {
 
   get(): QuestState { return this.state; }
 
+  /** 서버 동기 — 스냅샷/복원 (오늘 기준 정규화로 일일 리셋 반영) */
+  snapshot(): QuestState { return this.state; }
+  hydrate(raw: unknown): void { this.state = normalizeState(raw, todaySeoul()); this.persist(); }
+
   progress(): Map<string, number> {
     const m = new Map<string, number>();
     for (const q of DAILY_QUESTS) m.set(q.registryKey, this.state.counts[q.registryKey] ?? 0);
