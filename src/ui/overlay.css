@@ -1019,3 +1019,24 @@
   .hv-exit { top: 8px; padding: 6px 14px; font-size: 13px; }
   .hv-online { max-width: 30vw; }
 }
+
+/* ── 상대 플레이어 정보창 ── */
+.hv-pinfo {
+  position: fixed; inset: 0; z-index: 19; display: flex; align-items: center; justify-content: center;
+  background: rgba(15, 12, 10, 0.55); font-family: system-ui, sans-serif;
+}
+.pinfo-frame { width: min(340px, 92vw); }
+.pinfo-body { display: flex; gap: 12px; padding: 6px 4px 4px; align-items: center; }
+.pinfo-stage {
+  width: 88px; height: 118px; flex: none; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at 50% 78%, #f2dcae, #d9b478 70%, #c89a5a);
+  border: 2px solid #c89058; border-radius: 12px;
+}
+.pinfo-char { width: 66px; height: 88px; image-rendering: pixelated; }
+.pinfo-rows { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.pinfo-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #fff2d8; }
+.pinfo-row b { width: 40px; flex: none; color: #f2c88a; font-weight: 800; font-size: 12px; }
+.pinfo-row span { color: #fff2d8; display: flex; align-items: center; gap: 5px; }
+.pinfo-row em { font-style: normal; color: #9cd8a0; font-weight: 800; }
+.pinfo-title { color: #ffe08a !important; font-weight: 800; }
+.pinfo-petc { width: 20px; height: 20px; image-rendering: pixelated; }
