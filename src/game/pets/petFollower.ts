@@ -61,6 +61,21 @@ export class PetFollower {
     });
   }
 
+  /** 선물 연출 — 펫이 폴짝 뛰고 선물 아이콘이 플레이어(위)로 떠오른다 */
+  giftFx(emoji: string): void {
+    if (!this.sprite) return;
+    const s = this.sprite;
+    // 신난 폴짝
+    this.scene.tweens.add({ targets: s, y: s.y - 6, duration: 140, yoyo: true, ease: 'Quad.easeOut' });
+    const g = this.scene.add.text(s.x, s.y - 14, emoji, { fontSize: '15px' }).setOrigin(0.5).setDepth(22);
+    this.scene.tweens.add({
+      targets: g, y: g.y - 26, scale: 1.3, duration: 620, ease: 'Back.easeOut',
+      onComplete: () => this.scene.tweens.add({
+        targets: g, alpha: 0, duration: 260, onComplete: () => g.destroy(),
+      }),
+    });
+  }
+
   update(px: number, py: number, delta: number): void {
     if (!this.sprite) return;
     this.t += delta;

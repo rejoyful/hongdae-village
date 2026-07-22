@@ -29,6 +29,13 @@ export class TreasureStore {
     return r.gained;
   }
 
+  /** 조각 직접 추가 (펫 선물 등). 음수·0은 무시 */
+  addShards(n: number): void {
+    if (n <= 0) return;
+    this.state = { ...this.state, shards: this.state.shards + Math.floor(n) };
+    this.persist();
+  }
+
   /** 보물 제작. 성공 여부 */
   craft(treasureId: string): boolean {
     const r = craftTreasure(this.state, treasureId);

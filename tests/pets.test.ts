@@ -3,6 +3,7 @@ import {
   petStage, evalUnlocks, PET_STAGES, AFFINITY_MAX, BASE_SPECIES, RARE_SPECIES,
 } from '../src/game/pets/pets';
 import { petTarget, PET_REST } from '../src/game/pets/petFollowMath';
+import { giftIntervalMs, giftShards, giftEmoji, GIFT_EMOJIS } from '../src/game/pets/petGift';
 
 // 노드 환경엔 localStorage가 없다 — 최소 shim
 class MemStorage {
@@ -60,6 +61,31 @@ describe('펫 팔로워 위치 — 플레이어와 겹치지 않는다', () => {
   it('이동 중(충분히 뒤처짐)이면 지연 좌표를 그대로 따라간다', () => {
     const lagged = { x: 260, y: 200 }; // 40px 뒤
     expect(petTarget(300, 200, lagged)).toEqual(lagged);
+  });
+});
+
+describe('펫 선물 로직', () => {
+  it('간격은 친밀도가 높을수록 짧고 하한 18s를 지킨다', () => {
+    expect(giftIntervalMs(0)).toBe(30000);
+    expect(giftIntervalMs(50)).toBe(24000);
+    expect(giftIntervalMs(100)).toBe(18000);
+    expect(giftIntervalMs(100000)).toBe(18000); // 하한
+  });
+
+  it('조각 수는 1 ~ stage+1 범위', () => {
+    expect(giftShards(0, () => 0)).toBe(1);
+    expect(giftShards(0, () => 0.99)).toBe(1); // stage0은 항상 1
+    expect(giftShards(3, () => 0)).toBe(1);
+    expect(giftShards(3, () => 0.99)).toBe(4); // 1 + floor(0.99*4)=4
+    for (let i = 0; i < 40; i++) {
+      const n = giftShards(3);
+      expect(n).toBeGreaterThanOrEqual(1);
+      expect(n).toBeLessThanOrEqual(4);
+    }
+  });
+
+  it('선물 이모지는 정의된 목록 안에서 나온다', () => {
+    for (let i = 0; i < 30; i++) expect(GIFT_EMOJIS).toContain(giftEmoji());
   });
 });
 
