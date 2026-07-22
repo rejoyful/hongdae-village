@@ -8,3 +8,6 @@ export const MAP_H = 60;
 /** 텍스트 렌더 해상도 — 고해상도 모바일에서 흐릿함 방지 (Phaser Text style.resolution) */
 export const TEXT_RES = Math.min(3, Math.max(2, Math.round(
   (typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1)));
+
+/** 게임 내 텍스트 폰트 — Phaser 기본(Courier)은 한글이 뭉개진다 → 시스템 고딕 스택 */
+export const UI_FONT = '"Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif';

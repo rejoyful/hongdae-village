@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { TILE, ZOOM, MAP_W, MAP_H, TEXT_RES } from '../config';
+import { TILE, ZOOM, MAP_W, MAP_H, TEXT_RES, UI_FONT } from '../config';
 import {
   ZONES, SPAWN_TILE, HOUSE_DOORS, SHOP_DOORS, CAFE_DOORS, INTERIOR_DOORS,
   BUSKING_SPOT, OMOK_SPOT, BOARD_SPOT, CLAW_SPOT, PHOTO_SPOT, BUNGEO_SPOT, REALTY_DOOR,
@@ -40,6 +40,9 @@ import { ChatInput } from '../../ui/chatInput';
 import { EmoteWheel, EMOTE_EMOJI } from '../../ui/emoteWheel';
 import { GameHud } from '../../ui/gameHud';
 import type { QuestStore } from '../questProgress';
+import { TreasurePanel } from '../../ui/treasurePanel';
+import type { TreasureStore } from '../treasure/treasureStore';
+import { STREET_SPARKLES } from '../treasure/treasures';
 import { BagPanel } from '../../ui/bagPanel';
 import { CollectionPanel } from '../../ui/collectionPanel';
 import { MapPanel } from '../../ui/mapPanel';
@@ -108,6 +111,9 @@ export class StreetScene extends Phaser.Scene {
   private forestMs = 0;
   private hud: GameHud | null = null;
   private questStore!: QuestStore;
+  private treasureStore!: TreasureStore;
+  private treasure: TreasurePanel | null = null;
+  private lastSparkleTile = '';
   private bag: BagPanel | null = null;
   private dex: CollectionPanel | null = null;
   private mapPanel: MapPanel | null = null;
@@ -145,6 +151,7 @@ export class StreetScene extends Phaser.Scene {
     this.adapter = data.adapter ?? null;
     this.sb = (this.registry.get('sb') as SupabaseClient | undefined) ?? null;
     this.questStore = this.registry.get('quests') as QuestStore;
+    this.treasureStore = this.registry.get('treasure') as TreasureStore;
     this.remotes = new Map();
     this.bubbles = [];
     this.spawnTile = data.spawnTile ?? SPAWN_TILE;
@@ -159,13 +166,13 @@ export class StreetScene extends Phaser.Scene {
     for (const z of ZONES) {
       const p = tileToWorld(z.rect.x, z.rect.y);
       this.add.text(p.x + 8, p.y + 8, z.name, {
-        fontSize: '11px', color: '#ffffff', resolution: TEXT_RES,
+        fontFamily: UI_FONT, fontSize: '11px', color: '#ffffff', resolution: TEXT_RES,
       }).setAlpha(0.45).setDepth(3);
     }
     for (const d of HOUSE_DOORS) {
       const p = tileToWorld(d.tx, d.ty);
       this.add.text(p.x + TILE / 2, p.y - 5, String(d.roomId), {
-        fontSize: '9px', color: '#f2d8a8', resolution: TEXT_RES,
+        fontFamily: UI_FONT, fontSize: '9px', color: '#f2d8a8', resolution: TEXT_RES,
       }).setOrigin(0.5).setAlpha(0.9).setDepth(3);
     }
     // 부동산 매물 상태 로드 (온라인은 서버, 오프라인은 로컬 세트)
@@ -308,6 +315,7 @@ export class StreetScene extends Phaser.Scene {
     // NPC 무리 + 이름 있는 주민 (근접 인사)
     this.npcs?.update(delta);
     this.residents?.update(next.x, next.y);
+    { const t = worldToTile(next.x, next.y); this.checkSparkle(t.tx, t.ty); }
     this.idleBreath?.set(!moving && !this.anyPanelOpen());
 
     // 위치 브로드캐스트 (POS_HZ 스로틀)
@@ -482,6 +490,7 @@ export class StreetScene extends Phaser.Scene {
     kb.on('keydown-Q', () => this.openQuests());
     kb.on('keydown-R', () => this.openRanking());
     kb.on('keydown-P', () => this.openResidents());
+    kb.on('keydown-T', () => this.openTreasure());
     // ESC로 열린 패널 닫기 — 패널이 Phaser 키보드를 끄므로 document 레벨에서 처리
     this.escHandler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { if (this.closeTopPanel()) e.stopPropagation(); }
@@ -545,10 +554,10 @@ export class StreetScene extends Phaser.Scene {
     // 활동 스팟 표시 — 통통 튀는 아이콘으로 "여기서 뭔가 된다"를 알린다
     const spot = (t: { tx: number; ty: number }, emoji: string, label: string) => {
       const w = tileToWorld(t.tx, t.ty);
-      const icon = this.add.text(w.x + TILE / 2, w.y - 4, emoji, { fontSize: '16px' })
+      const icon = this.add.text(w.x + TILE / 2, w.y - 4, emoji, { fontFamily: UI_FONT, fontSize: '16px' })
         .setOrigin(0.5, 1).setDepth(12).setAlpha(0.95);
       this.add.text(w.x + TILE / 2, w.y + TILE + 2, label, {
-        fontSize: '8px', color: '#fff2d8', backgroundColor: '#7a5220',
+        fontFamily: UI_FONT, fontSize: '8px', color: '#fff2d8', backgroundColor: '#7a5220',
         padding: { x: 3, y: 1 }, resolution: TEXT_RES,
       }).setOrigin(0.5, 0).setDepth(12).setAlpha(0.9);
       this.tweens.add({ targets: icon, y: w.y - 10, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
@@ -593,6 +602,7 @@ export class StreetScene extends Phaser.Scene {
       onToggle: (o) => this.setGameKeysEnabled(!o),
       fetchRows: () => fetchRanking(this.sb!),
     });
+    this.treasure = new TreasurePanel(this.treasureStore, { onToggle: (o) => this.setGameKeysEnabled(!o) });
     // HUD는 세션 싱글턴 (main 생성) — 거리 진입 시 액션 바만 장착
     this.hud = this.registry.get('hud') as GameHud;
     this.hud.mountActions({
@@ -600,6 +610,7 @@ export class StreetScene extends Phaser.Scene {
       onDex: () => void this.openDex(),
       onMap: () => this.openMap(),
       onQuest: () => this.openQuests(),
+      onTreasure: () => this.openTreasure(),
       onResidents: () => this.openResidents(),
       onRanking: () => this.openRanking(),
       onCustomize: () => { if (!this.chat!.isOpen && !this.customize!.isOpen) this.customize!.open(this.peer.appearance); },
@@ -628,7 +639,7 @@ export class StreetScene extends Phaser.Scene {
       || (this.mapPanel?.isOpen ?? false) || (this.quests?.isOpen ?? false)
       || (this.shop?.isOpen ?? false) || (this.residentsPanel?.isOpen ?? false)
       || (this.rankingPanel?.isOpen ?? false) || (this.claw?.isOpen ?? false)
-      || (this.realty?.isOpen ?? false);
+      || (this.realty?.isOpen ?? false) || (this.treasure?.isOpen ?? false);
   }
 
   /** ESC — 열린 패널 중 하나를 닫는다. 닫았으면 true */
@@ -643,6 +654,7 @@ export class StreetScene extends Phaser.Scene {
       { open: this.shop?.isOpen ?? false, close: () => this.shop!.close() },
       { open: this.claw?.isOpen ?? false, close: () => this.claw!.close() },
       { open: this.realty?.isOpen ?? false, close: () => this.realty!.close() },
+      { open: this.treasure?.isOpen ?? false, close: () => this.treasure!.close() },
       { open: this.omok?.isOpen ?? false, close: () => this.omok!.close() },
       { open: this.cafe?.isOpen ?? false, close: () => this.cafe!.close() },
       { open: this.busking?.isOpen ?? false, close: () => this.busking!.close() },
@@ -687,6 +699,26 @@ export class StreetScene extends Phaser.Scene {
   private openResidents(): void {
     if (this.anyPanelOpen()) return;
     this.residentsPanel!.open(this.residents!.getTrust());
+  }
+
+  private openTreasure(): void {
+    if (this.anyPanelOpen()) return;
+    this.treasure!.open();
+  }
+
+  /** 히든 반짝이 스팟 채집 — 밟는 순간 1회, 오늘 처음이면 조각 획득 + 반짝이 연출 */
+  private checkSparkle(tx: number, ty: number): void {
+    const spot = STREET_SPARKLES.find((s) => s.tx === tx && s.ty === ty);
+    const key = spot ? spot.id : '';
+    if (spot && key !== this.lastSparkleTile) {
+      const gained = this.treasureStore.collect(spot);
+      if (gained > 0) {
+        this.showBubble(this.player, `✨ 반짝이는 걸 발견! 조각 +${gained} 💠`);
+        this.motions?.play(this.player, 'win');
+        audio.playSe('success');
+      }
+    }
+    this.lastSparkleTile = key;
   }
 
   // --- 부동산 ---
@@ -973,7 +1005,7 @@ export class StreetScene extends Phaser.Scene {
 
   private makeNameLabel(name: string): Phaser.GameObjects.Text {
     return this.add.text(0, 0, name, {
-      fontSize: '10px', color: '#4a2e14', backgroundColor: '#f6ecd0',
+      fontFamily: UI_FONT, fontSize: '10px', color: '#4a2e14', backgroundColor: '#f6ecd0',
       padding: { x: 4, y: 2 }, resolution: TEXT_RES,
     }).setOrigin(0.5, 1).setAlpha(0.95);
   }
@@ -985,7 +1017,7 @@ export class StreetScene extends Phaser.Scene {
       return true;
     });
     const t = this.add.text(0, 0, text, {
-      fontSize: '11px', color: '#4a2e14', wordWrap: { width: 150 }, align: 'center',
+      fontFamily: UI_FONT, fontSize: '11px', color: '#4a2e14', wordWrap: { width: 150 }, align: 'center',
       resolution: TEXT_RES,
     }).setOrigin(0.5);
     const bounds = t.getBounds();
@@ -1013,6 +1045,7 @@ export class StreetScene extends Phaser.Scene {
     this.omok?.destroy();
     this.claw?.destroy();
     this.realty?.destroy();
+    this.treasure?.destroy();
     this.quests?.destroy();
     this.npcs?.destroy();
     this.residents?.destroy();

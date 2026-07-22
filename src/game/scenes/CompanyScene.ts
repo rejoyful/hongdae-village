@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { TILE, ZOOM, TEXT_RES } from '../config';
+import { TILE, ZOOM, TEXT_RES, UI_FONT } from '../config';
 import { tileToWorld, worldToTile, CollisionGrid } from '../world/grid';
 import { COMPANIES, type CompanyId, type CompanyFloor } from '../company/company';
 import { COMPANY_DOORS } from '../world/mapData';
@@ -16,6 +16,9 @@ import { RosterPanel } from '../../ui/rosterPanel';
 import { workStatus, seoulHourNow } from '../company/worklife';
 import { fetchCoins } from '../../db/economyApi';
 import type { GameHud } from '../../ui/gameHud';
+import { FOREST_SPARKLES } from '../treasure/treasures';
+import type { TreasureStore } from '../treasure/treasureStore';
+import { audio } from '../audio';
 
 interface CompanyData {
   companyId: CompanyId;
@@ -50,6 +53,7 @@ export class CompanyScene extends Phaser.Scene {
   private draft: DraftPanel | null = null;
   private roster: RosterPanel | null = null;
   private onDeskTile = '';
+  private lastSparkleTile = '';
   private escHandler: ((e: KeyboardEvent) => void) | null = null;
 
   constructor() { super('company'); }
@@ -86,26 +90,26 @@ export class CompanyScene extends Phaser.Scene {
     // 회의실 이름표
     for (const m of f.meetings) {
       this.add.text((m.rect.x + m.rect.w / 2) * TILE, (m.rect.y + 0.3) * TILE, m.name, {
-        fontSize: '9px', color: '#3a4a6a', fontStyle: 'bold', resolution: TEXT_RES,
+        fontFamily: UI_FONT, fontSize: '9px', color: '#3a4a6a', fontStyle: 'bold', resolution: TEXT_RES,
       }).setOrigin(0.5, 0).setDepth(1).setAlpha(0.7);
     }
     // 층·부서 + 근무 상태 안내 (실시간 서울시각)
     const def = COMPANIES[this.companyId];
     const st = workStatus(seoulHourNow());
     this.add.text(doorTx * TILE + TILE / 2, 4, `${def.name} ${f.level}F · ${f.name}`, {
-      fontSize: '8px', color: '#fff2d8', backgroundColor: '#3a4a6a', padding: { x: 4, y: 2 }, resolution: TEXT_RES,
+      fontFamily: UI_FONT, fontSize: '10px', color: '#fff2d8', backgroundColor: '#3a4a6a', padding: { x: 4, y: 2 }, resolution: TEXT_RES,
     }).setOrigin(0.5, 0).setDepth(12).setAlpha(0.95);
     this.add.text(doorTx * TILE + TILE / 2, 18, st.headline, {
-      fontSize: '7px', color: '#243040', backgroundColor: st.isOvertime ? '#e8b04c' : '#cfe0f2',
+      fontFamily: UI_FONT, fontSize: '9px', color: '#243040', backgroundColor: st.isOvertime ? '#e8b04c' : '#cfe0f2',
       padding: { x: 4, y: 2 }, resolution: TEXT_RES,
     }).setOrigin(0.5, 0).setDepth(12).setAlpha(0.95);
 
     // 계단·엘리베이터·데스크 마커
     const marker = (t: { tx: number; ty: number }, emoji: string, label: string, bg = '#5c4432') => {
       const w = tileToWorld(t.tx, t.ty);
-      this.add.text(w.x + TILE / 2, w.y + TILE / 2, emoji, { fontSize: '15px' }).setOrigin(0.5).setDepth(2);
+      this.add.text(w.x + TILE / 2, w.y + TILE / 2, emoji, { fontFamily: UI_FONT, fontSize: '15px' }).setOrigin(0.5).setDepth(2);
       this.add.text(w.x + TILE / 2, w.y + TILE, label, {
-        fontSize: '7px', color: '#fff2d8', backgroundColor: bg, padding: { x: 2, y: 1 }, resolution: TEXT_RES,
+        fontFamily: UI_FONT, fontSize: '9px', color: '#fff2d8', backgroundColor: bg, padding: { x: 2, y: 1 }, resolution: TEXT_RES,
       }).setOrigin(0.5, 0).setDepth(12);
     };
     if (f.up) marker(f.up, '🪜', '6층 계단');
@@ -121,7 +125,7 @@ export class CompanyScene extends Phaser.Scene {
       const w = tileToWorld(npc.tx, npc.ty);
       const s = this.add.sprite(w.x + TILE / 2, w.y + TILE / 2, key, 0).setOrigin(0.5, 0.66).setDepth(9);
       this.add.text(s.x, s.y - 24, npc.name, {
-        fontSize: '8px', color: '#fff2d8', backgroundColor: '#3a4a6a', padding: { x: 3, y: 1 }, resolution: TEXT_RES,
+        fontFamily: UI_FONT, fontSize: '10px', color: '#fff2d8', backgroundColor: '#3a4a6a', padding: { x: 3, y: 1 }, resolution: TEXT_RES,
       }).setOrigin(0.5, 1).setDepth(11).setAlpha(0.95);
       this.tweens.add({ targets: s, y: s.y - 3, duration: 1200 + (npc.name.length * 90) % 900, yoyo: true, repeat: -1,
         ease: 'Sine.easeInOut', delay: (npc.tx * 137) % 1200 });
@@ -130,7 +134,7 @@ export class CompanyScene extends Phaser.Scene {
     // 상호작용 스팟
     for (const sp of f.spots) {
       const w = tileToWorld(sp.tx, sp.ty);
-      const icon = this.add.text(w.x + TILE / 2, w.y - 2, '✨', { fontSize: '12px' }).setOrigin(0.5, 1).setDepth(12);
+      const icon = this.add.text(w.x + TILE / 2, w.y - 2, '✨', { fontFamily: UI_FONT, fontSize: '12px' }).setOrigin(0.5, 1).setDepth(12);
       this.tweens.add({ targets: icon, y: w.y - 8, duration: 640, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     }
 
@@ -243,6 +247,19 @@ export class CompanyScene extends Phaser.Scene {
       else if (desk === 'org' && this.roster && !this.roster.isOpen) this.roster.open();
     }
     this.onDeskTile = desk;
+
+    // 히든 반짝이 스팟 (마인드 포레스트 층별 — 주인공 빌딩)
+    if (this.companyId === 'forest') {
+      const sparks = FOREST_SPARKLES[f.level] ?? [];
+      const spark = sparks.find((sp) => sp.tx === tile.tx && sp.ty === tile.ty);
+      const key = spark ? spark.id : '';
+      if (spark && key !== this.lastSparkleTile) {
+        const store = this.registry.get('treasure') as TreasureStore | undefined;
+        const gained = store?.collect(spark) ?? 0;
+        if (gained > 0) { this.showBubble(this.player, `✨ 히든 발견! 조각 +${gained} 💠`); audio.playSe('success'); }
+      }
+      this.lastSparkleTile = key;
+    }
 
     // 상호작용 스팟
     const spotIdx = f.spots.findIndex((sp) => sp.tx === tile.tx && sp.ty === tile.ty);
@@ -361,7 +378,7 @@ export class CompanyScene extends Phaser.Scene {
   private showBubble(owner: Phaser.GameObjects.Sprite, text: string): void {
     this.bubbles = this.bubbles.filter((b) => { if (b.owner === owner) { b.c.destroy(); return false; } return true; });
     const t = this.add.text(0, 0, text, {
-      fontSize: '11px', color: '#243040', wordWrap: { width: 150 }, align: 'center', resolution: TEXT_RES,
+      fontFamily: UI_FONT, fontSize: '11px', color: '#243040', wordWrap: { width: 150 }, align: 'center', resolution: TEXT_RES,
     }).setOrigin(0.5);
     const b = t.getBounds();
     const w = b.width + 16, h = b.height + 10;
