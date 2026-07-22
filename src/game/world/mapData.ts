@@ -58,7 +58,12 @@ export const SOLID_PROPS: Rect[] = [
   { x: 66, y: 43, w: 1, h: 1 }, // 인형뽑기 기계 몸체
   { x: 72, y: 43, w: 1, h: 1 }, // 네컷 포토부스 몸체
   { x: 10, y: 43, w: 1, h: 1 }, // 붕어빵 포차 몸체
+  { x: 30, y: 47, w: 2, h: 1 }, // 광장 푸드트럭 1
+  { x: 46, y: 47, w: 2, h: 1 }, // 광장 푸드트럭 2
 ];
+
+/** 광장 푸드트럭 위치 (streetArt 그리기용 — SOLID_PROPS와 동기) */
+export const FOOD_TRUCKS = [{ tx: 30, ty: 47 }, { tx: 46, ty: 47 }];
 
 /** 스폰 지점: 역 출구 앞 광장 (스펙 §2) */
 export const SPAWN_TILE = { tx: 40, ty: 42 };

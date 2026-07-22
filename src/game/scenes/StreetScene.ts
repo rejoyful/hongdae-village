@@ -489,7 +489,11 @@ export class StreetScene extends Phaser.Scene {
     });
     this.claw = new ClawPanel(this.peer.userId, {
       onToggle: (open) => this.setGameKeysEnabled(!open),
-      onWin: (prize) => { this.showBubble(this.player, `${prize} 획득! 🎉`); this.motions?.play(this.player, 'win'); },
+      onWin: (prize) => {
+        this.showBubble(this.player, `${prize} 획득! 🎉`);
+        this.motions?.play(this.player, 'win');
+        void this.awardActivity('claw');
+      },
     });
     this.quests = new QuestPanel({
       online: !!this.sb,
@@ -606,18 +610,35 @@ export class StreetScene extends Phaser.Scene {
     return false;
   }
 
-  /** 네컷 포토부스 — 프로필 인사 연출 (실시간 시간대 문구) */
+  /** 네컷 포토부스 — 갬성샷 + 소액 보상 */
   private takePhoto(): void {
-    const slot = ['📸 인생네컷 찰칵!', '📸 갬성샷 득템~', '📸 최고의 한 컷 ✨'];
-    this.showBubble(this.player, slot[Math.floor(Date.now() / 1000) % slot.length]!);
+    const lines = ['📸 인생네컷 찰칵!', '📸 갬성샷 득템~', '📸 최고의 한 컷 ✨'];
+    this.showBubble(this.player, lines[Math.floor(Date.now() / 1000) % lines.length]!);
     this.motions?.play(this.player, 'greet');
     audio.playSe('success');
+    void this.awardActivity('photo');
   }
 
-  /** 붕어빵 포차 — 따끈한 간식 (하트 회복 연출) */
+  /** 붕어빵 포차 — 따끈한 간식 + 소액 보상 */
   private eatBungeo(): void {
     this.showBubble(this.player, '🐟 붕어빵 호호… 따끈해!');
-    this.motions?.play(this.player, 'coin');
+    void this.awardActivity('bungeo');
+  }
+
+  /**
+   * 활동 보상 지급 — earn_activity RPC(서버 원장·일일 상한). 성공 시 코인·모션.
+   * kind가 화이트리스트에 없으면(-2, SQL 미적용 상태) 조용히 연출만 유지.
+   */
+  private async awardActivity(kind: 'claw' | 'photo' | 'bungeo'): Promise<void> {
+    if (!this.sb) return; // 오프라인: 연출만
+    const { data } = await this.sb.rpc('earn_activity', { p_kind: kind });
+    if (typeof data === 'number' && data >= 0) {
+      this.setCoins(data);
+      this.motions?.play(this.player, 'coin');
+    } else if (data === -3) {
+      this.showBubble(this.player, '오늘은 여기까지! (하루 상한)');
+    }
+    // data === -2 (미적용) 또는 기타: 연출만 유지, 조용히 통과
   }
 
   private openResidents(): void {
