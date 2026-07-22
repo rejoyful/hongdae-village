@@ -830,3 +830,47 @@
 .tr-hint b { font-size: 12px; color: #4a2e14; }
 .tr-hint span { font-size: 11px; color: #7a5a3a; }
 .tr-hint em { font-size: 12px; font-weight: 800; color: #5aa668; font-style: normal; }
+
+/* ── 실내 나가기 버튼 ── */
+.hv-exit {
+  position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%);
+  z-index: 13; display: flex; align-items: center; gap: 6px; padding: 9px 18px; cursor: pointer;
+  background: linear-gradient(#e88a6a, #d86a4a); color: #fff; font-weight: 800; font-size: 14px;
+  border: 3px solid #8a3a2a; border-radius: 999px; box-shadow: 0 3px 0 #8a3a2a;
+  font-family: "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+}
+.hv-exit:active { transform: translateX(-50%) translateY(2px); box-shadow: 0 1px 0 #8a3a2a; }
+.hv-exit .ico { font-size: 16px; }
+
+/* ── 퀘스트 버튼 진행 배지 ── */
+.hv-hud-bar button { position: relative; }
+.hud-badge {
+  position: absolute; top: -6px; right: -4px; min-width: 18px; height: 18px; padding: 0 4px;
+  box-sizing: border-box; border-radius: 999px; background: #8a8a92; color: #fff;
+  font-size: 10px; font-weight: 900; line-height: 18px; text-align: center; border: 1.5px solid #fff;
+}
+.hud-badge.active { background: #e8a83c; }
+.hud-badge.done { background: #4ea86a; }
+
+/* ── 퀘스트 패널 안내 ── */
+.quest-intro { font-size: 12px; color: #cbb89a; line-height: 1.5; margin: 4px 14px 8px; }
+.quest-intro b { color: #f2d8a8; }
+.hv-quest-rows .where { color: #8cc0a0; font-size: 11px; }
+
+/* ── 접속자 목록: 하트 제거로 상단 여유 → 위로 ── */
+.hv-online { top: calc(12px + env(safe-area-inset-top, 0px)) !important; }
+
+/* ── 가로 회전(landscape) 대응 — 낮은 높이에서 패널·바 압축 ── */
+@media (orientation: landscape) and (max-height: 520px) {
+  .hv-wood-modal .wood-frame, .map-frame, .rank-frame, .realty-frame, .res-frame,
+  .dex-frame, .tr-frame, .roster-frame, .hv-shop-card, .hv-cafe-card, .hv-omok-card,
+  .elev-frame, .draft-card, .hv-claw-card {
+    max-height: 94vh !important; width: min(560px, 88vw) !important;
+  }
+  .wood-page, .hv-quest-rows, .rank-page, .realty-list, .res-list, .dex-list, .tr-body, .roster-body { max-height: 62vh !important; }
+  .wood-head h2 { font-size: 14px; }
+  .wood-close { padding: 5px 0; width: 90px; }
+  .tr-grid { grid-template-columns: repeat(6, 1fr); }
+  .hv-exit { top: 8px; padding: 6px 14px; font-size: 13px; }
+  .hv-online { max-width: 30vw; }
+}

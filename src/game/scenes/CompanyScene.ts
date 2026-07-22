@@ -8,6 +8,7 @@ import { ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
 import { makeTexture } from '../art/pixelCanvas';
 import { ROOM_PAL, PAL } from '../art/palette';
 import { TouchControls, isTouchDevice } from '../../ui/touchControls';
+import { ExitButton } from '../../ui/exitButton';
 import type { NetworkAdapter, PeerState } from '../../net/NetworkAdapter';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ElevatorPanel } from '../../ui/elevatorPanel';
@@ -43,6 +44,7 @@ export class CompanyScene extends Phaser.Scene {
   private charKey = '';
   private touch: TouchControls | null = null;
   private hint: HTMLDivElement | null = null;
+  private exitBtn: ExitButton | null = null;
   private bubbles: Bubble[] = [];
   private npcSprites: Array<{ sprite: Phaser.GameObjects.Sprite; lines: string[]; last: number; idx: number }> = [];
   private onSpotTile = -1;
@@ -163,9 +165,11 @@ export class CompanyScene extends Phaser.Scene {
     this.hint = document.createElement('div');
     this.hint.className = 'hv-hint';
     this.hint.textContent = f.elevator
-      ? `${def.name} ${f.level}F · 🛗엘베(1~5층)·🪜계단(6층) · 문으로 나가기`
-      : `${def.name} ${f.level}F · 🪜계단으로 5층 · 문으로 나가기`;
+      ? `${def.name} ${f.level}F · 🛗엘베(1~5층)·🪜계단(6층)`
+      : `${def.name} ${f.level}F · 🪜계단으로 5층`;
     document.body.appendChild(this.hint);
+    // 어느 층에서든 바로 건물 밖으로 (계단 안 찾아도 됨)
+    this.exitBtn = new ExitButton(() => this.exitBuilding(), '건물 나가기');
 
     // 엘리베이터·기안 결재 패널
     this.elev = new ElevatorPanel({
@@ -189,6 +193,7 @@ export class CompanyScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.touch?.destroy(); this.touch = null;
       this.hint?.remove(); this.hint = null;
+      this.exitBtn?.destroy(); this.exitBtn = null;
       this.elev?.destroy(); this.elev = null;
       this.draft?.destroy(); this.draft = null;
       this.roster?.destroy(); this.roster = null;
@@ -286,12 +291,16 @@ export class CompanyScene extends Phaser.Scene {
     });
 
     // 1층 하단 문 → 거리 (건물 앞)
-    if (f.level === 1 && tile.tx === Math.floor(f.w / 2) && tile.ty === f.h - 1) {
-      this.switching = true;
-      const door = COMPANY_DOORS.find((d) => d.company === this.companyId);
-      const spawnTile = door ? { tx: door.tx, ty: door.ty + 1 } : undefined;
-      this.scene.start('street', { peer: this.peer, adapter: this.adapter, spawnTile });
-    }
+    if (f.level === 1 && tile.tx === Math.floor(f.w / 2) && tile.ty === f.h - 1) this.exitBuilding();
+  }
+
+  /** 건물 밖(거리)으로 — 어느 층에서든 (나가기 버튼용) */
+  private exitBuilding(): void {
+    if (this.switching) return;
+    this.switching = true;
+    const door = COMPANY_DOORS.find((d) => d.company === this.companyId);
+    const spawnTile = door ? { tx: door.tx, ty: door.ty + 1 } : undefined;
+    this.scene.start('street', { peer: this.peer, adapter: this.adapter, spawnTile });
   }
 
   /** 층 이동 — 도착 층의 반대편 계단 옆으로 스폰 (재트리거 방지) */

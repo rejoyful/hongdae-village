@@ -88,6 +88,13 @@ const WASD = [
   Phaser.Input.Keyboard.KeyCodes.S, Phaser.Input.Keyboard.KeyCodes.D,
 ];
 
+/** 화면 크기에 맞춘 카메라 줌 — 모바일(세로·가로 회전 모두)에서 시야를 넓게 확보 */
+function streetZoom(): number {
+  const vmin = Math.min(window.innerWidth, window.innerHeight);
+  if (vmin >= 700) return ZOOM; // 데스크톱
+  return Math.max(1.1, Math.min(1.7, vmin / 300));
+}
+
 export class StreetScene extends Phaser.Scene {
   private grid!: CollisionGrid;
   private player!: Phaser.GameObjects.Sprite;
@@ -225,9 +232,12 @@ export class StreetScene extends Phaser.Scene {
 
     // 카메라 — 로컬 플레이어만 팔로우 (좁은 화면은 줌을 낮춰 시야 확보)
     const cam = this.cameras.main;
-    cam.setZoom(window.innerWidth < 700 ? 1.5 : ZOOM);
+    // 모바일은 세로가 좁으므로 화면 크기에 맞춰 시야 확보 (가로 회전 포함)
+    cam.setZoom(streetZoom());
     cam.setBounds(0, 0, MAP_W * TILE, MAP_H * TILE);
     cam.startFollow(this.player, true, 0.12, 0.12);
+    // 화면 회전·리사이즈 시 줌 재적용
+    this.scale.on('resize', this.onResize, this);
 
     this.setupUi();
     if (this.adapter) this.wireAdapter(this.adapter);
@@ -482,6 +492,10 @@ export class StreetScene extends Phaser.Scene {
   /** 좌상단 접속자 목록 갱신 (나 + 원격 닉네임) */
   private refreshOnline(): void {
     this.onlineList?.render([...this.remotes.values()].map((r) => r.nick));
+  }
+
+  private onResize(): void {
+    this.cameras.main?.setZoom(streetZoom());
   }
 
   private updateFacing(input: MoveInput): void {
@@ -1081,6 +1095,7 @@ export class StreetScene extends Phaser.Scene {
   }
 
   private teardown(): void {
+    this.scale.off('resize', this.onResize, this);
     void this.adapter?.disconnect();
     this.chat?.destroy();
     this.chatFeed?.destroy();

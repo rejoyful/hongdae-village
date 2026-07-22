@@ -51,6 +51,13 @@ export class QuestPanel {
   }
 
   private render(): void {
+    const WHERE: Record<string, string> = {
+      quest_cafe: '📍 카페 「모퉁이」 문을 밟으세요',
+      quest_busking: '📍 메인 스트리트 🎸 버스킹 스팟',
+      quest_forest: '📍 위쪽 경의선 숲길을 거닐어요',
+      quest_emote: '📍 😊 이모트 버튼(또는 E)으로 인사',
+      quest_decorate: '📍 내 집에 들어가 가구를 배치',
+    };
     const rows = DAILY_QUESTS.map((q) => {
       const p = Math.min(this.progress.get(q.registryKey) ?? 0, q.goal);
       const done = p >= q.goal;
@@ -60,19 +67,21 @@ export class QuestPanel {
           <div class="info">
             <b>${q.name}</b>
             <span>${q.desc}</span>
+            <span class="where">${WHERE[q.id] ?? ''}</span>
           </div>
           <span class="prog">${done ? '완료!' : `${p} / ${q.goal}`}</span>
           <button data-q="${q.id}" ${done && !claimed && this.online ? '' : 'disabled'}>
-            ${claimed ? '수령함' : `🪙 ${q.reward}`}
+            ${claimed ? '수령함' : done ? `받기 🪙${q.reward}` : `🪙 ${q.reward}`}
           </button>
         </div>`;
     }).join('');
     this.root.innerHTML = `
       <div class="hv-shop-card">
         <div class="hv-cafe-head">
-          <h2>마을 게시판 · 오늘의 퀘스트</h2>
+          <h2>오늘의 퀘스트</h2>
           <button class="close">✕</button>
         </div>
+        <p class="quest-intro">아래 활동을 하면 <b>자동으로 진행</b>돼요. 완료하면 <b>받기</b> 버튼으로 보상을 받으세요! (매일 리셋)</p>
         <div class="hv-quest-rows">${rows}</div>
         ${this.online ? '' : '<p class="off">오프라인 모드 — 보상 수령은 접속 후 가능해요</p>'}
       </div>`;

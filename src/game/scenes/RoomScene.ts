@@ -18,6 +18,7 @@ import { TouchControls, isTouchDevice } from '../../ui/touchControls';
 import { ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
 import type { NetworkAdapter, PeerState } from '../../net/NetworkAdapter';
 import { InventoryBar } from '../../ui/inventoryBar';
+import { ExitButton } from '../../ui/exitButton';
 import type { GameHud } from '../../ui/gameHud';
 import type { QuestStore } from '../questProgress';
 import { DAILY_QUESTS } from '../quests';
@@ -67,6 +68,7 @@ export class RoomScene extends Phaser.Scene {
   private ghostTile = { tx: 2, ty: 2 };
   private unsubscribe: (() => void) | null = null;
   private hint: HTMLDivElement | null = null;
+  private exitBtn: ExitButton | null = null;
   private touch: TouchControls | null = null;
   private localSeq = 0;
 
@@ -173,9 +175,10 @@ export class RoomScene extends Phaser.Scene {
     this.hint.className = 'hv-hint';
     const label = HOUSE_SPECS[this.houseType].label + (this.dealType ? ` · ${DEAL_LABEL[this.dealType]}` : '');
     this.hint.textContent = this.isOwner
-      ? `${label} · 가구 선택→클릭 배치 · R 회전 · 배치물 클릭 제거 · 문으로 나가기`
-      : `${label} (구경 모드) · 문으로 나가기`;
+      ? `${label} · 가구 선택→클릭 배치 · R 회전 · 배치물 클릭 제거`
+      : `${label} (구경 모드)`;
     document.body.appendChild(this.hint);
+    this.exitBtn = new ExitButton(() => this.exitToStreet());
 
     void this.loadRoom();
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.teardown());
@@ -212,11 +215,13 @@ export class RoomScene extends Phaser.Scene {
 
     // 문 타일에 서면 거리로 퇴장 — 들어온 집 문 앞으로 복귀
     const { tx, ty } = worldToTile(next.x, next.y);
-    if (tx === this.plan.door.tx && ty === this.plan.door.ty) {
-      const door = HOUSE_DOORS.find((d) => d.roomId === this.roomId);
-      const spawnTile = door ? { tx: door.tx, ty: door.ty + 1 } : undefined;
-      this.scene.start('street', { peer: this.peer, adapter: this.adapter, spawnTile });
-    }
+    if (tx === this.plan.door.tx && ty === this.plan.door.ty) this.exitToStreet();
+  }
+
+  private exitToStreet(): void {
+    const door = HOUSE_DOORS.find((d) => d.roomId === this.roomId);
+    const spawnTile = door ? { tx: door.tx, ty: door.ty + 1 } : undefined;
+    this.scene.start('street', { peer: this.peer, adapter: this.adapter, spawnTile });
   }
 
   private showRentNotice(due: number): void {
@@ -442,5 +447,7 @@ export class RoomScene extends Phaser.Scene {
     this.ghost = null;
     this.hint?.remove();
     this.hint = null;
+    this.exitBtn?.destroy();
+    this.exitBtn = null;
   }
 }
