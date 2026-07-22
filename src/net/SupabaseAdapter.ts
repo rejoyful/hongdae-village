@@ -149,7 +149,8 @@ export class SupabaseAdapter implements NetworkAdapter {
 
   private broadcast(event: string, payload: Record<string, unknown>): void {
     const self = this.self;
-    if (!this.channel || !self) return;
+    // join 완료 전 send()는 REST 폴백으로 새어나가 유실·rate limit을 유발 → 소켓 준비 후에만 전송
+    if (!this.channel || this.channel.state !== 'joined' || !self) return;
     void this.channel.send({ type: 'broadcast', event, payload: { u: self.userId, ...payload } });
   }
 

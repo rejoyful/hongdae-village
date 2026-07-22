@@ -18,12 +18,18 @@ export async function claimRoom(sb: SupabaseClient, roomId: number, uid: string)
   return !error && (data?.length ?? 0) > 0;
 }
 
-/** 시작 가구(웰컴 박스) 지급 — 없는 아이템만 채우므로 여러 번 불러도 안전, 세트가 늘면 부족분만 추가 */
+/**
+ * 시작 가구(웰컴 박스) 지급 — 서버 RPC(0007)가 지급. 없는 아이템만 채우므로 여러 번 불러도 안전.
+ * RPC가 아직 없는 구 스키마에서는 직접 upsert로 폴백 (마이그레이션 전환기 호환).
+ */
 export async function grantStarterOnce(sb: SupabaseClient, uid: string): Promise<void> {
-  await sb.from('inventory').upsert(
-    STARTER_ITEMS.map((s) => ({ user_id: uid, item_id: s.itemId, qty: s.qty })),
-    { onConflict: 'user_id,item_id', ignoreDuplicates: true },
-  );
+  const { error } = await sb.rpc('grant_starter');
+  if (error) {
+    await sb.from('inventory').upsert(
+      STARTER_ITEMS.map((s) => ({ user_id: uid, item_id: s.itemId, qty: s.qty })),
+      { onConflict: 'user_id,item_id', ignoreDuplicates: true },
+    );
+  }
 }
 
 export async function fetchInventory(sb: SupabaseClient, uid: string): Promise<Map<string, number>> {
@@ -56,19 +62,36 @@ export async function fetchPlacements(sb: SupabaseClient, roomId: number): Promi
   return (data ?? []).map(rowToPlaced);
 }
 
+/**
+ * 가구 배치 — 서버 RPC place_item(0007)이 방 소유·보유 수량·좌표를 검증하고
+ * 인벤 차감까지 원자 처리. 구 스키마에서는 직접 insert + 인벤 차감으로 폴백.
+ */
 export async function insertPlacement(
-  sb: SupabaseClient, roomId: number, p: Omit<Placed, 'id'>,
+  sb: SupabaseClient, roomId: number, uid: string, p: Omit<Placed, 'id'>,
 ): Promise<string | null> {
-  const { data, error } = await sb.from('placements')
+  const { data, error } = await sb.rpc('place_item', {
+    p_room_id: roomId, p_item_id: p.itemId, p_tx: p.tx, p_ty: p.ty, p_rot: p.rot,
+  });
+  if (!error) return (data as string | null) ?? null;
+  // 구 스키마 폴백 (RPC 미존재)
+  const legacy = await sb.from('placements')
     .insert({ room_id: roomId, item_id: p.itemId, tx: p.tx, ty: p.ty, rot: p.rot })
     .select('id').single();
-  if (error || !data) return null;
-  return data.id as string;
+  if (legacy.error || !legacy.data) return null;
+  void adjustInventory(sb, uid, p.itemId, -1);
+  return legacy.data.id as string;
 }
 
-export async function deletePlacement(sb: SupabaseClient, id: string): Promise<boolean> {
-  const { error } = await sb.from('placements').delete().eq('id', id);
-  return !error;
+/** 가구 회수 — RPC pickup_item이 삭제+인벤 복귀 원자 처리. 구 스키마 폴백 포함 */
+export async function deletePlacement(
+  sb: SupabaseClient, id: string, uid: string, itemId: string,
+): Promise<boolean> {
+  const { data, error } = await sb.rpc('pickup_item', { p_placement_id: id });
+  if (!error) return data === true;
+  const legacy = await sb.from('placements').delete().eq('id', id);
+  if (legacy.error) return false;
+  void adjustInventory(sb, uid, itemId, 1);
+  return true;
 }
 
 /** 방 배치 변경 실시간 구독 — 변경 시 재조회 콜백. 반환값은 해제 함수 */

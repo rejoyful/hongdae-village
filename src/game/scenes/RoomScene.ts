@@ -17,7 +17,7 @@ import type { NetworkAdapter, PeerState } from '../../net/NetworkAdapter';
 import { InventoryBar } from '../../ui/inventoryBar';
 import {
   fetchInventory, fetchPlacements, insertPlacement, deletePlacement,
-  adjustInventory, subscribePlacements, grantStarterOnce,
+  subscribePlacements, grantStarterOnce,
 } from '../../db/roomsApi';
 
 interface RoomData {
@@ -304,7 +304,8 @@ export class RoomScene extends Phaser.Scene {
     this.updateGhost();
 
     if (!this.sb) return; // 오프라인: 로컬 유지
-    const realId = await insertPlacement(this.sb, this.roomId, { itemId, tx, ty, rot });
+    // 서버가 소유·수량·좌표 검증 + 인벤 차감까지 원자 처리 (0007 place_item)
+    const realId = await insertPlacement(this.sb, this.roomId, this.peer.userId, { itemId, tx, ty, rot });
     if (!realId) {
       this.placed = this.placed.filter((pl) => pl.id !== localId);
       this.placedGfx.get(localId)?.destroy();
@@ -316,7 +317,6 @@ export class RoomScene extends Phaser.Scene {
     optimistic.id = realId;
     const gfx = this.placedGfx.get(localId);
     if (gfx) { this.placedGfx.delete(localId); this.placedGfx.set(realId, gfx); }
-    void adjustInventory(this.sb, this.peer.userId, itemId, -1);
   }
 
   private async removePlaced(p: Placed): Promise<void> {
@@ -327,9 +327,9 @@ export class RoomScene extends Phaser.Scene {
     this.inv?.setCounts(this.counts);
 
     if (!this.sb || p.id.startsWith('local-')) return;
-    const ok = await deletePlacement(this.sb, p.id);
-    if (ok) void adjustInventory(this.sb, this.peer.userId, p.itemId, 1);
-    else void this.refresh(); // 실패 시 서버 상태로 복원
+    // 서버가 삭제 + 인벤 복귀 원자 처리 (0007 pickup_item)
+    const ok = await deletePlacement(this.sb, p.id, this.peer.userId, p.itemId);
+    if (!ok) void this.refresh(); // 실패 시 서버 상태로 복원
   }
 
   private teardown(): void {
