@@ -25,6 +25,7 @@ import type { MonsterSpecies } from '../battle/monsters';
 import { BattleHud } from '../../ui/battleHud';
 import { WeaponShopPanel } from '../../ui/weaponShopPanel';
 import { buyWeapon, fetchOwnedWeapons } from '../../db/weaponApi';
+import { saveLastPos, loadLastPos } from '../world/lastPos';
 import { ClawPanel } from '../../ui/clawPanel';
 import { RealtyPanel } from '../../ui/realtyPanel';
 import {
@@ -198,6 +199,9 @@ export class StreetScene extends Phaser.Scene {
   private facing: 0 | 1 | 2 | 3 = 0;
   private sb: SupabaseClient | null = null;
   private spawnTile = SPAWN_TILE;
+  private hasExplicitSpawn = false;   // 내부·방 복귀처럼 명시적 스폰이 주어졌는지
+  private lastPosSaveMs = 0;
+  private sceneDoorSet = new Set<string>(); // 씬 전환 문 — 여기서 리스폰하면 자동 입장 루프
   private entering = false;
   private onShopTile = false;
   private onCafeTile = false;
@@ -224,11 +228,24 @@ export class StreetScene extends Phaser.Scene {
     this.remotes = new Map();
     this.bubbles = [];
     this.spawnTile = data.spawnTile ?? SPAWN_TILE;
+    this.hasExplicitSpawn = !!data.spawnTile;
     this.entering = false;
   }
 
   create(): void {
     this.grid = buildCollision();
+
+    // 씬 전환 문 집합 (여기서 리스폰하면 자동 입장 루프) — 복원 안전성 판정용
+    this.sceneDoorSet = new Set([
+      ...HOUSE_DOORS.map((d) => `${d.tx},${d.ty}`),
+      ...INTERIOR_DOORS.map((d) => `${d.tx},${d.ty}`),
+      ...COMPANY_DOORS.map((d) => `${d.tx},${d.ty}`),
+    ]);
+    // 새로고침 복원: 명시적 스폰(내부·방 복귀)이 없을 때만 마지막 위치를 되살린다
+    if (!this.hasExplicitSpawn) {
+      const saved = loadLastPos(this.peer.userId);
+      if (saved && this.safeSpawn(saved.tx, saved.ty)) this.spawnTile = saved;
+    }
 
     // 거리 아트 (바닥·건물·문·간판·소품·바닥 데칼)
     buildStreetArt(this, MAP_W, MAP_H, this.grid);
@@ -456,6 +473,12 @@ export class StreetScene extends Phaser.Scene {
     if (this.adapter && now - this.lastSentAt >= 1000 / POS_HZ) {
       this.lastSentAt = now;
       this.adapter.sendPos({ x: Math.round(next.x), y: Math.round(next.y), f: this.facing });
+    }
+    // 마지막 위치 저장 (새로고침 복원용) — 안전 타일일 때만, 1.5s 스로틀
+    if (now - this.lastPosSaveMs > 1500) {
+      this.lastPosSaveMs = now;
+      const pt = worldToTile(next.x, next.y);
+      if (this.safeSpawn(pt.tx, pt.ty)) saveLastPos(this.peer.userId, pt.tx, pt.ty);
     }
 
     // 원격 플레이어 보간 + 걷기 애니메이션
@@ -1081,6 +1104,13 @@ export class StreetScene extends Phaser.Scene {
   // --- 전투/레벨업 ---
 
   private isFatigued(): boolean { return this.time.now < this.fatigueUntil; }
+
+  /** 복원해도 안전한 스폰 타일인지 (지도 안·비장애물·씬전환문 아님) */
+  private safeSpawn(tx: number, ty: number): boolean {
+    if (tx < 1 || ty < 1 || tx >= MAP_W - 1 || ty >= MAP_H - 1) return false;
+    if (this.grid.isSolid(tx, ty)) return false;
+    return !this.sceneDoorSet.has(`${tx},${ty}`);
+  }
 
   /** 레벨업 효과 — 금빛 링 + 위로 뜨는 텍스트 + 스프라이트 팝 (나·상대 공용) */
   private levelUpFx(sprite: Phaser.GameObjects.Sprite, level: number): void {
