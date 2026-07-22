@@ -1040,3 +1040,26 @@
 .pinfo-row em { font-style: normal; color: #9cd8a0; font-weight: 800; }
 .pinfo-title { color: #ffe08a !important; font-weight: 800; }
 .pinfo-petc { width: 20px; height: 20px; image-rendering: pixelated; }
+
+/* ── 우측 상단 미니맵 (항상 표시, 유저 위치 실시간) ── */
+.hv-minimap {
+  position: fixed; right: 14px; top: calc(96px + env(safe-area-inset-top, 0px)); z-index: 11;
+  width: 150px; padding: 5px; cursor: pointer;
+  background: linear-gradient(#b07a46, #96613a); border: 2px solid #5c3a1c; border-radius: 10px;
+  box-shadow: 0 0 0 2px #c89058 inset, 0 4px 10px rgba(0,0,0,.4); pointer-events: auto;
+}
+.hv-minimap canvas {
+  display: block; width: 100%; height: auto; image-rendering: pixelated;
+  border: 1px solid #6e4522; border-radius: 6px; background: #efe0bc;
+}
+.hv-minimap .mm-tag {
+  position: absolute; left: 8px; top: 7px; font: 800 9px "Apple SD Gothic Neo", system-ui, sans-serif;
+  color: #fff2d8; text-shadow: 0 1px 2px rgba(0,0,0,.6); pointer-events: none;
+}
+.hv-minimap:active { transform: translateY(1px); }
+@media (max-width: 700px) {
+  .hv-minimap { width: 108px; top: calc(84px + env(safe-area-inset-top, 0px)); right: 10px; }
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  .hv-minimap { width: 104px; top: 52px; }
+}
