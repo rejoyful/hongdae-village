@@ -12,6 +12,7 @@ import type { NetworkAdapter, PeerState } from '../../net/NetworkAdapter';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ElevatorPanel } from '../../ui/elevatorPanel';
 import { DraftPanel } from '../../ui/draftPanel';
+import { RosterPanel } from '../../ui/rosterPanel';
 import { workStatus, seoulHourNow } from '../company/worklife';
 import { fetchCoins } from '../../db/economyApi';
 import type { GameHud } from '../../ui/gameHud';
@@ -47,6 +48,7 @@ export class CompanyScene extends Phaser.Scene {
   private sb: SupabaseClient | null = null;
   private elev: ElevatorPanel | null = null;
   private draft: DraftPanel | null = null;
+  private roster: RosterPanel | null = null;
   private onDeskTile = '';
   private escHandler: ((e: KeyboardEvent) => void) | null = null;
 
@@ -111,6 +113,7 @@ export class CompanyScene extends Phaser.Scene {
     if (f.elevator) marker(f.elevator, '🛗', '엘리베이터', '#3a4a6a');
     if (f.clockDesk) marker(f.clockDesk, '⏰', '출퇴근', '#3a5a3a');
     if (f.draftDesk) marker(f.draftDesk, '📝', '결재함', '#5a3a3a');
+    if (f.orgBoard) marker(f.orgBoard, '🗂️', '조직도', '#3a4a6a');
 
     // 사람들 (자리·이름표·폴짝)
     for (const npc of f.npcs) {
@@ -169,11 +172,13 @@ export class CompanyScene extends Phaser.Scene {
       onToggle: (o) => this.setKeys(!o),
       onDone: (correct) => this.onDraftDone(correct),
     });
+    this.roster = new RosterPanel({ onToggle: (o) => this.setKeys(!o) });
 
     this.escHandler = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (this.elev?.isOpen) { this.elev.close(); e.stopPropagation(); }
       else if (this.draft?.isOpen) { this.draft.close(); e.stopPropagation(); }
+      else if (this.roster?.isOpen) { this.roster.close(); e.stopPropagation(); }
     };
     document.addEventListener('keydown', this.escHandler);
 
@@ -182,6 +187,7 @@ export class CompanyScene extends Phaser.Scene {
       this.hint?.remove(); this.hint = null;
       this.elev?.destroy(); this.elev = null;
       this.draft?.destroy(); this.draft = null;
+      this.roster?.destroy(); this.roster = null;
       if (this.escHandler) document.removeEventListener('keydown', this.escHandler);
       for (const b of this.bubbles) b.c.destroy();
       this.bubbles = [];
@@ -229,10 +235,12 @@ export class CompanyScene extends Phaser.Scene {
     if (deskAt(f.elevator)) desk = 'elev';
     else if (deskAt(f.clockDesk)) desk = 'clock';
     else if (deskAt(f.draftDesk)) desk = 'draft';
+    else if (deskAt(f.orgBoard)) desk = 'org';
     if (desk && desk !== this.onDeskTile) {
       if (desk === 'elev' && this.elev && !this.elev.isOpen) this.elev.open(f.level);
       else if (desk === 'clock') this.clockCheck();
       else if (desk === 'draft' && this.draft && !this.draft.isOpen) this.draft.open(f.level * 7 + Math.floor(this.time.now / 60000));
+      else if (desk === 'org' && this.roster && !this.roster.isOpen) this.roster.open();
     }
     this.onDeskTile = desk;
 

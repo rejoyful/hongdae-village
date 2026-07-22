@@ -714,3 +714,13 @@
 .draft-result { text-align: center; padding: 12px 0; }
 .draft-score { font-size: 34px; font-weight: 900; color: #5aa668; }
 .draft-result p { font-size: 13px; color: #5a4d2a; margin: 8px 0 0; }
+
+/* ── AX 조직도 보드 ── */
+.roster-frame { width: min(420px, 94vw); }
+.roster-body { padding: 10px; display: flex; flex-direction: column; gap: 8px; max-height: 60vh; }
+.roster-group { background: #e0c088; border: 1px solid #c89058; border-radius: 8px; padding: 8px 10px; }
+.roster-role { font-size: 13px; font-weight: 900; color: #4a2e14; display: flex; align-items: center; gap: 6px; }
+.roster-role span { font-size: 11px; background: #7a5220; color: #fff; padding: 1px 8px; border-radius: 999px; }
+.roster-names { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.roster-names span { font-size: 12px; font-weight: 700; color: #4a2e14; background: #fff2d8; border: 1px solid #c89058; padding: 3px 9px; border-radius: 999px; }
+.roster-tip { text-align: center; font-size: 11px; color: #fff2d8; margin: 0; }

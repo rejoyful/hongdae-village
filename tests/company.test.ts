@@ -35,9 +35,19 @@ describe('회사 건물 3동', () => {
     expect(f6.meetings.map((m) => m.name)).toEqual(['에너지룸', '시너지룸', '라운지룸']);
   });
 
-  it('6층 AX기획실에 정확히 14명이 근무한다', () => {
+  it('6층 AX기획실에 정확히 14명(실제 팀원 13 + 인턴)이 근무한다', () => {
     const f6 = COMPANIES.forest.floors[5]!;
     expect(f6.npcs.length).toBe(14);
+    const names = f6.npcs.map((n) => n.name);
+    const realTeam = [
+      '박찬영 팀장', '이해원 차장', '조용선 차장', '김인성 과장', '박성배 과장',
+      '이민석 과장', '정유나 대리', '이재현 대리', '양희주 책임', '이제홍 대리',
+      '이새임 대리', '김현석 책임', '박동한 대리',
+    ];
+    for (const n of realTeam) expect(names, `${n} 누락`).toContain(n);
+    expect(names).toContain('인턴');
+    // 이름 중복 없음
+    expect(new Set(names).size).toBe(14);
   });
 
   it('모든 층: 사람·스팟·계단·회의실문이 벽과 겹치지 않고 통행 가능', () => {
@@ -55,6 +65,7 @@ describe('회사 건물 3동', () => {
         if (f.elevator) check(f.elevator.tx, f.elevator.ty, 'elevator');
         if (f.clockDesk) check(f.clockDesk.tx, f.clockDesk.ty, 'clock-desk');
         if (f.draftDesk) check(f.draftDesk.tx, f.draftDesk.ty, 'draft-desk');
+        if (f.orgBoard) check(f.orgBoard.tx, f.orgBoard.ty, 'org-board');
       }
     }
     expect(bad, bad.join('\n')).toEqual([]);

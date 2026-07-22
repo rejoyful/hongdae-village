@@ -25,6 +25,7 @@ export interface CompanyFloor {
   elevator?: { tx: number; ty: number }; // 엘리베이터 (1~5층만, 6층은 없음)
   clockDesk?: { tx: number; ty: number }; // 출퇴근 체크 (1층 로비)
   draftDesk?: { tx: number; ty: number };  // 결재함 (기안 미니게임, AX기획실)
+  orgBoard?: { tx: number; ty: number };   // 조직도 보드 (AX 팀 소개)
 }
 
 export interface CompanyDef {
@@ -40,36 +41,39 @@ const emp = (skin: number, hair: number, hc: number, shirt: string): Appearance 
 
 // ── 마인드 포레스트 (인싸이트) — 6층, 6층에 AX기획실 ──
 
-/** AX기획실 근무자 14명 (6층). 오피스존(y6~9)에 배치, 회의실 벽 회피 */
+/** AX기획실 근무자 14명 (실제 팀원 13명 + 인턴). 오피스존(y6~9) 배치 */
 const AX_STAFF: CompanyNpc[] = [
-  { tx: 1, ty: 6, name: '기획실장', role: 'AX 총괄', appearance: emp(1, 5, 1, '4a4e5c'),
-    lines: ['오늘 스프린트 목표 확인했나요?', 'AX는 결국 사람을 향해요', '데모부터 만들어봅시다'] },
-  { tx: 3, ty: 6, name: '프로덕트 리드', role: 'PM', appearance: emp(0, 1, 0, '8ab8a8'),
-    lines: ['이 기능 임팩트가 클까요?', '유저 인터뷰 결과 공유할게요', '로드맵 다시 볼게요'] },
-  { tx: 5, ty: 6, name: '디자인 리드', role: 'Design', appearance: emp(2, 3, 5, 'c8a8d8'),
-    lines: ['이 플로우 마찰이 있어요', '컴포넌트 정리했어요', '픽셀 단위로 봅니다 👀'] },
-  { tx: 7, ty: 6, name: 'AI 엔지니어', role: 'ML', appearance: emp(0, 0, 1, '6a7a8a'),
-    lines: ['프롬프트 튜닝 중이에요', '평가셋부터 만들죠', '토큰이 좀 많이 드네요'] },
-  { tx: 9, ty: 6, name: '백엔드 개발', role: 'Server', appearance: emp(3, 4, 2, '9cc79c'),
-    lines: ['API 계약 먼저 정해요', 'RLS 다시 봐야 해요', '배포 파이프라인 손봤어요'] },
-  { tx: 11, ty: 6, name: '프론트 개발', role: 'Client', appearance: emp(1, 2, 3, 'a8c8e0'),
-    lines: ['반응형 확인했어요', '상태관리 정리 중', 'HMR 사랑해요'] },
-  { tx: 1, ty: 8, name: '데이터 분석', role: 'Data', appearance: emp(2, 1, 4, 'd8b86e'),
-    lines: ['리텐션 지표 뽑았어요', 'A/B 결과 유의해요', '대시보드 업데이트했어요'] },
-  { tx: 3, ty: 8, name: 'QA 엔지니어', role: 'QA', appearance: emp(0, 5, 0, 'b0685a'),
-    lines: ['엣지케이스 잡았어요', '재현 경로 정리했어요', '회귀 테스트 통과!'] },
-  { tx: 5, ty: 8, name: '콘텐츠 기획', role: 'Content', appearance: emp(1, 3, 5, 'e0a8b8'),
-    lines: ['카피 톤 맞춰봤어요', '심리 콘텐츠 검수 중', '사용자 언어로 씁시다'] },
-  { tx: 7, ty: 8, name: '심리 전문위원', role: 'Psych', appearance: emp(2, 5, 1, 'f2ead8'),
-    lines: ['타당도가 중요해요', '검사 규준 다시 볼게요', '해석은 신중하게'] },
-  { tx: 9, ty: 8, name: '마케터', role: 'Growth', appearance: emp(0, 3, 3, 'd88a7c'),
-    lines: ['이번 캠페인 반응 좋아요', '퍼널 최적화 중', '바이럴 포인트 찾았어요'] },
-  { tx: 11, ty: 8, name: '사업개발', role: 'BizDev', appearance: emp(3, 1, 2, '6e5c4c'),
-    lines: ['제휴 미팅 다녀왔어요', '파트너십 논의 중', 'B2B 문의 늘었어요'] },
-  { tx: 5, ty: 9, name: 'HR 매니저', role: 'People', appearance: emp(1, 1, 4, '9cd8a0'),
-    lines: ['커피챗 하실래요?', '온보딩 자료 정리했어요', '팀 분위기 최고예요 ☕'] },
+  // ── 앞줄 (ty6): 팀장 · 차장 · 과장 ──
+  { tx: 1, ty: 6, name: '박찬영 팀장', role: 'AX 총괄', appearance: emp(1, 5, 1, '4a4e5c'),
+    lines: ['오늘 스프린트 목표 확인했나요?', 'AX는 결국 사람을 향해요', '데모부터 만들어봅시다', '방향만 맞으면 속도는 따라와요'] },
+  { tx: 3, ty: 6, name: '이해원 차장', role: 'UX기획', appearance: emp(0, 1, 3, 'a8c8e0'),
+    lines: ['이 플로우 마찰이 있어요', '유저 인터뷰 인사이트 공유할게요', '정보구조부터 다시 봅시다', 'UX는 디테일에서 갈려요'] },
+  { tx: 5, ty: 6, name: '조용선 차장', role: 'Dev', appearance: emp(2, 0, 1, '6a7a8a'),
+    lines: ['아키텍처 먼저 정리하죠', '기술 부채 갚을 때 됐어요', '코드 리뷰 올렸어요', '배포 파이프라인 손봤어요'] },
+  { tx: 7, ty: 6, name: '김인성 과장', role: '서비스기획', appearance: emp(3, 4, 2, '9cc79c'),
+    lines: ['이 기능 임팩트가 클까요?', '요구사항 정리했어요', '우선순위 다시 볼게요', '유저 스토리로 풀어봅시다'] },
+  { tx: 9, ty: 6, name: '박성배 과장', role: '서비스기획', appearance: emp(0, 2, 0, '8ab8a8'),
+    lines: ['로드맵 업데이트했어요', '지표로 검증해봐요', 'MVP부터 가시죠', '릴리즈 노트 정리 중'] },
+  { tx: 11, ty: 6, name: '이민석 과장', role: '서비스기획', appearance: emp(1, 3, 4, 'd8b86e'),
+    lines: ['기획서 리뷰 부탁드려요', '엣지케이스 정리했어요', '이건 A/B로 확인하죠', '데이터가 말해줄 거예요'] },
+  // ── 뒷줄 (ty8): 대리 · 책임 ──
+  { tx: 1, ty: 8, name: '정유나 대리', role: 'UX기획', appearance: emp(2, 3, 5, 'e0a8b8'),
+    lines: ['와이어프레임 다듬는 중', '컴포넌트 정리했어요', '픽셀 단위로 봅니다 👀', '유저 저니 맵 그려봤어요'] },
+  { tx: 3, ty: 8, name: '이재현 대리', role: 'UX기획', appearance: emp(0, 5, 2, 'c8a8d8'),
+    lines: ['프로토타입 만들었어요', '사용성 테스트 돌려봐요', '톤앤매너 맞춰봤어요', '이 인터랙션 어때요?'] },
+  { tx: 5, ty: 8, name: '양희주 책임', role: 'Edu', appearance: emp(1, 1, 4, '9cd8a0'),
+    lines: ['교육 콘텐츠 검수 중', '연수 커리큘럼 짜요', '학습자 관점으로 봅시다', '이러닝 반응 좋아요'] },
+  { tx: 7, ty: 8, name: '이제홍 대리', role: 'Dev', appearance: emp(3, 0, 1, '6e5c4c'),
+    lines: ['API 계약 먼저 정해요', '리팩터링 하는 중', 'HMR 사랑해요', '테스트부터 짤게요'] },
+  { tx: 9, ty: 8, name: '이새임 대리', role: 'Dev', appearance: emp(0, 3, 3, 'b0685a'),
+    lines: ['반응형 확인했어요', '상태관리 정리 중', '버그 재현했어요', '이 컴포넌트 분리하죠'] },
+  { tx: 11, ty: 8, name: '김현석 책임', role: 'Dev', appearance: emp(2, 4, 0, '7fa8d8'),
+    lines: ['성능 프로파일링 했어요', 'RLS 다시 봐야 해요', '쿼리 최적화 중', '모니터링 붙였어요'] },
+  // ── 보조석 (ty9) ──
+  { tx: 5, ty: 9, name: '박동한 대리', role: 'Dev', appearance: emp(1, 2, 2, '5aa0c8'),
+    lines: ['CI 초록불 확인!', '배포 준비됐어요', '롤백 플랜도 있어요', '로그 남겨뒀어요'] },
   { tx: 9, ty: 9, name: '인턴', role: 'Intern', appearance: emp(0, 0, 0, 'e8c9a0'),
-    lines: ['배울 게 많아요!', '오늘도 파이팅입니다', '커밋 처음 올렸어요 🎉'] },
+    lines: ['배울 게 많아요!', '오늘도 파이팅입니다', '커밋 처음 올렸어요 🎉', '선배님들 멋져요'] },
 ];
 
 const forest6: CompanyFloor = {
@@ -94,7 +98,13 @@ const forest6: CompanyFloor = {
   ],
   down: { tx: 13, ty: 9 },       // 6층은 엘리베이터 없음 — 계단으로만 5층
   draftDesk: { tx: 11, ty: 7 },  // 결재함 (기안 미니게임) — 계단과 떨어뜨림
+  orgBoard: { tx: 3, ty: 7 },    // AX 조직도 보드 (팀 소개)
 };
+
+/** AX기획실 팀 로스터 (조직도 보드용) — AX_STAFF에서 파생, 인턴 제외한 실제 팀원 */
+export function axRoster(): Array<{ name: string; role: string }> {
+  return AX_STAFF.filter((n) => n.name !== '인턴').map((n) => ({ name: n.name, role: n.role }));
+}
 
 /**
  * 1~5층 로비/부서 — 엘리베이터(1~5층 이동). 5층만 6층행 계단(up)을 추가로 둔다.
