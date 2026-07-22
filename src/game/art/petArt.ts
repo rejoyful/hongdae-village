@@ -51,6 +51,12 @@ function drawPet(d: Px, ox: number, oy: number, s: PetSpecies): void {
   d.rect(ox + 11, oy + 9, 1, 1, 0xe89a9a, 0.5); // 볼터치
   // 부리 (병아리·펭귄)
   if (s.accent && (s.id === 'chick' || s.id === 'penguin')) d.rect(ox + 15, oy + 7, 1, 2, s.accent);
+
+  // 희귀 펫 반짝임 (별가루)
+  if (s.rare) {
+    d.rect(ox + 2, oy + 3, 1, 1, 0xfff2a0); d.rect(ox + 1, oy + 4, 1, 1, 0xfff2a0);
+    d.rect(ox + 14, oy + 2, 1, 1, 0xfff2a0); d.rect(ox + 6, oy + 6, 1, 1, 0xffffff, 0.8);
+  }
 }
 
 /** Phaser 텍스처 등록 (씬용). 키: pet-<id> */

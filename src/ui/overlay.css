@@ -931,7 +931,26 @@
   align-self: center; margin-top: 2px; padding: 8px 18px; border: 2px solid #6e4522; border-radius: 999px;
   background: linear-gradient(#e7bd7f, #d9a45b); color: #4a2e14; font-weight: 800; cursor: pointer; box-shadow: 0 2px 0 #5c3a1c;
 }
-@media (max-width: 700px) { .ps-list { max-height: 52vh; } }
+.ps-info em { font-style: normal; font-size: 10px; font-weight: 800; color: #7a5220; background: #fff2d8; border: 1px solid #c89058; border-radius: 999px; padding: 1px 6px; }
+.ps-aff { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #8a6a3c; font-weight: 700; }
+.ps-aff i { font-style: normal; color: #e8623c; letter-spacing: 1px; }
+.ps-btns { display: flex; flex-direction: column; gap: 4px; flex: none; }
+.ps-btns button { width: 100%; padding: 6px 10px; font-size: 11px; }
+.ps-feed { background: linear-gradient(#f2c25c, #e8a83c); color: #5a3a10; border: 2px solid #6e4522; border-radius: 8px; font-weight: 800; cursor: pointer; box-shadow: 0 2px 0 #5c3a1c; }
+.ps-feed:active { transform: translateY(2px); box-shadow: 0 1px 0 #5c3a1c; }
+.ps-feed:disabled { opacity: .45; box-shadow: none; cursor: default; }
+.ps-section { text-align: center; font-size: 12px; font-weight: 900; color: #7a5220; margin: 6px 0 2px; padding-top: 8px; border-top: 2px dashed #c89058; }
+.ps-locked { opacity: .8; }
+.ps-locked .ps-pic { background: #d9c49a; }
+.ps-q { font-size: 26px; font-weight: 900; color: #a8926a; }
+.ps-lock { font-size: 18px; flex: none; }
+.ps-rare-tag { color: #fff !important; background: linear-gradient(#e8a83c, #d98a2c) !important; border-color: #b06a1c !important; }
+.ps-rare-buy { background: linear-gradient(#f2c25c, #e8a83c) !important; color: #5a3a10 !important; }
+.ps-discovered { background: #fff6d8; outline: 2px solid #f2c25c; }
+@media (max-width: 700px) {
+  .ps-list { max-height: 52vh; }
+  .ps-btns { flex-direction: row; }
+}
 
 /* ── 가로 회전(landscape) 대응 — 낮은 높이에서 패널·바 압축 ── */
 @media (orientation: landscape) and (max-height: 520px) {

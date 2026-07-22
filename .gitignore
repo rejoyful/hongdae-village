@@ -6,3 +6,4 @@ dist/
 # macOS/iCloud 중복 파일
 * 2.*
 *\ 2.*
+.DS_Store
