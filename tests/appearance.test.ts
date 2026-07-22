@@ -17,8 +17,14 @@ describe('appearance', () => {
   });
 
   it('정상값은 그대로 통과한다', () => {
-    const a = { skin: 2, hair: 4, hairColor: 5, shirt: 'a8c8e0', pants: 3 };
+    const a = { skin: 2, hair: 4, hairColor: 5, shirt: 'a8c8e0', pants: 3, glasses: 3, hat: 6 };
     expect(normalizeAppearance(a)).toEqual(a);
+  });
+
+  it('안경·모자는 없어도(레거시) 0으로 채워진다', () => {
+    const legacy = normalizeAppearance({ skin: 1, hair: 1, hairColor: 1, shirt: 'a8c8e0', pants: 1 });
+    expect(legacy.glasses).toBe(0);
+    expect(legacy.hat).toBe(0);
   });
 
   it('appearanceKey는 조합마다 유일하다', () => {

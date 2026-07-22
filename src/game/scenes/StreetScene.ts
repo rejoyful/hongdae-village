@@ -4,8 +4,13 @@ import { TILE, ZOOM, MAP_W, MAP_H, TEXT_RES, UI_FONT } from '../config';
 import {
   ZONES, SPAWN_TILE, HOUSE_DOORS, SHOP_DOORS, CAFE_DOORS, INTERIOR_DOORS,
   BUSKING_SPOT, OMOK_SPOT, BOARD_SPOT, CLAW_SPOT, PHOTO_SPOT, BUNGEO_SPOT, REALTY_DOOR,
-  COMPANY_DOORS, buildCollision,
+  COMPANY_DOORS, PETSHOP_DOOR, buildCollision,
 } from '../world/mapData';
+import { PetShopPanel } from '../../ui/petShopPanel';
+import { PetStore } from '../pets/petStore';
+import { PetFollower } from '../pets/petFollower';
+import { adoptPet, fetchOwnedPets } from '../../db/petApi';
+import { petById } from '../pets/pets';
 import { ClawPanel } from '../../ui/clawPanel';
 import { RealtyPanel } from '../../ui/realtyPanel';
 import {
@@ -127,6 +132,10 @@ export class StreetScene extends Phaser.Scene {
   private onBungeoTile = false;
   private claw: ClawPanel | null = null;
   private realty: RealtyPanel | null = null;
+  private petShop: PetShopPanel | null = null;
+  private petStore = new PetStore();
+  private pet: PetFollower | null = null;
+  private onPetShopTile = false;
   private properties: Property[] = [];
   private onRealtyTile = false;
   private escHandler: ((e: KeyboardEvent) => void) | null = null;
@@ -211,6 +220,11 @@ export class StreetScene extends Phaser.Scene {
       .setOrigin(0.5, 0.66).setDepth(10); // 발이 충돌 박스 바닥에 오게
     this.playerLabel = this.makeNameLabel(this.peer.nickname, 'me').setDepth(11);
 
+    // 동행 펫 (펫샵에서 입양) — 플레이어를 졸졸 따라온다
+    this.pet = new PetFollower(this, this.petStore.activeId());
+    // 온라인이면 서버 보유 펫을 병합 (기기 간 유지)
+    if (this.sb) void fetchOwnedPets(this.sb, this.peer.userId).then((ids) => this.petStore.merge(ids));
+
     // 입력
     const kb = this.input.keyboard!;
     this.keys = {
@@ -290,6 +304,9 @@ export class StreetScene extends Phaser.Scene {
         const onRealty = tile.tx === REALTY_DOOR.tx && tile.ty === REALTY_DOOR.ty;
         if (onRealty && !this.onRealtyTile && this.realty && !this.realty.isOpen) void this.openRealty();
         this.onRealtyTile = onRealty;
+        const onPetShop = tile.tx === PETSHOP_DOOR.tx && tile.ty === PETSHOP_DOOR.ty;
+        if (onPetShop && !this.onPetShopTile && this.petShop && !this.petShop.isOpen) this.openPetShop();
+        this.onPetShopTile = onPetShop;
         const onBusking = tile.tx === BUSKING_SPOT.tx && tile.ty === BUSKING_SPOT.ty;
         if (onBusking && !this.onBuskingTile && this.busking && !this.busking.isOpen) this.busking.open();
         this.onBuskingTile = onBusking;
@@ -344,6 +361,7 @@ export class StreetScene extends Phaser.Scene {
     this.npcs?.update(delta);
     this.residents?.update(next.x, next.y);
     { const t = worldToTile(next.x, next.y); this.checkSparkle(t.tx, t.ty); }
+    this.pet?.update(next.x, next.y, delta);
     this.idleBreath?.set(!moving && !this.anyPanelOpen());
 
     // 위치 브로드캐스트 (POS_HZ 스로틀)
@@ -607,6 +625,11 @@ export class StreetScene extends Phaser.Scene {
       onToggle: (open) => this.setGameKeysEnabled(!open),
       onClaim: (questId) => void this.handleQuestClaim(questId),
     });
+    this.petShop = new PetShopPanel({
+      onToggle: (open) => this.setGameKeysEnabled(!open),
+      onAdopt: (petId) => void this.handleAdopt(petId),
+      onSetActive: (petId) => this.handleSetActivePet(petId),
+    });
 
     // 활동 스팟 표시 — 통통 튀는 아이콘으로 "여기서 뭔가 된다"를 알린다
     const spot = (t: { tx: number; ty: number }, emoji: string, label: string) => {
@@ -625,6 +648,7 @@ export class StreetScene extends Phaser.Scene {
     spot(CLAW_SPOT, '🕹️', '인형뽑기');
     spot(PHOTO_SPOT, '📸', '네컷');
     spot(BUNGEO_SPOT, '🐟', '붕어빵');
+    spot(PETSHOP_DOOR, '🐾', '펫샵');
 
     // 마을을 걸어다니는 행인들 (스펙 §2 NPC 앰비언트)
     this.npcs = new NpcCrowd(this, this.grid, (sprite, text) => this.showBubble(sprite, text));
@@ -696,7 +720,8 @@ export class StreetScene extends Phaser.Scene {
       || (this.mapPanel?.isOpen ?? false) || (this.quests?.isOpen ?? false)
       || (this.shop?.isOpen ?? false) || (this.residentsPanel?.isOpen ?? false)
       || (this.rankingPanel?.isOpen ?? false) || (this.claw?.isOpen ?? false)
-      || (this.realty?.isOpen ?? false) || (this.treasure?.isOpen ?? false);
+      || (this.realty?.isOpen ?? false) || (this.treasure?.isOpen ?? false)
+      || (this.petShop?.isOpen ?? false);
   }
 
   /** ESC — 열린 패널 중 하나를 닫는다. 닫았으면 true */
@@ -711,6 +736,7 @@ export class StreetScene extends Phaser.Scene {
       { open: this.shop?.isOpen ?? false, close: () => this.shop!.close() },
       { open: this.claw?.isOpen ?? false, close: () => this.claw!.close() },
       { open: this.realty?.isOpen ?? false, close: () => this.realty!.close() },
+      { open: this.petShop?.isOpen ?? false, close: () => this.petShop!.close() },
       { open: this.treasure?.isOpen ?? false, close: () => this.treasure!.close() },
       { open: this.omok?.isOpen ?? false, close: () => this.omok!.close() },
       { open: this.cafe?.isOpen ?? false, close: () => this.cafe!.close() },
@@ -798,6 +824,46 @@ export class StreetScene extends Phaser.Scene {
   private async refreshRealty(): Promise<void> {
     if (this.sb) this.properties = await fetchProperties(this.sb);
     this.realty?.update(this.properties, this.coins);
+  }
+
+  // --- 펫샵 ---
+
+  private openPetShop(): void {
+    if (this.anyPanelOpen()) return;
+    this.petShop!.open(this.petStore, this.coins, !!this.sb);
+  }
+
+  /** 입양 — 온라인이면 서버 코인 차감(가격 SSOT=서버), 미적용/오프라인은 무료 코스메틱 폴백 */
+  private async handleAdopt(petId: string): Promise<void> {
+    const s = petById(petId);
+    if (!s || this.petStore.isOwned(petId)) return;
+    if (this.sb) {
+      const res = await adoptPet(this.sb, petId);
+      if (res.ok) {
+        this.setCoins(res.balance);
+        this.petStore.adopt(petId);
+        this.motions?.play(this.player, 'coin');
+      } else if (res.reason === 'no-coins') {
+        this.showBubble(this.player, '코인이 부족해요 😢');
+        this.petShop?.refresh(this.coins);
+        return;
+      } else {
+        // 서버 미적용(no-rpc)/에러 → 무료 입양 폴백
+        this.petStore.adopt(petId);
+      }
+    } else {
+      this.petStore.adopt(petId); // 오프라인 무료 입양
+    }
+    // 처음 들인 펫은 바로 데리고 다닌다
+    if (!this.petStore.activeId()) this.handleSetActivePet(petId);
+    this.showBubble(this.player, `${s.emoji} ${s.name} 입양 완료! 🎉`);
+    audio.playSe('success');
+    this.petShop?.refresh(this.coins);
+  }
+
+  private handleSetActivePet(petId: string | null): void {
+    this.petStore.setActive(petId);
+    this.pet?.setSpecies(petId);
   }
 
   private async handleLease(id: number, deal: DealType): Promise<void> {
@@ -1108,6 +1174,8 @@ export class StreetScene extends Phaser.Scene {
     this.omok?.destroy();
     this.claw?.destroy();
     this.realty?.destroy();
+    this.petShop?.destroy();
+    this.pet?.destroy();
     this.treasure?.destroy();
     this.quests?.destroy();
     this.npcs?.destroy();

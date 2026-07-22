@@ -49,6 +49,8 @@ export const SOLID_RECTS: Rect[] = [
   { x: 28, y: 11, w: 8, h: 7 },  // 30 마인드 포레스트 (인싸이트, 6층)
   { x: 40, y: 11, w: 6, h: 5 },  // 31 마인드 월드 (학지사)
   { x: 48, y: 11, w: 6, h: 5 },  // 32 마인드 브릿지 (학지사 에듀)
+  // 펫샵 (벽화 골목 남측 빈터 — 밟으면 입양 패널)
+  { x: 66, y: 46, w: 6, h: 3 },  // 33 펫샵 멍냥이네
 ];
 
 /**
@@ -123,6 +125,9 @@ export const BUNGEO_SPOT = { tx: 10, ty: 44 };
 /** 복덕방(부동산) 문 — 밟으면 매물 패널 (전세·월세·매매 계약) */
 export const REALTY_DOOR = { tx: 41, ty: 35 };
 
+/** 펫샵 「멍냥이네」 문 — 밟으면 입양 패널 (SOLID_RECTS[33] 하단 중앙) */
+export const PETSHOP_DOOR = { tx: 68, ty: 48 };
+
 /** 회사 건물 3동 입장 문 — 밟으면 CompanyScene (층별 사무실) */
 export type CompanyId = 'forest' | 'world' | 'bridge';
 export const COMPANY_DOORS: Array<{ company: CompanyId; tx: number; ty: number }> = [
@@ -136,5 +141,5 @@ export function buildCollision(): CollisionGrid {
   // 건물 + 대형 소품이 솔리드. 문 타일만 뚫어 걸어 들어가게 한다 (밟으면 입장).
   return CollisionGrid.fromRects(MAP_W, MAP_H, [...SOLID_RECTS, ...SOLID_PROPS],
     [...HOUSE_DOORS, ...SHOP_DOORS, ...CAFE_DOORS, ...INTERIOR_DOORS, REALTY_DOOR,
-      ...COMPANY_DOORS]);
+      ...COMPANY_DOORS, PETSHOP_DOOR]);
 }

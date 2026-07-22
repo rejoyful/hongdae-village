@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import { PAL } from './palette';
-import { makeSheet, type Px } from './pixelCanvas';
+import { makeSheet, px, type Px } from './pixelCanvas';
 import {
   type Appearance, appearanceKey, SKIN_TONES, HAIR_COLORS, PANTS_COLORS,
 } from './appearance';
@@ -130,6 +130,115 @@ function drawChar(d: Px, ox: number, dir: 0 | 1 | 2 | 3, step: number, a: Appear
   }
 
   drawHair(d, ox, hy, dir, a.hair, hairC, hairDark, hairLite);
+  if ((a.glasses ?? 0) > 0) drawGlasses(d, ox, hy, dir, a.glasses!);
+  if ((a.hat ?? 0) > 0) drawHat(d, ox, hy, dir, a.hat!);
+}
+
+/** 안경 5종 — 얼굴 눈 위에 올린다 (뒤통수 dir 3 제외). 얇은 테 + 렌즈 사이 간격 */
+function drawGlasses(d: Px, ox: number, hy: number, dir: 0 | 1 | 2 | 3, style: number): void {
+  if (dir === 3) return;
+  const ey = hy + 6; // 눈 높이
+
+  if (style === 4) { // 하트 선글라스 (핑크)
+    const heart = (lx: number) => {
+      d.rect(ox + lx, ey, 4, 3, 0xe86a8a);
+      d.rect(ox + lx, ey - 1, 1, 1, 0xe86a8a); d.rect(ox + lx + 3, ey - 1, 1, 1, 0xe86a8a);
+      d.rect(ox + lx + 1, ey + 3, 2, 1, 0xe86a8a);
+      d.rect(ox + lx + 1, ey, 1, 1, 0xffffff, 0.6);
+    };
+    if (dir === 0) { heart(6); heart(13); } else if (dir === 1) heart(12); else heart(6);
+    return;
+  }
+
+  const FR = style === 2 ? 0x5a3a1c : 0x2a2620;     // 뿔테=브라운, 나머지=블랙
+  const isSun = style === 3;
+  const glass = isSun ? 0x1e2228 : 0x8fd0e8;
+  const ga = isSun ? 0.98 : 0.5;
+  const lens = (lx: number) => {
+    d.rect(ox + lx, ey - 1, 4, 1, FR);              // 윗테
+    d.rect(ox + lx, ey + 3, 4, 1, FR);              // 아랫테
+    d.rect(ox + lx, ey, 1, 3, FR);                  // 왼테
+    d.rect(ox + lx + 3, ey, 1, 3, FR);              // 오른테
+    d.rect(ox + lx + 1, ey, 2, 3, glass, ga);       // 렌즈
+    if (!isSun) d.rect(ox + lx + 1, ey, 1, 1, 0xffffff, 0.8); // 반짝
+  };
+  if (dir === 0) { lens(6); lens(13); d.rect(ox + 11, ey, 2, 1, FR); } // 양쪽 + 브리지
+  else if (dir === 1) lens(12);
+  else lens(7);
+}
+
+/** 모자·머리장식 7종 — 헤어 위에 올린다 */
+function drawHat(d: Px, ox: number, hy: number, dir: 0 | 1 | 2 | 3, style: number): void {
+  const back = dir === 3;
+  switch (style) {
+    case 1: { // 베레모 (기울어진 붉은 베레)
+      const c = 0xc4453a, dk = 0x8a2e28;
+      d.rect(ox + 5, hy - 3, 14, 5, c);
+      d.rect(ox + 5, hy + 1, 14, 1, dk);
+      d.rect(ox + 6, hy - 3, 11, 1, 0xe86a5a, 0.6);
+      d.rect(ox + 17, hy - 4, 2, 2, dk);        // 꼭지
+      break;
+    }
+    case 2: { // 비니 (골지 니트)
+      const c = 0x5a7a9a, dk = 0x3a5470;
+      d.rect(ox + 5, hy - 3, 14, 6, c);
+      for (let i = 0; i < 7; i++) d.rect(ox + 5 + i * 2, hy - 3, 1, 6, dk, 0.5);
+      d.rect(ox + 5, hy + 2, 14, 2, 0xcfd8e0);  // 접단
+      break;
+    }
+    case 3: { // 머리띠 (리본 포인트)
+      const c = 0xe86a9a;
+      d.rect(ox + 5, hy - 1, 14, 2, c);
+      d.rect(ox + 5, hy - 1, 14, 1, 0xf2a0c0, 0.7);
+      if (!back) { d.rect(ox + 15, hy - 3, 4, 3, c); d.rect(ox + 16, hy - 2, 2, 1, 0xf2a0c0); } // 리본
+      break;
+    }
+    case 4: { // 꽃 (측면 데이지)
+      if (!back) {
+        const petals: Array<[number, number]> = [[15, -1], [17, 0], [17, 2], [15, 3], [14, 1]];
+        for (const [x, y] of petals) d.rect(ox + x, hy + y, 2, 2, 0xf2f2f2);
+        d.rect(ox + 15, hy + 1, 2, 2, 0xf2c25c); // 꽃술
+        d.rect(ox + 15, hy + 1, 1, 1, 0xe89a3c);
+      } else {
+        d.rect(ox + 6, hy - 1, 2, 2, 0xf2f2f2); d.rect(ox + 6, hy, 1, 1, 0xf2c25c);
+      }
+      break;
+    }
+    case 5: { // 리본 (정수리 나비)
+      const c = 0xe85a7a, dk = 0xb03a5a;
+      d.rect(ox + 8, hy - 3, 3, 3, c); d.rect(ox + 13, hy - 3, 3, 3, c);
+      d.rect(ox + 11, hy - 2, 2, 2, dk);        // 매듭
+      d.rect(ox + 8, hy - 3, 1, 1, 0xf2a0b8); d.rect(ox + 15, hy - 3, 1, 1, 0xf2a0b8);
+      break;
+    }
+    case 6: { // 왕관 (골드)
+      const c = 0xf2c84c, dk = 0xc89a2c;
+      d.rect(ox + 6, hy - 1, 12, 3, c);
+      d.rect(ox + 6, hy + 1, 12, 1, dk);
+      for (const x of [6, 10, 14, 17]) { d.rect(ox + x, hy - 3, 1, 2, c); d.rect(ox + x, hy - 4, 1, 1, 0xf2f2a0); }
+      d.rect(ox + 11, hy - 1, 2, 2, 0xe85a7a); // 보석
+      break;
+    }
+    default: { // 헤드폰
+      const c = 0x3a3f52, ear = 0xe8623c;
+      d.rect(ox + 5, hy - 3, 14, 2, c);         // 밴드
+      d.rect(ox + 5, hy - 3, 14, 1, 0x6a7088, 0.7);
+      if (dir === 0 || back) { d.rect(ox + 4, hy + 1, 3, 4, ear); d.rect(ox + 17, hy + 1, 3, 4, ear); }
+      else if (dir === 1) d.rect(ox + 5, hy + 1, 3, 4, ear);
+      else d.rect(ox + 16, hy + 1, 3, 4, ear);
+    }
+  }
+}
+
+/**
+ * DOM 캔버스에 캐릭터 한 프레임을 그린다 (커스터마이즈 미리보기용, Phaser 불필요).
+ * 캔버스는 24×32 픽셀 그대로 — CSS image-rendering:pixelated로 확대해 선명하게 본다.
+ */
+export function paintCharacterFrame(
+  ctx: CanvasRenderingContext2D, a: Appearance, dir: 0 | 1 | 2 | 3 = 0, step = 0,
+): void {
+  ctx.clearRect(0, 0, CHAR_W, CHAR_H);
+  drawChar(px(ctx), 0, dir, step, a);
 }
 
 /** 헤어스타일 6종 — 24×32 캔버스 기준, 하이라이트 밴드 포함 */

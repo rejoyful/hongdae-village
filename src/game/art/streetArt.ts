@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 import { TILE } from '../config';
 import {
   ZONES, SOLID_RECTS, HOUSE_DOORS, SHOP_DOORS, CAFE_DOORS, INTERIOR_DOORS,
-  CLAW_SPOT, PHOTO_SPOT, BUNGEO_SPOT, FOOD_TRUCKS, REALTY_DOOR, COMPANY_DOORS,
+  CLAW_SPOT, PHOTO_SPOT, BUNGEO_SPOT, FOOD_TRUCKS, REALTY_DOOR, COMPANY_DOORS, PETSHOP_DOOR,
 } from '../world/mapData';
 import { COMPANIES } from '../company/company';
 import type { Rect, CollisionGrid } from '../world/grid';
@@ -333,7 +333,7 @@ export function buildStreetArt(scene: Phaser.Scene, mapW: number, mapH: number, 
   const glowKey = makeDoorGlow(scene);
   const allDoors = [
     ...HOUSE_DOORS.map((d) => ({ tx: d.tx, ty: d.ty })),
-    ...SHOP_DOORS, ...CAFE_DOORS, REALTY_DOOR,
+    ...SHOP_DOORS, ...CAFE_DOORS, REALTY_DOOR, PETSHOP_DOOR,
     ...INTERIOR_DOORS.map((d) => ({ tx: d.tx, ty: d.ty })),
     ...COMPANY_DOORS.map((d) => ({ tx: d.tx, ty: d.ty })),
   ];
@@ -352,6 +352,13 @@ export function buildStreetArt(scene: Phaser.Scene, mapW: number, mapH: number, 
   scene.add.rectangle(rr.x * T + 6, rr.y * T + 8, rr.w * T - 12, 14, PAL.signBg).setOrigin(0).setDepth(3);
   scene.add.text((rr.x + rr.w / 2) * T, rr.y * T + 15, '복덕방 부동산', {
     fontSize: '9px', color: '#f2d8a8', fontStyle: 'bold',
+  }).setOrigin(0.5).setDepth(3);
+
+  // 펫샵 간판
+  const ps = SOLID_RECTS[33]!;
+  scene.add.rectangle(ps.x * T + 6, ps.y * T + 8, ps.w * T - 12, 14, 0x8a4a6a).setOrigin(0).setDepth(3);
+  scene.add.text((ps.x + ps.w / 2) * T, ps.y * T + 15, '🐾 멍냥이네', {
+    fontSize: '9px', color: '#ffe0ec', fontStyle: 'bold',
   }).setOrigin(0.5).setDepth(3);
 
   // 회사 건물 3동 간판 (오피스 단지)
