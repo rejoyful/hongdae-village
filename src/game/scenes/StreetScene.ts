@@ -3,9 +3,15 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { TILE, ZOOM, MAP_W, MAP_H, TEXT_RES } from '../config';
 import {
   ZONES, SPAWN_TILE, HOUSE_DOORS, SHOP_DOORS, CAFE_DOORS, INTERIOR_DOORS,
-  BUSKING_SPOT, OMOK_SPOT, BOARD_SPOT, CLAW_SPOT, PHOTO_SPOT, BUNGEO_SPOT, buildCollision,
+  BUSKING_SPOT, OMOK_SPOT, BOARD_SPOT, CLAW_SPOT, PHOTO_SPOT, BUNGEO_SPOT, REALTY_DOOR, buildCollision,
 } from '../world/mapData';
 import { ClawPanel } from '../../ui/clawPanel';
+import { RealtyPanel } from '../../ui/realtyPanel';
+import {
+  fetchProperties, leaseProperty, moveOut, sellProperty, payRent, chargeRent,
+  offlineProperties, type Property,
+} from '../../db/realEstateApi';
+import type { DealType } from '../realestate/realEstate';
 import { NpcCrowd } from '../entities/npcAmbient';
 import { OmokPanel } from '../../ui/omokPanel';
 import { QuestPanel } from '../../ui/questPanel';
@@ -23,7 +29,6 @@ import { DEFAULT_APPEARANCE, type Appearance } from '../art/appearance';
 import { CustomizePanel } from '../../ui/customizePanel';
 import { saveAppearance, linkIdCode } from '../../ui/loginPanel';
 import { TouchControls, isTouchDevice } from '../../ui/touchControls';
-import { fetchRooms, claimRoom, grantStarterOnce, type RoomInfo } from '../../db/roomsApi';
 import { tileToWorld, worldToTile, type CollisionGrid } from '../world/grid';
 import { stepPlayer, type MoveInput } from '../entities/playerMotion';
 import { RemoteTrack } from '../entities/remoteMotion';
@@ -95,6 +100,9 @@ export class StreetScene extends Phaser.Scene {
   private onPhotoTile = false;
   private onBungeoTile = false;
   private claw: ClawPanel | null = null;
+  private realty: RealtyPanel | null = null;
+  private properties: Property[] = [];
+  private onRealtyTile = false;
   private escHandler: ((e: KeyboardEvent) => void) | null = null;
   private forestMs = 0;
   private hud: GameHud | null = null;
@@ -113,7 +121,6 @@ export class StreetScene extends Phaser.Scene {
   private lastSentAt = 0;
   private facing: 0 | 1 | 2 | 3 = 0;
   private sb: SupabaseClient | null = null;
-  private rooms: RoomInfo[] = [];
   private spawnTile = SPAWN_TILE;
   private entering = false;
   private onShopTile = false;
@@ -160,7 +167,9 @@ export class StreetScene extends Phaser.Scene {
         fontSize: '9px', color: '#f2d8a8', resolution: TEXT_RES,
       }).setOrigin(0.5).setAlpha(0.9).setDepth(3);
     }
-    if (this.sb) void fetchRooms(this.sb).then((r) => { this.rooms = r; });
+    // 부동산 매물 상태 로드 (온라인은 서버, 오프라인은 로컬 세트)
+    this.properties = offlineProperties();
+    if (this.sb) void fetchProperties(this.sb).then((p) => { if (p.length) this.properties = p; });
 
     // 로컬 플레이어 (커스터마이징 외형)
     const spawn = tileToWorld(this.spawnTile.tx, this.spawnTile.ty);
@@ -242,6 +251,9 @@ export class StreetScene extends Phaser.Scene {
         const onCafe = CAFE_DOORS.some((d) => d.tx === tile.tx && d.ty === tile.ty);
         if (onCafe && !this.onCafeTile && this.cafe && !this.cafe.isOpen) this.cafe.open();
         this.onCafeTile = onCafe;
+        const onRealty = tile.tx === REALTY_DOOR.tx && tile.ty === REALTY_DOOR.ty;
+        if (onRealty && !this.onRealtyTile && this.realty && !this.realty.isOpen) void this.openRealty();
+        this.onRealtyTile = onRealty;
         const onBusking = tile.tx === BUSKING_SPOT.tx && tile.ty === BUSKING_SPOT.ty;
         if (onBusking && !this.onBuskingTile && this.busking && !this.busking.isOpen) this.busking.open();
         this.onBuskingTile = onBusking;
@@ -324,32 +336,45 @@ export class StreetScene extends Phaser.Scene {
     });
   }
 
-  /** 문 진입(밟기/클릭): 빈 방이면 선착순 입주(+시작 가구), 내 방이면 꾸미기, 남의 방이면 구경 */
+  /**
+   * 문 진입: 계약한 내 집이면 꾸미기, 남의 집이면 구경, 공실이면 복덕방 안내.
+   * (무료 선착순 입주는 폐지 — 부동산 계약으로 대체)
+   */
   private async enterDoor(roomId: number): Promise<void> {
     if (this.entering) return;
-    this.entering = true;
-    audio.playSe('door');
-    let isOwner = false;
+    const prop = this.properties.find((p) => p.id === roomId);
     if (!this.sb) {
-      isOwner = true; // 오프라인: 모든 방을 주인 모드로 (로컬 전용)
-    } else {
-      this.rooms = await fetchRooms(this.sb);
-      const room = this.rooms.find((r) => r.id === roomId);
-      if (!room) { this.entering = false; return; }
-      if (room.ownerId === this.peer.userId) {
-        isOwner = true;
-      } else if (room.ownerId === null) {
-        const claimed = await claimRoom(this.sb, roomId, this.peer.userId);
-        if (claimed) {
-          await grantStarterOnce(this.sb, this.peer.userId);
-          isOwner = true;
-        } else {
-          this.entering = false;
-          return this.enterDoor(roomId); // 레이스에서 밀림 → 최신 상태로 재시도(방문 모드)
-        }
-      }
+      // 오프라인: 로컬 전용 — 유형만 반영해 바로 입장(무료)
+      this.entering = true;
+      audio.playSe('door');
+      this.scene.start('room', {
+        roomId, isOwner: true, peer: this.peer, adapter: this.adapter,
+        houseType: prop?.houseType ?? 'oneroom', floorSeed: prop?.floorSeed ?? roomId, dealType: null,
+      });
+      return;
     }
-    this.scene.start('room', { roomId, isOwner, peer: this.peer, adapter: this.adapter });
+    // 온라인: 최신 소유 상태 확인
+    this.properties = await fetchProperties(this.sb);
+    const p = this.properties.find((x) => x.id === roomId);
+    if (!p) return;
+    if (p.holderId === this.peer.userId) {
+      this.entering = true;
+      audio.playSe('door');
+      this.scene.start('room', {
+        roomId, isOwner: true, peer: this.peer, adapter: this.adapter,
+        houseType: p.houseType, floorSeed: p.floorSeed, dealType: p.dealType,
+      });
+    } else if (p.holderId === null) {
+      this.showBubble(this.player, '공실이에요 — 복덕방에서 계약할 수 있어요 🏘️');
+    } else {
+      // 남의 집 구경 모드
+      this.entering = true;
+      audio.playSe('door');
+      this.scene.start('room', {
+        roomId, isOwner: false, peer: this.peer, adapter: this.adapter,
+        houseType: p.houseType, floorSeed: p.floorSeed, dealType: p.dealType,
+      });
+    }
   }
 
   // --- 멀티플레이 배선 ---
@@ -495,6 +520,14 @@ export class StreetScene extends Phaser.Scene {
         void this.awardActivity('claw');
       },
     });
+    this.realty = new RealtyPanel({
+      online: !!this.sb,
+      onToggle: (open) => this.setGameKeysEnabled(!open),
+      onLease: (id, deal) => void this.handleLease(id, deal),
+      onMoveOut: (id) => void this.handleMoveOut(id),
+      onSell: (id) => void this.handleSellProperty(id),
+      onPayRent: (id) => void this.handlePayRent(id),
+    });
     this.quests = new QuestPanel({
       online: !!this.sb,
       onToggle: (open) => this.setGameKeysEnabled(!open),
@@ -586,7 +619,8 @@ export class StreetScene extends Phaser.Scene {
       || (this.bag?.isOpen ?? false) || (this.dex?.isOpen ?? false)
       || (this.mapPanel?.isOpen ?? false) || (this.quests?.isOpen ?? false)
       || (this.shop?.isOpen ?? false) || (this.residentsPanel?.isOpen ?? false)
-      || (this.rankingPanel?.isOpen ?? false) || (this.claw?.isOpen ?? false);
+      || (this.rankingPanel?.isOpen ?? false) || (this.claw?.isOpen ?? false)
+      || (this.realty?.isOpen ?? false);
   }
 
   /** ESC — 열린 패널 중 하나를 닫는다. 닫았으면 true */
@@ -600,6 +634,7 @@ export class StreetScene extends Phaser.Scene {
       { open: this.quests?.isOpen ?? false, close: () => this.quests!.close() },
       { open: this.shop?.isOpen ?? false, close: () => this.shop!.close() },
       { open: this.claw?.isOpen ?? false, close: () => this.claw!.close() },
+      { open: this.realty?.isOpen ?? false, close: () => this.realty!.close() },
       { open: this.omok?.isOpen ?? false, close: () => this.omok!.close() },
       { open: this.cafe?.isOpen ?? false, close: () => this.cafe!.close() },
       { open: this.busking?.isOpen ?? false, close: () => this.busking!.close() },
@@ -644,6 +679,76 @@ export class StreetScene extends Phaser.Scene {
   private openResidents(): void {
     if (this.anyPanelOpen()) return;
     this.residentsPanel!.open(this.residents!.getTrust());
+  }
+
+  // --- 부동산 ---
+
+  private async openRealty(): Promise<void> {
+    if (this.anyPanelOpen()) return;
+    if (this.sb) {
+      this.properties = await fetchProperties(this.sb);
+      // 내 월세 매물 청구 (연체 반영)
+      for (const p of this.properties) {
+        if (p.holderId === this.peer.userId && p.dealType === 'wolse') await chargeRent(this.sb, p.id);
+      }
+      this.properties = await fetchProperties(this.sb);
+      this.coins = await fetchCoins(this.sb, this.peer.userId);
+      this.setCoins(this.coins);
+    }
+    this.realty!.open(this.properties, this.coins, this.peer.userId);
+  }
+
+  private async refreshRealty(): Promise<void> {
+    if (this.sb) this.properties = await fetchProperties(this.sb);
+    this.realty?.update(this.properties, this.coins);
+  }
+
+  private async handleLease(id: number, deal: DealType): Promise<void> {
+    if (!this.sb) { this.showBubble(this.player, '계약은 접속 후에 가능해요'); return; }
+    const res = await leaseProperty(this.sb, id, deal);
+    if (res.ok) {
+      this.setCoins(res.balance);
+      this.motions?.play(this.player, 'coin');
+      this.showBubble(this.player, '계약 완료! 문으로 입주하세요 🔑');
+      await this.refreshRealty();
+    } else if (res.reason === 'no-coins') {
+      this.showBubble(this.player, '잔액이 부족해요 😢');
+    } else if (res.reason === 'occupied') {
+      this.showBubble(this.player, '방금 다른 분이 계약했어요');
+      await this.refreshRealty();
+    } else {
+      this.showBubble(this.player, '계약에 실패했어요');
+    }
+  }
+
+  private async handleMoveOut(id: number): Promise<void> {
+    if (!this.sb) return;
+    const bal = await moveOut(this.sb, id);
+    if (bal !== null) {
+      this.setCoins(bal);
+      this.showBubble(this.player, '퇴실 완료 · 보증금 환급 🧳');
+      await this.refreshRealty();
+    } else this.showBubble(this.player, '퇴실에 실패했어요');
+  }
+
+  private async handleSellProperty(id: number): Promise<void> {
+    if (!this.sb) return;
+    const bal = await sellProperty(this.sb, id);
+    if (bal !== null) {
+      this.setCoins(bal);
+      this.showBubble(this.player, '매도 완료 🏷️');
+      await this.refreshRealty();
+    } else this.showBubble(this.player, '매도에 실패했어요');
+  }
+
+  private async handlePayRent(id: number): Promise<void> {
+    if (!this.sb) return;
+    const bal = await payRent(this.sb, id);
+    if (bal !== null) {
+      this.setCoins(bal);
+      this.showBubble(this.player, '월세 납부 완료 🧾');
+      await this.refreshRealty();
+    } else this.showBubble(this.player, '납부에 실패했어요');
   }
 
   private openRanking(): void {
@@ -899,6 +1004,7 @@ export class StreetScene extends Phaser.Scene {
     this.busking?.destroy();
     this.omok?.destroy();
     this.claw?.destroy();
+    this.realty?.destroy();
     this.quests?.destroy();
     this.npcs?.destroy();
     this.residents?.destroy();

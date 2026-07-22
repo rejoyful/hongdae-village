@@ -5,8 +5,64 @@ import { PAL, ROOM_PAL } from './palette';
 import { CATALOG_BY_ID } from '../../items/catalog';
 import { makeTexture, seeded, type Px } from './pixelCanvas';
 import { furnitureAssetKey } from './assetManifest';
+import type { FloorPlan } from '../realestate/realEstate';
 
 const T = TILE;
+
+/** 부동산 평면 기반 방 배경 — 가변 크기 + 내부 칸막이 + 창문·문 (유형별 구조) */
+export function makeRoomBackgroundPlan(scene: Phaser.Scene, plan: FloorPlan, seed: number): string {
+  const key = `room-bg-${plan.w}x${plan.h}-${seed}`;
+  if (scene.textures.exists(key)) return key;
+  const W = plan.w * T, H = plan.h * T;
+  makeTexture(scene, key, W, H, (d) => {
+    const rnd = seeded(seed + 9);
+    // 바닥 마루
+    for (let ty = 0; ty < plan.h; ty++) {
+      for (let tx = 0; tx < plan.w; tx++) {
+        const x = tx * T, y = ty * T;
+        d.rect(x, y, T, T, (tx + ty) % 2 ? ROOM_PAL.floorWood1 : ROOM_PAL.floorWood2);
+        d.rect(x, y + T - 1, T, 1, ROOM_PAL.floorSeam, 0.5);
+        if (tx % 2 === 0) d.rect(x, y, 1, T, ROOM_PAL.floorSeam, 0.35);
+        d.speckle(x, y, T, T, ROOM_PAL.floorSeam, 0.015, rnd, 0.6);
+      }
+    }
+    const wallRect = (x: number, y: number, w: number, h: number) => {
+      d.rect(x, y, w, h, ROOM_PAL.wallPaper);
+      for (let i = 0; i < w; i += 8) d.rect(x + i, y, 1, h, ROOM_PAL.wallPaperShade, 0.4);
+      d.rect(x, y + h - 3, w, 3, ROOM_PAL.wallBase);
+    };
+    // 테두리 벽
+    wallRect(0, 0, W, T);
+    d.rect(0, 0, T, H, ROOM_PAL.wallPaper); d.rect(T - 3, 0, 3, H, ROOM_PAL.wallBase);
+    d.rect(W - T, 0, T, H, ROOM_PAL.wallPaper); d.rect(W - T, 0, 3, H, ROOM_PAL.wallBase);
+    d.rect(0, H - T, W, T, ROOM_PAL.wallPaper); d.rect(0, H - T, W, 3, ROOM_PAL.wallBase);
+    // 창문 (상단 벽, 크기에 비례)
+    for (let wx = 2; wx < plan.w - 2; wx += 3) {
+      d.rect(wx * T + 4, 6, 24, 20, PAL.winFrame);
+      d.rect(wx * T + 6, 8, 20, 16, PAL.winGlassDay);
+      d.rect(wx * T + 6, 15, 20, 1, PAL.winFrame);
+      d.rect(wx * T + 15, 8, 1, 16, PAL.winFrame);
+    }
+    // 내부 칸막이 (문 통로 제외)
+    const isGap = (tx: number, ty: number) => plan.doorGaps.some((g) => g.tx === tx && g.ty === ty);
+    for (const wl of plan.walls) {
+      for (let ty = wl.y; ty < wl.y + wl.h; ty++) {
+        for (let tx = wl.x; tx < wl.x + wl.w; tx++) {
+          if (isGap(tx, ty)) continue;
+          d.rect(tx * T, ty * T, T, T, ROOM_PAL.wallPaper);
+          d.rect(tx * T, ty * T, T, 3, ROOM_PAL.wallBase);
+          d.rect(tx * T, ty * T + T - 3, T, 3, ROOM_PAL.wallBase);
+        }
+      }
+    }
+    // 현관문 (하단 중앙)
+    const dx = plan.door.tx * T, dy = plan.door.ty * T;
+    d.rect(dx + 2, dy, T - 4, T, PAL.doorDark);
+    d.rect(dx + 4, dy + 2, T - 8, T - 2, PAL.doorWood);
+    d.rect(dx + T - 10, dy + T / 2, 3, 3, PAL.signText);
+  });
+  return key;
+}
 
 /** 방 배경(바닥·벽지·문) 텍스처 1장 */
 export function makeRoomBackground(scene: Phaser.Scene): string {

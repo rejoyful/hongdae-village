@@ -42,10 +42,19 @@ export function footprint(p: Pick<Placed, 'itemId' | 'tx' | 'ty' | 'rot'>): Arra
   return tiles;
 }
 
+/** 배치 가능 영역 — 기본은 고정 원룸(FLOOR), 부동산 평면은 동적으로 전달 */
+export interface PlaceRegion {
+  x: number; y: number; w: number; h: number; // 배치 가능 경계
+  wallRow: number;                            // 벽걸이 부착 행
+  isBlocked?: (tx: number, ty: number) => boolean; // 내부 칸막이·문 등 배치 불가 타일
+}
+
+const DEFAULT_REGION: PlaceRegion = { x: FLOOR.x, y: FLOOR.y, w: FLOOR.w, h: FLOOR.h, wallRow: FLOOR.y };
+
 /**
  * 배치 가능 여부.
- * - rug/floor: 바닥 경계 안 + 같은 레이어끼리 비겹침 (러그 위에 가구 OK)
- * - wall: 최상단 바닥 행(FLOOR.y)에만, 벽걸이끼리 비겹침
+ * - rug/floor: 영역 경계 안 + 칸막이 회피 + 같은 레이어끼리 비겹침 (러그 위에 가구 OK)
+ * - wall: wallRow에만, 벽걸이끼리 비겹침
  */
 export function canPlace(
   placed: Placed[],
@@ -53,17 +62,25 @@ export function canPlace(
   tx: number,
   ty: number,
   rot: Rot,
+  region: PlaceRegion = DEFAULT_REGION,
 ): boolean {
   const size = sizeOf(itemId, rot);
   if (!size) return false;
   const layer = layerOf(itemId);
 
   if (layer === 'wall') {
-    if (ty !== FLOOR.y) return false;
-    if (tx < FLOOR.x || tx + size.w > FLOOR.x + FLOOR.w) return false;
+    if (ty !== region.wallRow) return false;
+    if (tx < region.x || tx + size.w > region.x + region.w) return false;
   } else {
-    if (tx < FLOOR.x || ty < FLOOR.y) return false;
-    if (tx + size.w > FLOOR.x + FLOOR.w || ty + size.h > FLOOR.y + FLOOR.h) return false;
+    if (tx < region.x || ty < region.y) return false;
+    if (tx + size.w > region.x + region.w || ty + size.h > region.y + region.h) return false;
+  }
+
+  // 내부 칸막이·문 타일엔 배치 불가
+  if (region.isBlocked) {
+    for (const t of footprint({ itemId, tx, ty, rot })) {
+      if (region.isBlocked(t.tx, t.ty)) return false;
+    }
   }
 
   const occupied = new Set<string>();

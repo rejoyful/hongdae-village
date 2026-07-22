@@ -1,15 +1,18 @@
 import Phaser from 'phaser';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { TILE, ZOOM } from '../config';
-import { tileToWorld, worldToTile, type CollisionGrid } from '../world/grid';
-import { ROOM_W, ROOM_H, ROOM_DOOR, ROOM_SPAWN, buildRoomCollision } from '../world/roomMap';
+import { TILE, ZOOM, TEXT_RES } from '../config';
+import { tileToWorld, worldToTile, CollisionGrid } from '../world/grid';
 import { stepPlayer, type MoveInput } from '../entities/playerMotion';
-import { canPlace, footprint, sizeOf, layerOf, type Placed, type Rot } from '../entities/placement';
-import { FLOOR } from '../world/roomMap';
+import { canPlace, footprint, sizeOf, layerOf, type Placed, type Rot, type PlaceRegion } from '../entities/placement';
 import { screenToTile } from '../input/pointer';
 import { CATALOG_BY_ID } from '../../items/catalog';
 import { HOUSE_DOORS } from '../world/mapData';
-import { makeRoomBackground, ensureFurniture } from '../art/roomArt';
+import { makeRoomBackgroundPlan, ensureFurniture } from '../art/roomArt';
+import {
+  generateFloorPlan, isPlaceableTile, HOUSE_SPECS, DEAL_LABEL,
+  type FloorPlan, type HouseType, type DealType,
+} from '../realestate/realEstate';
+import { chargeRent } from '../../db/realEstateApi';
 import { ROOM_MATERIALS, FURNITURE_ASSETS, furnitureAssetKey } from '../art/assetManifest';
 import { TouchControls, isTouchDevice } from '../../ui/touchControls';
 import { ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
@@ -28,6 +31,9 @@ interface RoomData {
   isOwner: boolean;
   peer: PeerState;
   adapter: NetworkAdapter | null;
+  houseType?: HouseType;
+  floorSeed?: number;
+  dealType?: DealType | null;
 }
 
 export class RoomScene extends Phaser.Scene {
@@ -42,6 +48,10 @@ export class RoomScene extends Phaser.Scene {
   private peer!: PeerState;
   private adapter: NetworkAdapter | null = null;
   private sb: SupabaseClient | null = null;
+  private plan!: FloorPlan;
+  private region!: PlaceRegion;
+  private houseType: HouseType = 'oneroom';
+  private dealType: DealType | null = null;
 
   private placed: Placed[] = [];
   private placedGfx = new Map<string, Phaser.GameObjects.Image>();
@@ -79,6 +89,13 @@ export class RoomScene extends Phaser.Scene {
     this.peer = data.peer;
     this.adapter = data.adapter ?? null;
     this.sb = (this.registry.get('sb') as SupabaseClient | undefined) ?? null;
+    this.houseType = data.houseType ?? 'oneroom';
+    this.dealType = data.dealType ?? null;
+    this.plan = generateFloorPlan(this.houseType, data.floorSeed ?? this.roomId);
+    this.region = {
+      x: 1, y: 1, w: this.plan.w - 2, h: this.plan.h - 2, wallRow: 1,
+      isBlocked: (tx, ty) => !isPlaceableTile(this.plan, tx, ty),
+    };
     this.placed = [];
     this.placedGfx.clear();
     this.ghost = null;
@@ -86,10 +103,28 @@ export class RoomScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.grid = buildRoomCollision();
-    this.add.image(0, 0, makeRoomBackground(this)).setOrigin(0).setDepth(0);
+    // 부동산 평면 기반 충돌: 테두리(문 제외) + 내부 칸막이(통로 제외)
+    const { w, h, door, walls, doorGaps } = this.plan;
+    this.grid = CollisionGrid.fromRects(w, h, [
+      { x: 0, y: 0, w, h: 1 },
+      { x: 0, y: h - 1, w: door.tx, h: 1 },
+      { x: door.tx + 1, y: h - 1, w: w - door.tx - 1, h: 1 },
+      { x: 0, y: 0, w: 1, h },
+      { x: w - 1, y: 0, w: 1, h },
+      ...walls,
+    ], doorGaps);
+    this.add.image(0, 0, makeRoomBackgroundPlan(this, this.plan, this.roomId)).setOrigin(0).setDepth(0);
 
-    const spawn = tileToWorld(ROOM_SPAWN.tx, ROOM_SPAWN.ty);
+    // 방 이름표 (구획별)
+    for (const rm of this.plan.rooms) {
+      const cx = (rm.rect.x + rm.rect.w / 2) * TILE;
+      const cy = (rm.rect.y + 0.4) * TILE;
+      this.add.text(cx, cy, rm.name, {
+        fontSize: '9px', color: '#8a6a4a', resolution: TEXT_RES,
+      }).setOrigin(0.5).setDepth(1).setAlpha(0.5);
+    }
+
+    const spawn = tileToWorld(this.plan.spawn.tx, this.plan.spawn.ty);
     this.charKey = ensureCharacter(this, this.peer.appearance);
     this.player = this.add.sprite(
       spawn.x + TILE / 2, spawn.y + TILE / 2, this.charKey, 3 * FRAMES_PER_DIR,
@@ -105,9 +140,15 @@ export class RoomScene extends Phaser.Scene {
     };
 
     const cam = this.cameras.main;
-    cam.setZoom(window.innerWidth < 700 ? 1.4 : ZOOM);
-    // bounds를 걸면 방(뷰포트보다 작음)이 좌상단에 고정되므로 중앙 정렬만 사용
-    cam.centerOn((ROOM_W * TILE) / 2, (ROOM_H * TILE) / 2);
+    cam.setZoom(window.innerWidth < 700 ? 1.3 : ZOOM);
+    cam.centerOn((w * TILE) / 2, (h * TILE) / 2);
+
+    // 월세 청구 (온라인·월세 계약 시 서울 자정 경과분 자동 납부)
+    if (this.sb && this.isOwner && this.dealType === 'wolse') {
+      void chargeRent(this.sb, this.roomId).then((due) => {
+        if (due && due > 0) this.showRentNotice(due);
+      });
+    }
 
     if (isTouchDevice()) {
       this.touch = new TouchControls([
@@ -123,9 +164,10 @@ export class RoomScene extends Phaser.Scene {
 
     this.hint = document.createElement('div');
     this.hint.className = 'hv-hint';
+    const label = HOUSE_SPECS[this.houseType].label + (this.dealType ? ` · ${DEAL_LABEL[this.dealType]}` : '');
     this.hint.textContent = this.isOwner
-      ? '아래 바에서 가구 선택 → 클릭 배치 · R 회전 · 배치물 클릭 제거 · 문으로 나가기'
-      : '친구의 방 (구경 모드) · 문으로 나가기';
+      ? `${label} · 가구 선택→클릭 배치 · R 회전 · 배치물 클릭 제거 · 문으로 나가기`
+      : `${label} (구경 모드) · 문으로 나가기`;
     document.body.appendChild(this.hint);
 
     void this.loadRoom();
@@ -163,11 +205,20 @@ export class RoomScene extends Phaser.Scene {
 
     // 문 타일에 서면 거리로 퇴장 — 들어온 집 문 앞으로 복귀
     const { tx, ty } = worldToTile(next.x, next.y);
-    if (tx === ROOM_DOOR.tx && ty === ROOM_DOOR.ty) {
+    if (tx === this.plan.door.tx && ty === this.plan.door.ty) {
       const door = HOUSE_DOORS.find((d) => d.roomId === this.roomId);
       const spawnTile = door ? { tx: door.tx, ty: door.ty + 1 } : undefined;
       this.scene.start('street', { peer: this.peer, adapter: this.adapter, spawnTile });
     }
+  }
+
+  private showRentNotice(due: number): void {
+    const el = document.createElement('div');
+    el.className = 'hv-hint';
+    el.style.cssText = 'top:70px;bottom:auto;left:50%;transform:translateX(-50%);color:#e88a6a;opacity:1';
+    el.textContent = `⚠️ 월세 미납 ${due.toLocaleString()}코인 — 부동산에서 납부하세요`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 5000);
   }
 
   // --- 데이터 ---
@@ -244,7 +295,7 @@ export class RoomScene extends Phaser.Scene {
     const def = CATALOG_BY_ID.get(itemId);
     const size = sizeOf(itemId, this.ghostRot);
     if (!def || !size) return;
-    const ok = canPlace(this.placed, itemId, this.ghostTile.tx, this.ghostTile.ty, this.ghostRot);
+    const ok = canPlace(this.placed, itemId, this.ghostTile.tx, this.ghostTile.ty, this.ghostRot, this.region);
     const w = tileToWorld(this.ghostTile.tx, this.ghostTile.ty);
     const yOff = layerOf(itemId) === 'wall' ? -22 : 0;
     this.ghost.setPosition(w.x, w.y + yOff)
@@ -262,7 +313,7 @@ export class RoomScene extends Phaser.Scene {
     });
     // 벽걸이는 벽 행에 자석처럼 붙는다
     const itemId = this.inv?.selected;
-    if (itemId && layerOf(itemId) === 'wall') this.ghostTile = { tx: this.ghostTile.tx, ty: FLOOR.y };
+    if (itemId && layerOf(itemId) === 'wall') this.ghostTile = { tx: this.ghostTile.tx, ty: this.region.wallRow };
     this.updateGhost();
   }
 
@@ -292,7 +343,7 @@ export class RoomScene extends Phaser.Scene {
     const { tx, ty } = this.ghostTile;
     const rot = this.ghostRot;
     if ((this.counts.get(itemId) ?? 0) <= 0) return;
-    if (!canPlace(this.placed, itemId, tx, ty, rot)) return;
+    if (!canPlace(this.placed, itemId, tx, ty, rot, this.region)) return;
 
     // 오늘의 인테리어 퀘스트 진행 (지속 저장 + HUD 하트 갱신, P2-3)
     const quests = this.registry.get('quests') as QuestStore | undefined;

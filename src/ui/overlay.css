@@ -640,3 +640,32 @@
 }
 .hv-claw-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #a06428; }
 @media (max-width: 700px) { .hv-claw-machine { height: 130px; } }
+
+/* ── 부동산(복덕방) 매물 패널 ── */
+.realty-frame { width: min(460px, 95vw); }
+.realty-tabs { margin-bottom: 2px; }
+.realty-list { padding: 8px; max-height: 60vh; display: flex; flex-direction: column; gap: 8px; }
+.realty-card {
+  background: #f2e2b8; border: 2px solid #c89058; border-radius: 10px; padding: 8px 10px;
+}
+.realty-card.is-mine { background: #fff2cc; outline: 2px solid #e8a83c; }
+.realty-head { display: flex; align-items: center; gap: 7px; font-size: 13px; color: #4a2e14; }
+.realty-head .ico { font-size: 18px; }
+.realty-head b { font-size: 14px; }
+.realty-head .rooms { font-size: 11px; color: #8a6a3c; }
+.realty-head .tag { margin-left: auto; font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 999px; }
+.realty-head .tag.vacant { background: #8cbf6a; color: #fff; }
+.realty-head .tag.mine { background: #e8a83c; color: #4a2e14; }
+.realty-head .tag.taken { background: #b0a08a; color: #fff; }
+.realty-desc { margin: 5px 2px; font-size: 11px; color: #8a6a3c; }
+.realty-actions { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.realty-actions button {
+  flex: 1; min-width: 90px; padding: 7px 6px; border: 2px solid #6e4522; border-radius: 8px;
+  background: linear-gradient(#e7bd7f, #d9a45b); color: #4a2e14; font-weight: 800; font-size: 11px;
+  cursor: pointer; box-shadow: 0 2px 0 #5c3a1c;
+}
+.realty-actions button:active { transform: translateY(2px); box-shadow: 0 1px 0 #5c3a1c; }
+.realty-actions button:disabled { opacity: .4; cursor: default; box-shadow: none; }
+.realty-actions button.danger { background: linear-gradient(#e89a8a, #d87a6a); color: #fff; border-color: #8a3a2a; box-shadow: 0 2px 0 #8a3a2a; }
+.realty-actions .rent-due { font-size: 11px; font-weight: 800; color: #c4453a; background: #ffe0d8; padding: 3px 8px; border-radius: 999px; }
+.realty-empty { text-align: center; color: #8a6a3c; font-size: 12px; padding: 30px 0; }
