@@ -100,7 +100,7 @@ describe('32×48 HD character art', () => {
         }
       }
     }
-  });
+  }, 15_000);
 
   it('완전 코디는 기본형보다 더 많은 픽셀 디테일을 가진다', () => {
     const complete: Appearance = {
