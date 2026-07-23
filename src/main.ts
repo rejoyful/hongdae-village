@@ -1,10 +1,7 @@
 import Phaser from 'phaser';
 import './ui/overlay.css';
 import { installAudioUnlock } from './game/audio';
-import { StreetScene } from './game/scenes/StreetScene';
 import { RoomScene } from './game/scenes/RoomScene';
-import { InteriorScene } from './game/scenes/InteriorScene';
-import { CompanyScene } from './game/scenes/CompanyScene';
 import { createSupabase } from './supabaseClient';
 import { ensureProfile, showLoginPreview } from './ui/loginPanel';
 import { SupabaseAdapter } from './net/SupabaseAdapter';
@@ -129,33 +126,31 @@ async function boot(): Promise<void> {
   hud.setHearts(questStore.doneCount(), 5);
   game.registry.set('hud', hud);
 
-  // `?iso`는 실제 저장·HUD·퀘스트·집·펫을 공유하는 전환 월드다.
+  // 기본 공개 주소는 실제 저장·HUD·퀘스트·집·펫을 공유하는 아이소메트릭 월드다.
   // 순수 투영 실험실은 `?iso-lab&offline`로 계속 독립 검증한다.
   if (params.has('iso-lab')) {
     const { IsometricPreviewScene } = await import('./game/scenes/IsometricPreviewScene');
     game.scene.add('iso-preview', IsometricPreviewScene, true, { peer });
     return;
   }
-  if (params.has('iso')) {
-    const { IsometricVillageScene } = await import('./game/scenes/IsometricVillageScene');
-    game.scene.add('room', RoomScene, false);
-    game.scene.add('iso-village', IsometricVillageScene, true, { peer, adapter });
-    return;
-  }
 
+  const { IsometricVillageScene } = await import('./game/scenes/IsometricVillageScene');
   game.scene.add('room', RoomScene, false);
-  game.scene.add('interior', InteriorScene, false);
-  game.scene.add('company', CompanyScene, false);
   const devRoom = params.get('room');
+  game.scene.add('iso-village', IsometricVillageScene, !devRoom, { peer, adapter });
   if (devRoom) {
-    game.scene.add('street', StreetScene, false);
     const house = params.get('house');
     const houseType = ['banjiha', 'oneroom', 'villa', 'apt', 'house'].includes(house ?? '')
       ? house
       : undefined;
-    game.scene.start('room', { roomId: Number(devRoom), isOwner: true, peer, adapter, houseType });
-  } else {
-    game.scene.add('street', StreetScene, true, { peer, adapter });
+    game.scene.start('room', {
+      roomId: Number(devRoom),
+      isOwner: true,
+      peer,
+      adapter,
+      houseType,
+      returnScene: 'iso-village',
+    });
   }
 }
 
