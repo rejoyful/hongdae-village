@@ -39,9 +39,9 @@ export function gainXp(p: Progress, amount: number): { next: Progress; leveledUp
   return { next: { level, xp }, leveledUp };
 }
 
-/** 사망 패널티 — 현재 레벨 필요치의 30%만큼 경험치 감소(레벨 다운은 없음, 0에서 멈춤) */
+/** 친절한 사망 패널티 — 현재 레벨 필요치의 10%만 감소(레벨·장비 손실 없음). */
 export function deathPenalty(p: Progress): Progress {
-  const loss = Math.round(xpToNext(p.level) * 0.3);
+  const loss = Math.round(xpToNext(p.level) * 0.1);
   return { level: p.level, xp: Math.max(0, p.xp - loss) };
 }
 

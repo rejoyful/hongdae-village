@@ -1,8 +1,21 @@
 import { CATALOG_BY_ID } from '../../items/catalog';
 import { FLOOR } from '../world/roomMap';
 
-/** rot: 0 = 원본, 1 = 90도 회전(w·h 스왑) */
-export type Rot = 0 | 1;
+/** 시계 방향 4방향. 기존 저장의 0/1 의미는 그대로 유지하고 2/3을 무손실 확장한다. */
+export type Rot = 0 | 1 | 2 | 3;
+
+export const ROTATIONS: readonly Rot[] = [0, 1, 2, 3];
+export const ROTATION_LABEL: Record<Rot, string> = { 0: '북', 1: '동', 2: '남', 3: '서' };
+
+export function isRot(value: unknown): value is Rot {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 3;
+}
+
+export function normalizeRot(value: unknown): Rot { return isRot(value) ? value : 0; }
+
+export function nextRot(rot: Rot, itemId: string): Rot {
+  return layerOf(itemId) === 'wall' ? rot : ((rot + 1) % 4) as Rot;
+}
 
 /** 배치 레이어 — 러그는 가구 밑에 깔리고, 벽걸이는 벽에 붙는다. 겹침은 같은 레이어끼리만 판정 */
 export type Layer = 'rug' | 'floor' | 'wall';
@@ -27,7 +40,7 @@ export function layerOf(itemId: string): Layer {
 export function sizeOf(itemId: string, rot: Rot): { w: number; h: number } | null {
   const def = CATALOG_BY_ID.get(itemId);
   if (!def) return null;
-  if (layerOf(itemId) === 'wall' || rot === 0) return { w: def.w, h: def.h };
+  if (layerOf(itemId) === 'wall' || rot % 2 === 0) return { w: def.w, h: def.h };
   return { w: def.h, h: def.w };
 }
 
@@ -92,4 +105,19 @@ export function canPlace(
     if (occupied.has(`${t.tx},${t.ty}`)) return false;
   }
   return true;
+}
+
+/** 캐릭터 이동을 막는 것은 바닥 가구뿐이다. 러그와 벽장식은 통과 가능하다. */
+export function blockingTiles(placed: readonly Placed[]): Array<{ tx: number; ty: number }> {
+  const seen = new Set<string>();
+  const tiles: Array<{ tx: number; ty: number }> = [];
+  for (const item of placed) {
+    if (layerOf(item.itemId) !== 'floor') continue;
+    for (const tile of footprint(item)) {
+      const key = `${tile.tx},${tile.ty}`;
+      if (seen.has(key)) continue;
+      seen.add(key); tiles.push(tile);
+    }
+  }
+  return tiles;
 }

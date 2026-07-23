@@ -9,6 +9,24 @@ export interface IconDef { rows: string[]; pal: Record<string, string> }
 const O = '#4a2c12'; // 공통 외곽선
 
 export const ICON_DEFS: Record<string, IconDef> = {
+  // 마을 전체 찾기 — 돋보기와 작은 길 표식
+  search: {
+    pal: { o: O, c: '#f2dcae', g: '#6f8775', d: '#4f604f' },
+    rows: [
+      '............',
+      '...oooooo...',
+      '..occcccco..',
+      '.occcggccco.',
+      '.occgggccco.',
+      '.occcggccco.',
+      '..occcccco..',
+      '...oooooo...',
+      '.......odo..',
+      '........odo.',
+      '.........oo.',
+      '............',
+    ],
+  },
   // 🎒 소지품 — 빨간 배낭
   bag: {
     pal: { o: O, f: '#e8c9a0', r: '#d85a4a', d: '#b04234', p: '#f2a25c' },
@@ -135,6 +153,24 @@ export const ICON_DEFS: Record<string, IconDef> = {
       '............',
     ],
   },
+  // 🏷️ 나눔장터 — 천막 아래 가격표
+  market: {
+    pal: { o: O, r: '#b96d5b', c: '#f1dfb7', g: '#6f8775', y: '#e4bd67' },
+    rows: [
+      '............',
+      '..oooooooo..',
+      '.orcrcrcrco.',
+      '.orcrcrcrco.',
+      '..oooooooo..',
+      '..oggggggo..',
+      '..ogcyycgo..',
+      '..ogcyycgo..',
+      '..oggggggo..',
+      '..oo....oo..',
+      '..oo....oo..',
+      '............',
+    ],
+  },
   // 💬 채팅 — 말풍선
   chat: {
     pal: { o: O, w: '#fff8e4', d: '#a08050' },
@@ -186,6 +222,60 @@ export const ICON_DEFS: Record<string, IconDef> = {
       '....odo.....',
       '.....o......',
       '............',
+      '............',
+    ],
+  },
+  // 옥상 정원 — 잎맥이 보이는 새싹
+  leaf: {
+    pal: { o: O, g: '#6f9464', h: '#aabd7d', d: '#42624a' },
+    rows: [
+      '.....oo.....',
+      '....oggo....',
+      '...oggggo...',
+      '..oggggggo..',
+      '.oggggggggo.',
+      '.oggggghggo.',
+      '..oggggggo..',
+      '...oggggo...',
+      '....oggo....',
+      '.....og.....',
+      '.....od.....',
+      '............',
+    ],
+  },
+  // 골목 주방 — 뚜껑과 손잡이가 있는 조리 냄비
+  pot: {
+    pal: { o: O, h: '#e6c481', g: '#b77c4d', d: '#735039' },
+    rows: [
+      '............',
+      '..oo....oo..',
+      '.o..oooo..o.',
+      '..oooooooo..',
+      '..ohhhhhho..',
+      '..ohgggggo..',
+      '..ohgggggo..',
+      '..ohgggggo..',
+      '...oggggo...',
+      '....oooo....',
+      '............',
+      '............',
+    ],
+  },
+  // 물정원 낚시 — 은빛 물고기와 물결
+  fish: {
+    pal: { o: O, b: '#78a5ad', h: '#b8d5d0', d: '#3f6f79', g: '#d8bd72' },
+    rows: [
+      '............',
+      '............',
+      '........oo..',
+      '..oo..oohho.',
+      '.obboohhhhho',
+      'obbbohhhhgho',
+      '.obboohhhhho',
+      '..oo..oohho.',
+      '........oo..',
+      '.dddd..dddd.',
+      '...dddddd...',
       '............',
     ],
   },

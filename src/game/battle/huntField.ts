@@ -17,6 +17,7 @@ interface Mob {
 export interface HuntCallbacks {
   getPlayerPos: () => { x: number; y: number };
   getPlayerAtk: () => number;
+  getPlayerAttackInterval?: () => number;
   currentTier: () => number;
   onPlayerHit: (dmg: number) => void;   // 씬이 HP·사망 처리
   onDefeat: (species: MonsterSpecies) => void; // 씬이 경험치·조각·티어 처리
@@ -149,7 +150,7 @@ export class HuntField {
 
     // 내 자동 공격 (사정권 내 가장 가까운 몬스터)
     if (nearest && this.swingCd <= 0) {
-      this.swingCd = PLAYER_SWING_MS;
+      this.swingCd = Math.max(220, this.cb.getPlayerAttackInterval?.() ?? PLAYER_SWING_MS);
       const dmg = Math.max(1, Math.round(this.cb.getPlayerAtk()));
       this.cb.onSwing?.(nearest.sprite.x);
       this.swingFx(p.x, p.y, nearest.sprite.x);

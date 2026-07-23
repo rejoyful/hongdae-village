@@ -77,5 +77,11 @@ export class PlayerAura {
     this.emitter.setPosition(x, y + 4);
   }
 
+  /** 아이소메트릭 가림 순서에 맞춰 오라와 파티클 depth를 함께 이동한다. */
+  setDepth(depth: number): void {
+    this.aura.setDepth(depth);
+    this.emitter.setDepth(depth + 3);
+  }
+
   destroy(): void { this.pulse?.stop(); this.aura.destroy(); this.emitter.destroy(); }
 }

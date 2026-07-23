@@ -67,36 +67,48 @@ export async function linkIdCode(sb: SupabaseClient, id: string, code: string): 
 
 type LoginChoice = { mode: 'guest'; nickname: string } | { mode: 'id'; nickname: string };
 
-function showLoginPanel(sb: SupabaseClient): Promise<LoginChoice> {
+function showLoginPanel(sb: SupabaseClient | null, preview = false): Promise<LoginChoice> {
   return new Promise((resolve) => {
     const panel = document.createElement('div');
     panel.className = 'hv-panel hv-title-screen';
-    panel.innerHTML = `
-      <div class="hv-title-wrap">
-        <img class="hv-title-logo" src="assets/ui/title.png" alt="홍대마을" />
-        <p class="hv-tagline">서울 홍대입구 · 함께 꾸미는 힐링 마을</p>
-      </div>
+    panel.innerHTML = `<main class="hv-title-shell">
+      <section class="hv-title-wrap">
+        <span class="hv-title-kicker"><i></i> COZY PIXEL MMORPG</span>
+        <img class="hv-title-logo" src="assets/ui/title.png" alt="홍대마을" decoding="async" />
+        <p class="hv-tagline">서울 골목에서 시작하는, 오래 머물고 싶은 두 번째 생활</p>
+        <div class="hv-title-features" aria-label="게임 특징">
+          <span><i>집</i><b>12테마 집 꾸미기</b></span>
+          <span><i>곁</i><b>펫과 함께하는 생활</b></span>
+          <span><i>옷</i><b>자유로운 캐릭터 취향</b></span>
+          <span><i>길</i><b>이웃과 잇는 마을 이야기</b></span>
+        </div>
+        <p class="hv-title-caption">전투를 서두르지 않아도 괜찮아요. 꾸미고, 모으고, 친해지며 나만의 속도로 성장하세요.</p>
+      </section>
       <div class="hv-card">
-        <div class="hv-login-tabs">
-          <button data-tab="guest" class="sel">간편 입장</button>
-          <button data-tab="id">아이디 로그인</button>
+        <header class="hv-login-head"><small>WELCOME HOME</small><h1>마을로 돌아가기</h1><p>저장된 생활은 사라지지 않아요.</p></header>
+        <div class="hv-login-tabs" role="tablist" aria-label="입장 방식">
+          <button type="button" id="hv-tab-guest" role="tab" aria-selected="true" aria-controls="hv-panel-guest" data-tab="guest" class="sel">간편 입장</button>
+          <button type="button" id="hv-tab-id" role="tab" aria-selected="false" aria-controls="hv-panel-id" data-tab="id">아이디 로그인</button>
         </div>
-        <div class="hv-login-guest">
-          <p>닉네임만 정하면 바로 입장! (이 브라우저에 저장돼요)</p>
-          <input class="g-nick" type="text" maxlength="12" placeholder="닉네임 (1~12자)" />
-          <button class="g-enter">입장하기</button>
+        <div class="hv-login-guest" id="hv-panel-guest" role="tabpanel" aria-labelledby="hv-tab-guest">
+          <p>닉네임 하나로 먼저 둘러보세요. 이 브라우저에 안전하게 이어집니다.</p>
+          <label for="hv-guest-nick">마을에서 불릴 이름</label>
+          <input id="hv-guest-nick" class="g-nick" type="text" maxlength="12" placeholder="닉네임 1~12자" autocomplete="nickname" />
+          <button type="button" class="g-enter">새 생활 시작하기 <i>→</i></button>
         </div>
-        <div class="hv-login-id" style="display:none">
-          <p>어느 기기에서든 같은 캐릭터로 — 아이디와 코드로 입장</p>
-          <input class="i-id" type="text" maxlength="16" placeholder="아이디 (영문·숫자 3~16자)" autocapitalize="none" />
-          <input class="i-code" type="password" maxlength="32" placeholder="코드 (6자 이상)" />
+        <div class="hv-login-id" id="hv-panel-id" role="tabpanel" aria-labelledby="hv-tab-id" hidden style="display:none">
+          <p>다른 기기에서도 같은 캐릭터와 수집 기록을 이어가세요.</p>
+          <label for="hv-login-id">아이디</label><input id="hv-login-id" class="i-id" type="text" maxlength="16" placeholder="영문·숫자 3~16자" autocapitalize="none" autocomplete="username" />
+          <label for="hv-login-code">나만의 코드</label><input id="hv-login-code" class="i-code" type="password" maxlength="32" placeholder="6자 이상" autocomplete="current-password" />
           <div class="hv-login-row">
-            <button class="i-login">로그인</button>
-            <button class="i-signup">새로 만들기</button>
+            <button type="button" class="i-login">로그인</button>
+            <button type="button" class="i-signup">새로 만들기</button>
           </div>
         </div>
-        <p class="hv-note" style="display:none"></p>
-      </div>`;
+        <p class="hv-note" role="status" aria-live="polite" style="display:none"></p>
+        <footer class="hv-login-safe"><i>✓</i><span><b>친절한 저장</b><small>실패 페널티·접속 강요 없이 천천히 이어져요.</small></span></footer>
+      </div>
+    </main><p class="hv-title-version">HONGDAE VILLAGE · EARLY WORLD BUILD</p>`;
     document.body.appendChild(panel);
 
     const q = <T extends HTMLElement>(sel: string) => panel.querySelector<T>(sel)!;
@@ -107,17 +119,29 @@ function showLoginPanel(sb: SupabaseClient): Promise<LoginChoice> {
     panel.querySelectorAll<HTMLButtonElement>('[data-tab]').forEach((b) => {
       b.addEventListener('click', () => {
         panel.querySelectorAll('[data-tab]').forEach((x) => x.classList.remove('sel'));
+        panel.querySelectorAll<HTMLButtonElement>('[role="tab"]').forEach((tab) => tab.setAttribute('aria-selected', String(tab === b)));
         b.classList.add('sel');
-        q('.hv-login-guest').style.display = b.dataset.tab === 'guest' ? 'block' : 'none';
-        q('.hv-login-id').style.display = b.dataset.tab === 'id' ? 'block' : 'none';
+        const guest = q('.hv-login-guest');
+        const id = q('.hv-login-id');
+        const guestSelected = b.dataset.tab === 'guest';
+        guest.style.display = guestSelected ? 'block' : 'none';
+        guest.hidden = !guestSelected;
+        id.style.display = guestSelected ? 'none' : 'block';
+        id.hidden = guestSelected;
         note.style.display = 'none';
+        q<HTMLInputElement>(guestSelected ? '.g-nick' : '.i-id').focus();
       });
     });
 
     // 간편 입장
     const guestEnter = () => {
       const nickname = q<HTMLInputElement>('.g-nick').value.trim();
-      if (nickname.length < 1) { q<HTMLInputElement>('.g-nick').focus(); return; }
+      if (nickname.length < 1) {
+        say('마을에서 불릴 이름을 한 글자 이상 적어 주세요.');
+        q<HTMLInputElement>('.g-nick').focus();
+        return;
+      }
+      if (preview) { say('미리보기 모드예요. 실제 서버 연결에서는 이 이름으로 바로 입장합니다.'); return; }
       panel.remove();
       resolve({ mode: 'guest', nickname });
     };
@@ -136,8 +160,9 @@ function showLoginPanel(sb: SupabaseClient): Promise<LoginChoice> {
       return true;
     };
 
-    q('.i-login').addEventListener('click', () => {
+    const login = () => {
       if (!checkInputs()) return;
+      if (!sb) { say('미리보기 모드예요. 실제 서버 연결에서는 저장된 마을을 불러옵니다.'); return; }
       say('로그인 중…');
       void sb.auth.signInWithPassword({ email: idToEmail(idVal()), password: codeVal() }).then(({ data, error }) => {
         if (error || !data.session) {
@@ -147,10 +172,12 @@ function showLoginPanel(sb: SupabaseClient): Promise<LoginChoice> {
         panel.remove();
         resolve({ mode: 'id', nickname: idVal() });
       });
-    });
+    };
+    q('.i-login').addEventListener('click', login);
 
     q('.i-signup').addEventListener('click', () => {
       if (!checkInputs()) return;
+      if (!sb) { say('미리보기 모드예요. 실제 서버 연결에서는 새 계정을 만듭니다.'); return; }
       say('계정 만드는 중…');
       void sb.auth.signUp({ email: idToEmail(idVal()), password: codeVal() }).then(({ data, error }) => {
         if (error) {
@@ -166,7 +193,13 @@ function showLoginPanel(sb: SupabaseClient): Promise<LoginChoice> {
       });
     });
 
-    panel.querySelectorAll('input').forEach((i) => i.addEventListener('keydown', (e) => e.stopPropagation()));
+    panel.querySelectorAll('input').forEach((i) => i.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter' && i.closest('.hv-login-id')) login();
+    }));
     q<HTMLInputElement>('.g-nick').focus();
   });
 }
+
+/** 개발 시 실제 인증을 건드리지 않고 표지와 탭 상호작용을 검수한다. */
+export function showLoginPreview(): void { void showLoginPanel(null, true); }

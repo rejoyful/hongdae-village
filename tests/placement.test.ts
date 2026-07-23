@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { CATALOG, validateCatalog } from '../src/items/catalog';
-import { sizeOf, footprint, canPlace, layerOf, type Placed } from '../src/game/entities/placement';
+import {
+  blockingTiles, canPlace, footprint, layerOf, nextRot, normalizeRot, sizeOf, type Placed,
+} from '../src/game/entities/placement';
 import { buildRoomCollision, ROOM_DOOR, ROOM_SPAWN, ROOM_W, ROOM_H, FLOOR } from '../src/game/world/roomMap';
 
 describe('카탈로그', () => {
@@ -22,11 +24,23 @@ describe('roomMap', () => {
 });
 
 describe('placement', () => {
-  it('회전하면 w·h가 스왑된다 (벽걸이는 회전 무시)', () => {
+  it('4방향 중 홀수 방향만 w·h가 스왑된다 (벽걸이는 회전 무시)', () => {
     expect(sizeOf('bed_basic', 0)).toEqual({ w: 2, h: 3 });
     expect(sizeOf('bed_basic', 1)).toEqual({ w: 3, h: 2 });
+    expect(sizeOf('bed_basic', 2)).toEqual({ w: 2, h: 3 });
+    expect(sizeOf('bed_basic', 3)).toEqual({ w: 3, h: 2 });
     expect(sizeOf('neon_sign', 1)).toEqual({ w: 2, h: 1 }); // wall: rot 무시
     expect(sizeOf('unknown', 0)).toBeNull();
+  });
+
+  it('바닥 가구는 북→동→남→서로 돌고 벽장식은 방향을 고정한다', () => {
+    expect(nextRot(0, 'chair_wood')).toBe(1);
+    expect(nextRot(1, 'chair_wood')).toBe(2);
+    expect(nextRot(2, 'chair_wood')).toBe(3);
+    expect(nextRot(3, 'chair_wood')).toBe(0);
+    expect(nextRot(0, 'poster_band')).toBe(0);
+    expect(normalizeRot(3)).toBe(3);
+    expect(normalizeRot(8)).toBe(0);
   });
 
   it('레이어 분류: 러그/벽걸이/바닥', () => {
@@ -69,5 +83,15 @@ describe('placement', () => {
     const placed: Placed[] = [{ id: 'w1', itemId: 'poster_band', tx: 3, ty: FLOOR.y, rot: 0 }];
     expect(canPlace(placed, 'wall_clock', 3, FLOOR.y, 0)).toBe(false); // 벽걸이끼리 겹침 불가
     expect(canPlace(placed, 'chair_wood', 3, FLOOR.y, 0)).toBe(true);  // 바닥 가구는 그 아래 OK
+  });
+
+  it('이동 충돌 타일은 바닥 가구만 중복 없이 반환한다', () => {
+    const placed: Placed[] = [
+      { id: 'desk', itemId: 'desk_wood', tx: 2, ty: 3, rot: 0 },
+      { id: 'chair', itemId: 'chair_wood', tx: 3, ty: 3, rot: 2 },
+      { id: 'rug', itemId: 'rug_cream', tx: 2, ty: 3, rot: 0 },
+      { id: 'wall', itemId: 'poster_band', tx: 2, ty: 1, rot: 0 },
+    ];
+    expect(blockingTiles(placed)).toEqual([{ tx: 2, ty: 3 }, { tx: 3, ty: 3 }]);
   });
 });

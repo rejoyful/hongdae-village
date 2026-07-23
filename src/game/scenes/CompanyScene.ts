@@ -4,7 +4,7 @@ import { tileToWorld, worldToTile, CollisionGrid } from '../world/grid';
 import { COMPANIES, type CompanyId, type CompanyFloor } from '../company/company';
 import { COMPANY_DOORS } from '../world/mapData';
 import { stepPlayer, type MoveInput } from '../entities/playerMotion';
-import { ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
+import { CHAR_ORIGIN_Y, ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
 import { makeTexture } from '../art/pixelCanvas';
 import { ROOM_PAL, PAL } from '../art/palette';
 import { TouchControls, isTouchDevice } from '../../ui/touchControls';
@@ -125,8 +125,8 @@ export class CompanyScene extends Phaser.Scene {
     for (const npc of f.npcs) {
       const key = ensureCharacter(this, npc.appearance);
       const w = tileToWorld(npc.tx, npc.ty);
-      const s = this.add.sprite(w.x + TILE / 2, w.y + TILE / 2, key, 0).setOrigin(0.5, 0.66).setDepth(9);
-      this.add.text(s.x, s.y - 24, npc.name, {
+      const s = this.add.sprite(w.x + TILE / 2, w.y + TILE / 2, key, 0).setOrigin(0.5, CHAR_ORIGIN_Y).setDepth(9);
+      this.add.text(s.x, s.y - 40, npc.name, {
         fontFamily: UI_FONT, fontSize: '10px', color: '#fff2d8', backgroundColor: '#3a4a6a', padding: { x: 3, y: 1 }, resolution: TEXT_RES,
       }).setOrigin(0.5, 1).setDepth(11).setAlpha(0.95);
       this.tweens.add({ targets: s, y: s.y - 3, duration: 1200 + (npc.name.length * 90) % 900, yoyo: true, repeat: -1,
@@ -150,7 +150,7 @@ export class CompanyScene extends Phaser.Scene {
     const spawn = tileToWorld(spawnT.tx, spawnT.ty);
     this.charKey = ensureCharacter(this, this.peer.appearance);
     this.player = this.add.sprite(spawn.x + TILE / 2, spawn.y + TILE / 2, this.charKey, 3 * FRAMES_PER_DIR)
-      .setOrigin(0.5, 0.66).setDepth(10);
+      .setOrigin(0.5, CHAR_ORIGIN_Y).setDepth(10);
 
     const kb = this.input.keyboard!;
     this.keys = {
@@ -286,7 +286,7 @@ export class CompanyScene extends Phaser.Scene {
     }
     this.bubbles = this.bubbles.filter((b) => {
       if (now >= b.until || !b.owner.active) { b.c.destroy(); return false; }
-      b.c.setPosition(b.owner.x, b.owner.y - 30);
+      b.c.setPosition(b.owner.x, b.owner.y - 46);
       return true;
     });
 
@@ -394,7 +394,7 @@ export class CompanyScene extends Phaser.Scene {
     const bg = this.add.graphics();
     bg.fillStyle(0x2a3444, 1).fillRoundedRect(-w / 2 - 1.5, -h / 2 - 1.5, w + 3, h + 3, 8);
     bg.fillStyle(0xf2f6fc, 1).fillRoundedRect(-w / 2, -h / 2, w, h, 7);
-    const c = this.add.container(owner.x, owner.y - 30, [bg, t]).setDepth(20).setScale(0.6);
+    const c = this.add.container(owner.x, owner.y - 46, [bg, t]).setDepth(20).setScale(0.6);
     this.tweens.add({ targets: c, scale: 1, duration: 160, ease: 'Back.easeOut' });
     this.bubbles.push({ c, owner, until: this.time.now + 3500 });
   }

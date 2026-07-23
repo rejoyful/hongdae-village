@@ -1,9 +1,25 @@
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
-import { EV, type PosMsg, type ChatMsg, type EmoteMsg } from './protocol';
-import type { NetworkAdapter, PeerState } from './NetworkAdapter';
+import {
+  EV, isEmoteKind, isNeighborCheerKind, isPetMeetKind, sanitizeChat, sanitizeNetworkUserId,
+  type PosMsg, type ChatMsg, type EmoteMsg, type NeighborCheerMsg, type PetMeetMsg,
+} from './protocol';
+import type { NetworkAdapter, NetworkWorld, PeerState } from './NetworkAdapter';
 import { normalizeAppearance, type Appearance } from '../game/art/appearance';
+import { isPetAccessoryId, sanitizePetNickname, type PetAccessoryId } from '../game/pets/petProfiles';
+import { normalizeVillageProfilePublic, type VillageProfilePublic } from '../game/progression/villageProfile';
 
-interface PresenceMeta { nickname: string; color: string; appearance?: Appearance; pet?: string | null; level?: number; weapon?: string }
+interface PresenceMeta {
+  nickname: string;
+  color: string;
+  appearance?: Appearance;
+  pet?: string | null;
+  petAccessory?: PetAccessoryId;
+  petName?: string | null;
+  level?: number;
+  weapon?: string;
+  badge?: string | null;
+  profile?: VillageProfilePublic | null;
+}
 
 /** NetworkAdapter의 Supabase Realtime 구현체 — presence(입장/퇴장) + broadcast(위치·채팅·이모트) */
 export class SupabaseAdapter implements NetworkAdapter {
@@ -12,6 +28,7 @@ export class SupabaseAdapter implements NetworkAdapter {
   private known = new Set<string>();
   private retryMs = 1000;
   private stopped = false;
+  private world: NetworkWorld = 'street';
 
   private joinCbs: Array<(p: PeerState) => void> = [];
   private updateCbs: Array<(p: PeerState) => void> = [];
@@ -20,11 +37,18 @@ export class SupabaseAdapter implements NetworkAdapter {
   private posCbs: Array<(id: string, m: PosMsg, at: number) => void> = [];
   private chatCbs: Array<(id: string, m: ChatMsg) => void> = [];
   private emoteCbs: Array<(id: string, m: EmoteMsg) => void> = [];
+  private neighborCheerCbs: Array<(id: string, m: NeighborCheerMsg) => void> = [];
+  private petMeetCbs: Array<(id: string, m: PetMeetMsg) => void> = [];
 
   constructor(private readonly client: SupabaseClient) {}
 
-  async connect(self: PeerState): Promise<void> {
+  async connect(self: PeerState, world: NetworkWorld = 'street'): Promise<void> {
+    if (this.channel) {
+      await this.channel.unsubscribe();
+      this.channel = null;
+    }
     this.self = self;
+    this.world = world;
     this.stopped = false; // 씬 재진입(거리 복귀) 시 재활성화
     this.known.clear();
     this.subscribe();
@@ -44,13 +68,15 @@ export class SupabaseAdapter implements NetworkAdapter {
     this.posCbs = [];
     this.chatCbs = [];
     this.emoteCbs = [];
+    this.neighborCheerCbs = [];
+    this.petMeetCbs = [];
   }
 
   private subscribe(): void {
     const self = this.self;
     if (!self || this.stopped) return;
 
-    const ch = this.client.channel('street', {
+    const ch = this.client.channel(this.world, {
       config: { presence: { key: self.userId }, broadcast: { self: false } },
     });
 
@@ -58,19 +84,37 @@ export class SupabaseAdapter implements NetworkAdapter {
 
     ch.on('broadcast', { event: EV.pos }, ({ payload }) => {
       const p = payload as { u: string } & PosMsg;
-      if (p.u === self.userId) return;
+      if (p.u === self.userId || typeof p.u !== 'string'
+        || !Number.isFinite(p.x) || !Number.isFinite(p.y)
+        || !Number.isInteger(p.f) || p.f < 0 || p.f > 3) return;
       const at = Date.now();
       this.posCbs.forEach((cb) => cb(p.u, { x: p.x, y: p.y, f: p.f }, at));
     });
     ch.on('broadcast', { event: EV.chat }, ({ payload }) => {
       const p = payload as { u: string } & ChatMsg;
-      if (p.u === self.userId) return;
-      this.chatCbs.forEach((cb) => cb(p.u, { t: p.t }));
+      if (p.u === self.userId || typeof p.u !== 'string') return;
+      const text = sanitizeChat(typeof p.t === 'string' ? p.t : '');
+      if (!text) return;
+      this.chatCbs.forEach((cb) => cb(p.u, { t: text }));
     });
     ch.on('broadcast', { event: EV.emote }, ({ payload }) => {
       const p = payload as { u: string } & EmoteMsg;
-      if (p.u === self.userId) return;
+      if (p.u === self.userId || typeof p.u !== 'string' || !isEmoteKind(p.k)) return;
       this.emoteCbs.forEach((cb) => cb(p.u, { k: p.k }));
+    });
+    ch.on('broadcast', { event: EV.neighborCheer }, ({ payload }) => {
+      const p = payload as { u: string } & NeighborCheerMsg;
+      const senderId = sanitizeNetworkUserId(p.u);
+      const targetId = sanitizeNetworkUserId(p.to);
+      if (!senderId || senderId === self.userId || targetId !== self.userId || !isNeighborCheerKind(p.k)) return;
+      this.neighborCheerCbs.forEach((cb) => cb(senderId, { to: targetId, k: p.k }));
+    });
+    ch.on('broadcast', { event: EV.petMeet }, ({ payload }) => {
+      const p = payload as { u: string } & PetMeetMsg;
+      const senderId = sanitizeNetworkUserId(p.u);
+      const targetId = sanitizeNetworkUserId(p.to);
+      if (!senderId || senderId === self.userId || targetId !== self.userId || !isPetMeetKind(p.k)) return;
+      this.petMeetCbs.forEach((cb) => cb(senderId, { to: targetId, k: p.k }));
     });
 
     ch.subscribe((status) => {
@@ -78,7 +122,9 @@ export class SupabaseAdapter implements NetworkAdapter {
         this.retryMs = 1000;
         void ch.track({
           nickname: self.nickname, color: self.color, appearance: self.appearance,
-          pet: self.pet ?? null, level: self.level ?? 1, weapon: self.weapon ?? 'fist',
+          pet: self.pet ?? null, petAccessory: self.petAccessory ?? 'none', petName: self.petName ?? null,
+          level: self.level ?? 1, weapon: self.weapon ?? 'fist',
+          badge: self.badge ?? null, profile: self.profile ?? null,
         } satisfies PresenceMeta);
       } else if (status === 'CHANNEL_ERROR' || status === 'CLOSED' || status === 'TIMED_OUT') {
         // 끊겨도 게임은 "혼자 모드"로 계속 (스펙 §7) — 지수 백오프 재구독
@@ -118,10 +164,18 @@ export class SupabaseAdapter implements NetworkAdapter {
         color: meta.color,
         appearance: normalizeAppearance(meta.appearance, meta.color),
         pet: meta.pet ?? null,
+        petAccessory: isPetAccessoryId(meta.petAccessory) ? meta.petAccessory : 'none',
+        petName: sanitizePetNickname(meta.petName),
         level: typeof meta.level === 'number' ? meta.level : 1,
         weapon: typeof meta.weapon === 'string' ? meta.weapon : 'fist',
+        badge: typeof meta.badge === 'string' ? meta.badge.replace(/\s+/g, ' ').trim().slice(0, 24) : null,
+        profile: normalizeVillageProfilePublic(meta.profile),
       };
-      const serialized = JSON.stringify([meta.nickname, meta.appearance ?? meta.color, meta.pet ?? null, meta.level ?? 1, meta.weapon ?? 'fist']);
+      const serialized = JSON.stringify([
+        meta.nickname, meta.appearance ?? meta.color, meta.pet ?? null, meta.petAccessory ?? 'none',
+        sanitizePetNickname(meta.petName), meta.level ?? 1, meta.weapon ?? 'fist',
+        meta.badge ?? null, normalizeVillageProfilePublic(meta.profile),
+      ]);
       if (!this.known.has(id)) {
         this.known.add(id);
         this.lastMeta.set(id, serialized);
@@ -145,7 +199,9 @@ export class SupabaseAdapter implements NetworkAdapter {
     if (this.channel) {
       await this.channel.track({
         nickname: self.nickname, color: self.color, appearance: self.appearance,
-        pet: self.pet ?? null, level: self.level ?? 1, weapon: self.weapon ?? 'fist',
+        pet: self.pet ?? null, petAccessory: self.petAccessory ?? 'none', petName: self.petName ?? null,
+        level: self.level ?? 1, weapon: self.weapon ?? 'fist',
+        badge: self.badge ?? null, profile: self.profile ?? null,
       } satisfies PresenceMeta);
     }
   }
@@ -162,10 +218,20 @@ export class SupabaseAdapter implements NetworkAdapter {
   sendPos(msg: PosMsg): void { this.broadcast(EV.pos, { x: msg.x, y: msg.y, f: msg.f }); }
   sendChat(msg: ChatMsg): void { this.broadcast(EV.chat, { t: msg.t }); }
   sendEmote(msg: EmoteMsg): void { this.broadcast(EV.emote, { k: msg.k }); }
+  sendNeighborCheer(msg: NeighborCheerMsg): void {
+    const targetId = sanitizeNetworkUserId(msg.to);
+    if (targetId && isNeighborCheerKind(msg.k)) this.broadcast(EV.neighborCheer, { to: targetId, k: msg.k });
+  }
+  sendPetMeet(msg: PetMeetMsg): void {
+    const targetId = sanitizeNetworkUserId(msg.to);
+    if (targetId && isPetMeetKind(msg.k)) this.broadcast(EV.petMeet, { to: targetId, k: msg.k });
+  }
 
   onPeerJoin(cb: (peer: PeerState) => void): void { this.joinCbs.push(cb); }
   onPeerLeave(cb: (userId: string) => void): void { this.leaveCbs.push(cb); }
   onPos(cb: (userId: string, msg: PosMsg, atMs: number) => void): void { this.posCbs.push(cb); }
   onChat(cb: (userId: string, msg: ChatMsg) => void): void { this.chatCbs.push(cb); }
   onEmote(cb: (userId: string, msg: EmoteMsg) => void): void { this.emoteCbs.push(cb); }
+  onNeighborCheer(cb: (userId: string, msg: NeighborCheerMsg) => void): void { this.neighborCheerCbs.push(cb); }
+  onPetMeet(cb: (userId: string, msg: PetMeetMsg) => void): void { this.petMeetCbs.push(cb); }
 }

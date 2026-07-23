@@ -1,10 +1,12 @@
 import type Phaser from 'phaser';
 import { TILE, TEXT_RES, UI_FONT } from '../config';
 import { tileToWorld } from '../world/grid';
-import { ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
+import { CHAR_ORIGIN_Y, ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
 import {
-  RESIDENTS, applyGreeting, loadTrust, saveTrust, todaySeoul, type TrustState,
+  RESIDENTS, applyGreeting, loadTrust, saveTrust, todaySeoul, trustOf,
+  type ResidentDef, type TrustState,
 } from '../residents/residents';
+import { latestResidentStory } from '../residents/residentStories';
 
 interface ResidentNpc {
   id: string;
@@ -27,7 +29,7 @@ export class ResidentNpcs {
     private readonly userId: string,
     private readonly cbs: {
       onBubble: (sprite: Phaser.GameObjects.Sprite, text: string) => void;
-      onGreet: (sprite: Phaser.GameObjects.Sprite) => void;
+      onGreet: (sprite: Phaser.GameObjects.Sprite, resident: ResidentDef, trust: number) => void;
     },
   ) {
     this.trust = loadTrust(userId);
@@ -35,8 +37,8 @@ export class ResidentNpcs {
       const w = tileToWorld(def.tile.tx, def.tile.ty);
       const key = ensureCharacter(scene, def.appearance);
       const sprite = scene.add.sprite(w.x + TILE / 2, w.y + TILE / 2, key, 0)
-        .setOrigin(0.5, 0.66).setDepth(9);
-      const label = scene.add.text(sprite.x, sprite.y - 26, def.name, {
+        .setOrigin(0.5, CHAR_ORIGIN_Y).setDepth(9);
+      const label = scene.add.text(sprite.x, sprite.y - 40, def.name, {
         fontFamily: UI_FONT, fontSize: '9px', color: '#fff2d8', backgroundColor: '#7a5220',
         padding: { x: 4, y: 2 }, resolution: TEXT_RES,
       }).setOrigin(0.5, 1).setDepth(11).setAlpha(0.95);
@@ -67,13 +69,17 @@ export class ResidentNpcs {
       const dx = playerX - n.sprite.x, dy = playerY - n.sprite.y;
       const facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 1 : 2) : (dy > 0 ? 0 : 3);
       n.sprite.setFrame(facing * FRAMES_PER_DIR);
-      this.cbs.onBubble(n.sprite, def.ments[n.mentIdx % def.ments.length]!);
+      const story = latestResidentStory(def.id, trustOf(this.trust, def.id));
+      const line = n.mentIdx > 0 && n.mentIdx % 4 === 0 && story
+        ? story.dialogue
+        : def.ments[n.mentIdx % def.ments.length]!;
+      this.cbs.onBubble(n.sprite, line);
       n.mentIdx++;
       const res = applyGreeting(this.trust, n.id, todaySeoul());
       if (res.gained) {
         this.trust = res.state;
         saveTrust(this.userId, this.trust);
-        this.cbs.onGreet(n.sprite);
+        this.cbs.onGreet(n.sprite, def, trustOf(this.trust, def.id));
       }
     }
   }

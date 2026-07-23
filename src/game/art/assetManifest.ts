@@ -22,6 +22,70 @@ export const BUILDING_TEXTURES: BuildingTexture[] = [
   { key: 'bldg-seven',      url: 'assets/buildings/seven.png' },   // 세븐일레븐 (192×96)
 ];
 
+/** 아이소메트릭 대표 건물. 투명 PNG가 없거나 로드 실패하면 프로시저럴 건물로 자동 폴백한다. */
+export const ISOMETRIC_BUILDING_TEXTURES: BuildingTexture[] = [
+  { key: 'iso-cafe-hero-v1', url: 'assets/isometric/cafe_hero_v1.png' },
+  { key: 'iso-home-hero-v1', url: 'assets/isometric/home_hero_v1.png' },
+  { key: 'iso-atelier-hero-v1', url: 'assets/isometric/atelier_hero_v1.png' },
+  { key: 'iso-petshop-hero-v1', url: 'assets/isometric/petshop_hero_v1.png' },
+  { key: 'iso-studio-hero-v1', url: 'assets/isometric/studio_hero_v1.png' },
+  { key: 'iso-record-hero-v1', url: 'assets/isometric/record_hero_v1.png' },
+];
+
+export interface MonsterTexture extends BuildingTexture {
+  speciesId: string;
+  /** 48px 정규화 캔버스를 월드에서 보여 주는 기본 배율 */
+  scale: number;
+}
+
+/** 1티어 고밀도 몬스터. 같은 mon- 키를 선로딩해 절차형 생성기를 안전한 폴백으로 둔다. */
+export const ISOMETRIC_MONSTER_TEXTURES: MonsterTexture[] = [
+  { speciesId: 'slime_g', key: 'mon-slime_g', url: 'assets/isometric/monsters/slime_g_v1.png', scale: 0.82 },
+  { speciesId: 'acornbug', key: 'mon-acornbug', url: 'assets/isometric/monsters/acornbug_v1.png', scale: 0.82 },
+  { speciesId: 'molelet', key: 'mon-molelet', url: 'assets/isometric/monsters/molelet_v1.png', scale: 0.82 },
+  { speciesId: 'glowmoth', key: 'mon-glowmoth', url: 'assets/isometric/monsters/glowmoth_v1.png', scale: 0.82 },
+  { speciesId: 'nutsquirrel', key: 'mon-nutsquirrel', url: 'assets/isometric/monsters/nutsquirrel_v1.png', scale: 0.82 },
+];
+
+const MONSTER_TEXTURE_BY_ID = new Map(ISOMETRIC_MONSTER_TEXTURES.map((asset) => [asset.speciesId, asset]));
+
+/** 생성형 자산은 48px 캔버스, 나머지 티어는 기존 16px 절차형 자산 배율을 사용한다. */
+export const isometricMonsterScale = (speciesId: string): number => MONSTER_TEXTURE_BY_ID.get(speciesId)?.scale ?? 1.5;
+
+export type IsometricTreeVariant = 'zelkova' | 'ginkgo' | 'redpine';
+
+export interface TreeTexture extends BuildingTexture {
+  variant: IsometricTreeVariant;
+  /** 96×128 정규화 캔버스를 월드에 배치하는 기본 배율 */
+  scale: number;
+}
+
+/** 생활권과 외곽숲을 구분하는 고밀도 가로수 세트. */
+export const ISOMETRIC_TREE_TEXTURES: TreeTexture[] = [
+  { variant: 'zelkova', key: 'iso-tree-zelkova-v1', url: 'assets/isometric/trees/zelkova_v1.png', scale: 0.72 },
+  { variant: 'ginkgo', key: 'iso-tree-ginkgo-v1', url: 'assets/isometric/trees/ginkgo_v1.png', scale: 0.68 },
+  { variant: 'redpine', key: 'iso-tree-redpine-v1', url: 'assets/isometric/trees/redpine_v1.png', scale: 0.68 },
+];
+
+/** 생활 활동을 월드에 직접 보여 주는 고밀도 아이소메트릭 소품. */
+export const ISOMETRIC_PROP_TEXTURES = [
+  { kind: 'workbench', key: 'iso-diy-workbench-v1', url: 'assets/isometric/diy_workbench_v1.png', scale: 0.72 },
+  { kind: 'showcase', key: 'iso-taste-showcase-v1', url: 'assets/isometric/taste_showcase_booth_v1.png', scale: 0.78 },
+  { kind: 'clubboard', key: 'iso-hobby-club-board-v1', url: 'assets/isometric/hobby_club_board_v1.png', scale: 0.78 },
+  { kind: 'guidekiosk', key: 'iso-neighborhood-guide-kiosk-v1', url: 'assets/isometric/neighborhood_guide_kiosk_v1.png', scale: 0.82 },
+  { kind: 'finderkiosk', key: 'iso-village-finder-kiosk-v1', url: 'assets/isometric/village_finder_kiosk_v1.png', scale: 0.78 },
+  { kind: 'museumcabinet', key: 'iso-neighborhood-museum-cabinet-v1', url: 'assets/isometric/neighborhood_museum_cabinet_v1.png', scale: 0.86 },
+  { kind: 'projectboard', key: 'iso-community-project-pavilion-v1', url: 'assets/isometric/community_project_pavilion_v1.png', scale: 0.82 },
+] as const;
+
+export const isometricPropAsset = (kind: string) => ISOMETRIC_PROP_TEXTURES.find((asset) => asset.kind === kind);
+
+const TREE_TEXTURE_BY_VARIANT = new Map(ISOMETRIC_TREE_TEXTURES.map((asset) => [asset.variant, asset]));
+
+export const isometricTreeAsset = (variant: IsometricTreeVariant): TreeTexture | undefined => (
+  TREE_TEXTURE_BY_VARIANT.get(variant)
+);
+
 /** AI 가구 스프라이트 — public/assets/furniture/<id>_<rot>.png, 키 furn-ai-<id>-<rot> */
 export const FURNITURE_ASSETS: Array<{ itemId: string; rots: Array<0 | 1> }> = [
   { itemId: 'bed_basic', rots: [0, 1] },
