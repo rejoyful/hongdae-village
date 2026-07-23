@@ -7,13 +7,26 @@ import {
   COMPANY_DOORS, PETSHOP_DOOR, buildCollision,
 } from '../world/mapData';
 import { PetShopPanel } from '../../ui/petShopPanel';
+import { PetStyleStudioPanel } from '../../ui/petStyleStudioPanel';
 import { PetStore } from '../pets/petStore';
+import { PetOutingStore, type PetOutingProgress } from '../pets/petOutings';
+import type { PetSignalProgress } from '../pets/petSignals';
+import type { PetPerformanceProgress } from '../pets/petPerformances';
+import {
+  PetStyleStudioStore, type PetStyleDraft, type PetStyleStudioProgress,
+} from '../pets/petStyleStudio';
+import { PetHomeMemoryStore } from '../home/petHomeComfort';
+import { VillageRequestStore, type VillageRequestProgress } from '../requests/villageRequests';
+import { REQUEST_STORY_REWARDS, requestStoryMetricKey } from '../progression/requestStoryRewards';
+import { villageRequestDestinationForMetric } from '../requests/villageRequestStories';
 import { PetFollower } from '../pets/petFollower';
-import { adoptPet, fetchOwnedPets } from '../../db/petApi';
+import { adoptPet, carePet, claimRarePet, fetchOwnedPets, fetchPetProgress, type PetCareResult } from '../../db/petApi';
 import { petById } from '../pets/pets';
+import type { PetAccessoryId, PetPersonalityId } from '../pets/petProfiles';
 import { giftIntervalMs, giftShards, giftEmoji } from '../pets/petGift';
 import { WEAPONSHOP_DOOR, HUNT_FIELD } from '../world/mapData';
 import { BattleStore } from '../battle/battleStore';
+import { AdventureRoleStore, type AdventureRoleProgress } from '../battle/adventureRoles';
 import { HuntField } from '../battle/huntField';
 import { maxHpForLevel, totalAtk, xpToNext, FATIGUE_MS } from '../battle/combat';
 import { weaponById } from '../battle/weapons';
@@ -22,37 +35,73 @@ import { ensureWeaponSprite } from '../art/weaponArt';
 import { PlayerAura } from '../entities/playerAura';
 import type { MonsterSpecies } from '../battle/monsters';
 import { BattleHud } from '../../ui/battleHud';
+import { AdventureRolePanel } from '../../ui/adventureRolePanel';
 import { WeaponShopPanel } from '../../ui/weaponShopPanel';
 import { buyWeapon, fetchOwnedWeapons } from '../../db/weaponApi';
 import { ClawPanel } from '../../ui/clawPanel';
 import { RealtyPanel } from '../../ui/realtyPanel';
 import {
-  fetchProperties, leaseProperty, moveOut, sellProperty, payRent, chargeRent,
+  fetchProperties, fetchPropertyForHolder, leaseProperty, moveOut, sellProperty, payRent, chargeRent,
   offlineProperties, type Property,
 } from '../../db/realEstateApi';
 import type { DealType } from '../realestate/realEstate';
 import { NpcCrowd } from '../entities/npcAmbient';
 import { OmokPanel } from '../../ui/omokPanel';
 import { QuestPanel } from '../../ui/questPanel';
-import { DAILY_QUESTS } from '../quests';
+import { StarterConciergeDock } from '../../ui/starterConciergeDock';
+import { PhotoBoothPanel } from '../../ui/photoBoothPanel';
+import { PhotoAlbumStore, type PhotoRecord } from '../photo/photoAlbum';
+import { GardenPanel } from '../../ui/gardenPanel';
+import type { GardenStore } from '../garden/gardenStore';
+import { CookingPanel } from '../../ui/cookingPanel';
+import type { CookingStore } from '../cooking/cookingStore';
+import { FishingPanel } from '../../ui/fishingPanel';
+import type { FishingStore } from '../fishing/fishingStore';
+import type { HomeAquariumStore } from '../home/homeAquariumStore';
+import type { FurnitureReformStore } from '../home/furnitureReform';
+import { DAILY_QUESTS, QUEST_BY_ID } from '../quests';
+import { selectQuestGuide } from '../questGuidance';
 import { ShopPanel } from '../../ui/shopPanel';
 import { CafePanel } from '../../ui/cafePanel';
 import { BuskingPanel } from '../../ui/buskingPanel';
 import { phaseForHour, seoulHour } from '../world/timeOfDay';
-import { fetchCoins, claimDaily, buyItem, sellItem } from '../../db/economyApi';
+import { fetchCoins, claimDaily, buyItem, craftFurniture, fetchFurnitureCraftHistory, fetchWeeklyFurniturePurchaseHistory, sellItem } from '../../db/economyApi';
+import { claimDailyQuest, recordDailyProgress, refreshVerifiedProgress } from '../../db/progressionApi';
 import { fetchInventory } from '../../db/roomsApi';
 import { buildStreetArt } from '../art/streetArt';
+import { furnitureWorkshopPreview } from '../art/furnitureWorkshopArt';
 import { BUILDING_TEXTURES, PROP_ASSETS } from '../art/assetManifest';
-import { ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
+import { CHAR_H, CHAR_ORIGIN_Y, CHAR_W, ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
 import { DEFAULT_APPEARANCE, type Appearance } from '../art/appearance';
+import { ClosetStore } from '../art/closet';
+import { LookbookStore, type LookbookProgress } from '../art/lookbook';
+import { CharacterZineStore } from '../progression/characterZine';
+import { rareStyleUnlockCount } from '../art/styleCatalog';
+import { FURNITURE_RECIPE_BY_ID, furnitureAcquisitionChannel } from '../home/furnitureWorkshop';
+import { CATALOG_BY_ID } from '../../items/catalog';
+import { lifeMasteryQuestMetrics, lifeMasteryViews } from '../progression/lifeMastery';
+import type { LifeSpecialtyProgress } from '../progression/lifeSpecialty';
+import type { DailyInvitationProgress } from '../progression/dailyInvitations';
+import type { SessionPlannerProgress } from '../progression/sessionPlanner';
+import type { FanMerchWorkshopProgress } from '../progression/fanMerchWorkshop';
+import { villageJourneyMetrics, villageJourneySummary } from '../progression/villageJourney';
+import { adventurePathMetrics } from '../progression/adventurePaths';
+import { villageLevelMemoryMetrics } from '../progression/villageLevelMemories';
+import { STARTER_COMPASS_ROUTES, starterCompassMetrics } from '../progression/starterCompass';
+import type { ResidentRendezvousProgress } from '../residents/residentRendezvous';
+import type { ResidentLetterProgress } from '../residents/residentLetters';
+import type { ResidentFanbookProgress } from '../residents/residentFanbook';
+import type { ResidentRoomCareProgress } from '../residents/residentRoomCare';
 import { CustomizePanel } from '../../ui/customizePanel';
 import { saveAppearance, linkIdCode } from '../../ui/loginPanel';
 import { TouchControls, isTouchDevice } from '../../ui/touchControls';
+import { performanceComfort } from '../performance/performanceComfort';
+import { playComfort } from '../accessibility/playComfort';
 import { tileToWorld, worldToTile, type CollisionGrid } from '../world/grid';
 import { stepPlayer, type MoveInput } from '../entities/playerMotion';
 import { RemoteTrack } from '../entities/remoteMotion';
 import { screenToTile } from '../input/pointer';
-import { POS_HZ, INTERP_DELAY_MS, sanitizeChat, type EmoteKind } from '../../net/protocol';
+import { POS_HZ, INTERP_DELAY_MS, sanitizeChat, type EmoteKind, type NeighborCheerKind, type PetMeetKind } from '../../net/protocol';
 import type { NetworkAdapter, PeerState } from '../../net/NetworkAdapter';
 import { ChatInput } from '../../ui/chatInput';
 import { ChatFeed } from '../../ui/chatFeed';
@@ -60,19 +109,34 @@ import { OnlineList } from '../../ui/onlineList';
 import { EmoteWheel, EMOTE_EMOJI } from '../../ui/emoteWheel';
 import { GameHud } from '../../ui/gameHud';
 import type { QuestStore } from '../questProgress';
+import { AchievementStore, BADGE_BY_ID } from '../achievements';
 import { TreasurePanel } from '../../ui/treasurePanel';
 import type { TreasureStore } from '../treasure/treasureStore';
 import { STREET_SPARKLES } from '../treasure/treasures';
 import { BagPanel } from '../../ui/bagPanel';
 import { CollectionPanel } from '../../ui/collectionPanel';
+import { TASTE_SET_BY_ID, type TasteSetProgress } from '../progression/tasteSetArchive';
 import { MapPanel } from '../../ui/mapPanel';
 import { ResidentsPanel } from '../../ui/residentsPanel';
+import { VillageProfilePanel, type VillageProfileSelfContext } from '../../ui/villageProfilePanel';
+import { HomeStudioCardStore } from '../home/homeStudioCards';
 import { RankingPanel } from '../../ui/rankingPanel';
 import { fetchRanking } from '../../db/rankingApi';
 import { ActionMotions, IdleBreath } from '../entities/actionMotion';
 import { ResidentNpcs } from '../entities/npcResidents';
-import { RESIDENTS } from '../residents/residents';
+import { RESIDENTS, metCount } from '../residents/residents';
+import { residentTrustMetrics } from '../residents/residentStories';
 import { audio } from '../audio';
+import type { FestivalArchiveStore } from '../events/festivalArchive';
+import type { ChronicleProgress } from '../progression/villageChronicle';
+import type { NeighborCheerProgress } from '../social/neighborCheers';
+import {
+  NeighborhoodMarketStore, type MarketPriceTier, type NeighborhoodMarketProgress,
+} from '../social/neighborhoodMarket';
+import { NeighborhoodMarketPanel } from '../../ui/neighborhoodMarketPanel';
+import {
+  buyMarketListing, cancelMarketListing, createMarketListing, fetchMarketListings, fetchMarketSummary,
+} from '../../db/neighborhoodMarketApi';
 
 interface StreetData {
   peer: PeerState;
@@ -82,6 +146,7 @@ interface StreetData {
 }
 
 interface Remote {
+  peer: PeerState;
   sprite: Phaser.GameObjects.Sprite;
   label: Phaser.GameObjects.Text;
   ring: Phaser.GameObjects.Ellipse;
@@ -92,6 +157,7 @@ interface Remote {
   pet: PetFollower;   // 상대 동행 펫 (없으면 내부 스프라이트 null)
   aura: PlayerAura;   // 상대 레벨 간지
   level: number;
+  badge: string | null;
 }
 
 interface Bubble { c: Phaser.GameObjects.Container; owner: Phaser.GameObjects.Sprite; until: number }
@@ -138,6 +204,12 @@ export class StreetScene extends Phaser.Scene {
   private touch: TouchControls | null = null;
   private omok: OmokPanel | null = null;
   private quests: QuestPanel | null = null;
+  private starterConcierge: StarterConciergeDock | null = null;
+  private photoBooth: PhotoBoothPanel | null = null;
+  private gardenPanel: GardenPanel | null = null;
+  private cookingPanel: CookingPanel | null = null;
+  private fishingPanel: FishingPanel | null = null;
+  private photoAlbum!: PhotoAlbumStore;
   private npcs: NpcCrowd | null = null;
   private tintOverlay: Phaser.GameObjects.Rectangle | null = null;
   private onBuskingTile = false;
@@ -149,15 +221,25 @@ export class StreetScene extends Phaser.Scene {
   private claw: ClawPanel | null = null;
   private realty: RealtyPanel | null = null;
   private petShop: PetShopPanel | null = null;
-  private petStore = new PetStore();
+  private petStyleStudio: PetStyleStudioPanel | null = null;
+  private petStore = new PetStore(() => this.achievementStore?.get().unlocked ?? []);
+  private petOutingStore!: PetOutingStore;
+  private petStyleStudioStore!: PetStyleStudioStore;
+  private petHomeMemoryStore!: PetHomeMemoryStore;
+  private requestBoardStore!: VillageRequestStore;
+  private festivalArchiveStore!: FestivalArchiveStore;
   private pet: PetFollower | null = null;
   private onPetShopTile = false;
   private lastPetAt = 0;
   private petGiftMs = 0;
   // 전투/레벨업
-  private battleStore = new BattleStore();
+  private battleStore!: BattleStore;
+  private adventureRoleStore!: AdventureRoleStore;
+  private neighborhoodMarketStore!: NeighborhoodMarketStore;
   private hunt: HuntField | null = null;
   private battleHud: BattleHud | null = null;
+  private adventureRolePanel: AdventureRolePanel | null = null;
+  private neighborhoodMarket: NeighborhoodMarketPanel | null = null;
   private weaponShop: WeaponShopPanel | null = null;
   private onWeaponShopTile = false;
   private playerHp = 40;
@@ -172,13 +254,23 @@ export class StreetScene extends Phaser.Scene {
   private forestMs = 0;
   private hud: GameHud | null = null;
   private questStore!: QuestStore;
+  private achievementStore!: AchievementStore;
+  private closetStore!: ClosetStore;
+  private lookbookStore!: LookbookStore;
+  private characterZineStore!: CharacterZineStore;
   private treasureStore!: TreasureStore;
+  private gardenStore!: GardenStore;
+  private cookingStore!: CookingStore;
+  private fishingStore!: FishingStore;
+  private homeAquariumStore!: HomeAquariumStore;
+  private furnitureReformStore!: FurnitureReformStore;
   private treasure: TreasurePanel | null = null;
   private lastSparkleTile = '';
   private bag: BagPanel | null = null;
   private dex: CollectionPanel | null = null;
   private mapPanel: MapPanel | null = null;
   private residentsPanel: ResidentsPanel | null = null;
+  private profilePanel: VillageProfilePanel | null = null;
   private rankingPanel: RankingPanel | null = null;
   private residents: ResidentNpcs | null = null;
   private motions: ActionMotions | null = null;
@@ -211,8 +303,30 @@ export class StreetScene extends Phaser.Scene {
       ?? { userId: 'offline', nickname: '게스트', color: 'e8c9a0', appearance: DEFAULT_APPEARANCE };
     this.adapter = data.adapter ?? null;
     this.sb = (this.registry.get('sb') as SupabaseClient | undefined) ?? null;
+    this.battleStore = new BattleStore(this.peer.userId);
+    this.adventureRoleStore = new AdventureRoleStore(this.peer.userId);
+    this.neighborhoodMarketStore = new NeighborhoodMarketStore(this.peer.userId);
     this.questStore = this.registry.get('quests') as QuestStore;
+    this.achievementStore = new AchievementStore(this.peer.userId);
+    this.closetStore = new ClosetStore(this.peer.userId);
+    this.lookbookStore = new LookbookStore(this.peer.userId);
+    this.characterZineStore = new CharacterZineStore(this.peer.userId);
+    this.petOutingStore = new PetOutingStore(this.peer.userId);
+    this.petStyleStudioStore = new PetStyleStudioStore(this.peer.userId);
+    this.petHomeMemoryStore = new PetHomeMemoryStore(this.peer.userId);
+    this.requestBoardStore = this.registry.get('requests') as VillageRequestStore;
+    this.festivalArchiveStore = this.registry.get('festivals') as FestivalArchiveStore;
+    this.photoAlbum = new PhotoAlbumStore(this.peer.userId);
+    this.achievementStore.sync(this.questStore.views());
+    this.questStore.setMetric('rare_styles', rareStyleUnlockCount(this.achievementStore.get().unlocked));
+    this.achievementStore.sync(this.questStore.views());
+    this.peer.badge = this.achievementStore.equipped()?.name ?? null;
     this.treasureStore = this.registry.get('treasure') as TreasureStore;
+    this.gardenStore = this.registry.get('garden') as GardenStore;
+    this.cookingStore = this.registry.get('cooking') as CookingStore;
+    this.fishingStore = this.registry.get('fishing') as FishingStore;
+    this.homeAquariumStore = this.registry.get('homeAquarium') as HomeAquariumStore;
+    this.furnitureReformStore = this.registry.get('furnitureReform') as FurnitureReformStore;
     this.remotes = new Map();
     this.bubbles = [];
     this.spawnTile = data.spawnTile ?? SPAWN_TILE;
@@ -247,7 +361,7 @@ export class StreetScene extends Phaser.Scene {
     this.playerRing = this.add.ellipse(spawn.x + TILE / 2, spawn.y + TILE / 2 + 12, 26, 10, 0x4ec86a, 0.55)
       .setStrokeStyle(2, 0x2a6a3a, 0.9).setDepth(9);
     this.player = this.add.sprite(spawn.x + TILE / 2, spawn.y + TILE / 2, this.charKey, 0)
-      .setOrigin(0.5, 0.66).setDepth(10); // 발이 충돌 박스 바닥에 오게
+      .setOrigin(0.5, CHAR_ORIGIN_Y).setDepth(10); // 발이 충돌 박스 바닥에 오게
     this.playerLabel = this.makeNameLabel(this.peer.nickname, 'me').setDepth(11);
     // 이름 위 레벨 호칭
     this.playerTitle = this.add.text(spawn.x, spawn.y, '', {
@@ -256,21 +370,32 @@ export class StreetScene extends Phaser.Scene {
     }).setOrigin(0.5, 1).setDepth(11).setAlpha(0.98);
 
     // 동행 펫 (펫샵에서 입양) — 플레이어를 졸졸 따라온다
-    this.pet = new PetFollower(this, this.petStore.activeId());
+    const activePetId = this.petStore.activeId();
+    this.pet = new PetFollower(
+      this, activePetId, activePetId ? this.petStore.accessory(activePetId) : 'none',
+      activePetId ? this.petStore.nickname(activePetId) : null,
+    );
     this.refreshPetStage();
     // 온라인이면 서버 보유 펫을 병합 (기기 간 유지)
-    if (this.sb) void fetchOwnedPets(this.sb, this.peer.userId).then((ids) => this.petStore.merge(ids));
+    if (this.sb) {
+      void this.syncServerPetProgress();
+      void this.syncVerifiedProgress(false);
+    }
 
     // 사냥터 전투 (마을 밖 = 경의선 숲길 필드) — 근접 자동 전투
     this.playerHp = maxHpForLevel(this.battleStore.level);
-    this.battleHud = new BattleHud();
+    this.battleHud = new BattleHud({ onOpenRoles: () => this.adventureRolePanel?.open() });
     this.hunt = new HuntField(this,
       { x: HUNT_FIELD.x * TILE, y: HUNT_FIELD.y * TILE, w: HUNT_FIELD.w * TILE, h: HUNT_FIELD.h * TILE },
       {
         getPlayerPos: () => ({ x: this.player.x, y: this.player.y }),
-        getPlayerAtk: () => totalAtk(this.battleStore.level, weaponById(this.battleStore.equippedId()).atk, this.isFatigued()),
+        getPlayerAtk: () => totalAtk(this.battleStore.level, weaponById(this.battleStore.equippedId()).atk, this.isFatigued())
+          * this.adventureRoleStore.modifier().attackMultiplier,
+        getPlayerAttackInterval: () => this.adventureRoleStore.attackInterval(),
         currentTier: () => this.battleStore.tier,
-        onPlayerHit: (dmg) => this.damagePlayer(dmg),
+        onPlayerHit: (dmg) => this.damagePlayer(
+          Math.max(1, Math.round(dmg * this.adventureRoleStore.modifier().damageTakenMultiplier)),
+        ),
         onDefeat: (species) => this.onMonsterDefeat(species),
         onSwing: () => this.swingWeapon(),
       });
@@ -280,8 +405,13 @@ export class StreetScene extends Phaser.Scene {
     this.playerAura = new PlayerAura(this);
     this.playerAura.setLevel(this.battleStore.level);
     this.peer.pet = this.petStore.activeId();
+    this.peer.petAccessory = activePetId ? this.petStore.accessory(activePetId) : 'none';
+    this.peer.petName = activePetId ? this.petStore.nickname(activePetId) : null;
     this.peer.level = this.battleStore.level;
-    if (this.sb) void fetchOwnedWeapons(this.sb, this.peer.userId).then((ids) => { ids.forEach((id) => this.battleStore.buyWeapon(id)); });
+    if (this.sb) void fetchOwnedWeapons(this.sb, this.peer.userId).then((ids) => {
+      ids.forEach((id) => this.battleStore.buyWeapon(id));
+      this.setQuestMetric('weapons_owned', this.battleStore.weaponsOwned().length);
+    });
 
     // 입력
     const kb = this.input.keyboard!;
@@ -296,7 +426,7 @@ export class StreetScene extends Phaser.Scene {
       const cam = this.cameras.main;
       // 따라다니는 펫을 클릭하면 쓰다듬기 (동물의 숲 감성)
       const wp = cam.getWorldPoint(p.x, p.y);
-      if (this.pet?.contains(wp.x, wp.y) && !this.anyPanelOpen()) { this.pettingActivePet(); return; }
+      if (this.pet?.contains(wp.x, wp.y) && !this.anyPanelOpen()) { void this.pettingActivePet(); return; }
       const { tx, ty } = screenToTile(p.x, p.y, {
         scrollX: cam.scrollX, scrollY: cam.scrollY, zoom: cam.zoom,
         width: cam.width, height: cam.height,
@@ -315,12 +445,52 @@ export class StreetScene extends Phaser.Scene {
     this.scale.on('resize', this.onResize, this);
 
     this.setupUi();
+    // 개발 전용 UI 프리뷰: 이동 없이 주요 패널 회귀 테스트.
+    if (import.meta.env.DEV) {
+      const params = new URLSearchParams(location.search);
+      if (params.has('pet-style-profile-ready')) {
+        const previewStyles = [
+          { petId: 'dog', petName: '몽실', personalityId: 'gentle', accessoryId: 'scarf', backdropId: 'rain_window', poseId: 'look_back' },
+          { petId: 'cat', petName: '보리', personalityId: 'calm', accessoryId: 'beret', backdropId: 'cozy_home', poseId: 'daydream' },
+          { petId: 'rabbit', petName: '토리', personalityId: 'performer', accessoryId: 'ribbon', backdropId: 'little_stage', poseId: 'spotlight' },
+        ] as const;
+        previewStyles.forEach((draft, slot) => {
+          this.petStore.adopt(draft.petId);
+          if (!this.petStyleStudioStore.card(slot)) this.petStyleStudioStore.save(slot, draft);
+        });
+        for (const card of this.petStyleStudioStore.get().slots) {
+          if (!card || this.petStyleStudioStore.progress().featured >= 3) break;
+          if (!this.petStyleStudioStore.get().featuredIds.includes(card.id)) this.petStyleStudioStore.feature(card.id);
+        }
+        this.petStore.setActive('dog');
+        this.handleSetActivePet('dog');
+        this.syncVillageProfileMetrics();
+        this.time.delayedCall(140, () => this.profilePanel?.openSelf());
+      }
+      if (params.has('pet-style-ready')) {
+        for (const id of ['dog', 'cat', 'rabbit']) this.petStore.adopt(id);
+        this.petStore.setActive('dog'); this.petStore.setPersonality('dog', 'playful');
+        this.petStore.mergeServerProgress([{
+          petId: 'dog', affinity: 100, feeds: 8, plays: 8, trainings: 5,
+          tricks: ['hello', 'paw', 'spin', 'dance', 'pose'],
+          lastFedDay: null, lastPlayedDay: null, lastTrainedDay: null,
+        }]);
+        this.handleSetActivePet('dog');
+        this.time.delayedCall(120, () => this.petStyleStudio?.open(this.petStore, 'dog'));
+      }
+      if (params.has('petshop')) this.time.delayedCall(120, () => this.openPetShop());
+      if (params.has('photo')) this.time.delayedCall(120, () => this.openPhotoBooth());
+      if (params.has('garden')) this.time.delayedCall(120, () => this.gardenPanel?.open());
+      if (params.has('kitchen')) this.time.delayedCall(120, () => this.cookingPanel?.open());
+      if (params.has('fishing')) this.time.delayedCall(120, () => this.fishingPanel?.open());
+    }
     if (this.adapter) this.wireAdapter(this.adapter);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.teardown());
   }
 
   update(_time: number, delta: number): void {
+    performanceComfort.recordFrame(delta);
     const chatOpen = this.chat?.isOpen ?? false;
     const t = this.touch?.getInput();
     const input: MoveInput = chatOpen
@@ -391,6 +561,7 @@ export class StreetScene extends Phaser.Scene {
         const interiorDoor = INTERIOR_DOORS.find((d) => d.tx === tile.tx && d.ty === tile.ty);
         if (interiorDoor && !this.entering) {
           this.entering = true;
+          this.incQuest('visit_shop');
           audio.playSe('door');
           this.scene.start('interior', { shop: interiorDoor.shop, peer: this.peer, adapter: this.adapter });
           return;
@@ -398,13 +569,18 @@ export class StreetScene extends Phaser.Scene {
         const companyDoor = COMPANY_DOORS.find((d) => d.tx === tile.tx && d.ty === tile.ty);
         if (companyDoor && !this.entering) {
           this.entering = true;
+          this.incQuest('visit_company');
           audio.playSe('door');
           this.scene.start('company', { companyId: companyDoor.company, peer: this.peer, adapter: this.adapter });
           return;
         }
         const onBoard = tile.tx === BOARD_SPOT.tx && tile.ty === BOARD_SPOT.ty;
         if (onBoard && !this.onBoardTile && this.quests && !this.quests.isOpen) {
-          this.quests.open(this.questStore.progress(), this.questStore.get().claimed);
+          this.incQuest('open_quest');
+          this.quests.open(
+            this.questStore.views(), this.achievementStore.views(), lifeMasteryViews(this.questStore.get()),
+            this.questStore.focusedQuestId(),
+          );
         }
         this.onBoardTile = onBoard;
       }
@@ -447,7 +623,7 @@ export class StreetScene extends Phaser.Scene {
       if (p) {
         const moved = Math.abs(p.x - r.sprite.x) + Math.abs(p.y - r.sprite.y) > 0.4;
         r.sprite.setPosition(p.x, p.y);
-        r.label.setPosition(p.x, p.y - 26);
+        r.label.setPosition(p.x, p.y - 40);
         r.ring.setPosition(p.x, p.y + 12);
         r.aura.follow(p.x, p.y);
         r.pet?.update(p.x, p.y, delta);
@@ -462,14 +638,14 @@ export class StreetScene extends Phaser.Scene {
     }
 
     // 라벨·링·말풍선 위치 추종 및 만료 처리
-    this.playerLabel.setPosition(this.player.x, this.player.y - 26);
-    this.playerTitle.setPosition(this.player.x, this.player.y - 38);
+    this.playerLabel.setPosition(this.player.x, this.player.y - 40);
+    this.playerTitle.setPosition(this.player.x, this.player.y - 52);
     this.playerRing.setPosition(this.player.x, this.player.y + 12);
     this.playerAura?.follow(this.player.x, this.player.y);
     this.positionWeaponSprite();
     this.bubbles = this.bubbles.filter((b) => {
       if (now >= b.until || !b.owner.active) { b.c.destroy(); return false; }
-      b.c.setPosition(b.owner.x, b.owner.y - 38);
+      b.c.setPosition(b.owner.x, b.owner.y - 50);
       return true;
     });
   }
@@ -484,10 +660,12 @@ export class StreetScene extends Phaser.Scene {
     if (!this.sb) {
       // 오프라인: 로컬 전용 — 유형만 반영해 바로 입장(무료)
       this.entering = true;
+      this.incQuest('visit_home');
       audio.playSe('door');
       this.scene.start('room', {
         roomId, isOwner: true, peer: this.peer, adapter: this.adapter,
         houseType: prop?.houseType ?? 'oneroom', floorSeed: prop?.floorSeed ?? roomId, dealType: null,
+        isPublic: false,
       });
       return;
     }
@@ -497,20 +675,25 @@ export class StreetScene extends Phaser.Scene {
     if (!p) return;
     if (p.holderId === this.peer.userId) {
       this.entering = true;
+      this.incQuest('visit_home');
       audio.playSe('door');
       this.scene.start('room', {
         roomId, isOwner: true, peer: this.peer, adapter: this.adapter,
-        houseType: p.houseType, floorSeed: p.floorSeed, dealType: p.dealType,
+        houseType: p.houseType, floorSeed: p.floorSeed, dealType: p.dealType, isPublic: p.isPublic,
       });
     } else if (p.holderId === null) {
       this.showBubble(this.player, '공실이에요 — 복덕방에서 계약할 수 있어요 🏘️');
+    } else if (!p.isPublic) {
+      this.showBubble(this.player, '집주인이 지금은 문을 닫아 두었어요. 명함과 응원은 그대로 볼 수 있어요 🔒');
     } else {
       // 남의 집 구경 모드
       this.entering = true;
+      this.incQuest('visit_home');
       audio.playSe('door');
       this.scene.start('room', {
         roomId, isOwner: false, peer: this.peer, adapter: this.adapter,
-        houseType: p.houseType, floorSeed: p.floorSeed, dealType: p.dealType,
+        houseType: p.houseType, floorSeed: p.floorSeed, dealType: p.dealType, isPublic: p.isPublic,
+        visitOwner: { userId: p.holderId, nickname: '이웃' },
       });
     }
   }
@@ -523,13 +706,15 @@ export class StreetScene extends Phaser.Scene {
     a.onPeerUpdate((peer) => {
       const r = this.remotes.get(peer.userId);
       if (!r) return;
+      r.peer = peer;
       r.charKey = ensureCharacter(this, peer.appearance);
       r.sprite.stop();
       r.sprite.setTexture(r.charKey, r.lastF * FRAMES_PER_DIR);
       r.nick = peer.nickname;
       r.level = peer.level ?? r.level;
-      r.label.setText(`● ${peer.nickname}  Lv.${r.level}`);
-      r.pet.setSpecies(peer.pet ?? null); // 상대 펫 반영
+      r.badge = peer.badge ?? null;
+      r.label.setText(`${r.badge ? `◆ ${r.badge}\n` : ''}● ${peer.nickname}  Lv.${r.level}`);
+      r.pet.setSpecies(peer.pet ?? null, peer.petAccessory ?? 'none', peer.petName ?? null); // 상대 펫 개성 반영
       r.aura.setLevel(r.level);
       this.refreshOnline();
     });
@@ -551,6 +736,22 @@ export class StreetScene extends Phaser.Scene {
       const r = this.remotes.get(id);
       if (r) this.showBubble(r.sprite, EMOTE_EMOJI[m.k]);
     });
+    a.onNeighborCheer((id, message) => {
+      const remote = this.remotes.get(id);
+      if (remote && this.profilePanel?.receiveNeighborCheer(remote.peer, message.k)) {
+        this.showBubble(remote.sprite, '응원 우편을 보냈어요 ✉', 'user');
+        this.chatFeed?.push('', `${remote.nick}님에게서 취향 응원 우편이 도착했어요.`, 'system');
+        audio.playSe('success');
+      }
+    });
+    a.onPetMeet((id, message) => {
+      const remote = this.remotes.get(id);
+      if (remote && this.profilePanel?.receivePetMeet(remote.peer, message.k)) {
+        this.showBubble(remote.sprite, '동행 인사 엽서가 도착했어요 🐾', 'user');
+        this.chatFeed?.push('', `${remote.nick}님의 동행과 새 인사 엽서를 남겼어요.`, 'system');
+        audio.playSe('success');
+      }
+    });
     void a.connect(this.peer);
   }
 
@@ -562,14 +763,20 @@ export class StreetScene extends Phaser.Scene {
     const ring = this.add.ellipse(spawn.x + TILE / 2, spawn.y + TILE / 2 + 12, 26, 10, 0x5aa0e0, 0.5)
       .setStrokeStyle(2, 0x2a5a8a, 0.9).setDepth(9);
     const sprite = this.add.sprite(spawn.x + TILE / 2, spawn.y + TILE / 2, charKey, 0)
-      .setOrigin(0.5, 0.66).setDepth(10);
+      .setOrigin(0.5, CHAR_ORIGIN_Y).setDepth(10).setInteractive({ useHandCursor: true });
     const level = peer.level ?? 1;
+    const badge = peer.badge ?? null;
     const label = this.makeNameLabel(`${peer.nickname}  Lv.${level}`, 'user').setDepth(11);
+    if (badge) label.setText(`◆ ${badge}\n● ${peer.nickname}  Lv.${level}`);
     // 상대 동행 펫 + 레벨 간지 오라
-    const pet = new PetFollower(this, peer.pet ?? null);
+    const pet = new PetFollower(this, peer.pet ?? null, peer.petAccessory ?? 'none', peer.petName ?? null);
     const aura = new PlayerAura(this);
     aura.setLevel(level);
-    this.remotes.set(peer.userId, { sprite, label, ring, track: new RemoteTrack(), charKey, lastF: 0, nick: peer.nickname, pet, aura, level });
+    this.remotes.set(peer.userId, { peer, sprite, label, ring, track: new RemoteTrack(), charKey, lastF: 0, nick: peer.nickname, pet, aura, level, badge });
+    sprite.on('pointerdown', () => {
+      const current = this.remotes.get(peer.userId);
+      if (current && !this.anyPanelOpen()) this.profilePanel?.openPeer(current.peer);
+    });
     this.chatFeed?.push('', `${peer.nickname}님이 입장했어요`, 'system');
     this.refreshOnline();
   }
@@ -610,8 +817,21 @@ export class StreetScene extends Phaser.Scene {
   // --- UI (채팅·이모트·힌트) ---
 
   private setupUi(): void {
+    this.adventureRolePanel = new AdventureRolePanel(this.adventureRoleStore, {
+      onToggle: (open) => this.setGameKeysEnabled(!open),
+      getLevel: () => this.battleStore.level,
+      onChanged: (progress) => {
+        this.writeAdventureRoleMetrics(progress);
+        this.tickBattle(0);
+        this.refreshAchievementState(true);
+        this.refreshQuestTracker();
+      },
+    });
+    this.writeAdventureRoleMetrics(this.adventureRolePanel.progress());
     // 접속자 목록(좌상단) + 전체 채팅 피드 — 멀티일 때만 의미, 오프라인도 나 표시
-    this.onlineList = new OnlineList(this.peer.nickname);
+    this.onlineList = new OnlineList(this.peer.nickname, '', () => {
+      if (!this.anyPanelOpen()) this.profilePanel?.openSelf();
+    });
     this.chatFeed = new ChatFeed();
 
     this.chat = new ChatInput({
@@ -634,6 +854,29 @@ export class StreetScene extends Phaser.Scene {
       onChange: (a) => this.applyAppearance(a, false),
       onSave: (a) => this.applyAppearance(a, true),
       onToggle: (open) => this.setGameKeysEnabled(!open),
+      closet: this.closetStore,
+      lookbook: this.lookbookStore,
+      characterZine: this.characterZineStore,
+      getUnlockedBadgeIds: () => this.achievementStore.get().unlocked,
+      getQuestState: () => this.questStore.get(),
+      onWardrobeAction: (action) => {
+        if (action === 'preset') this.incQuest('fashion_preset');
+        else if (action === 'slot_save') this.incQuest('closet_save');
+        else if (action === 'slot_load') this.incQuest('closet_load');
+        else if (action === 'dye') this.incQuest('fashion_dye');
+        this.syncClosetMetrics();
+        this.syncVillageProfileMetrics();
+      },
+      onLookbookChanged: (progress) => this.handleLookbookChanged(progress),
+      onCharacterZineChanged: () => {
+        this.syncCharacterZineMetrics();
+        this.syncVillageProfileMetrics();
+      },
+      onCharacterEpisodeNavigate: (metric, title) => this.navigateClassicRequest(metric, title),
+      onCharacterEpisodeReplay: (card, episode) => {
+        this.applyAppearance(card.appearance, true);
+        this.navigateClassicRequest(episode.requirements[0]!.key, `${card.name} · ${episode.title}`);
+      },
       onLinkId: this.sb ? (id, code) => linkIdCode(this.sb!, id, code) : undefined,
     });
 
@@ -650,6 +893,8 @@ export class StreetScene extends Phaser.Scene {
     kb.on('keydown-R', () => this.openRanking());
     kb.on('keydown-P', () => this.openResidents());
     kb.on('keydown-T', () => this.openTreasure());
+    kb.on('keydown-K', () => { if (!this.anyPanelOpen()) this.adventureRolePanel?.open(); });
+    kb.on('keydown-N', () => void this.openNeighborhoodMarket());
     // ESC로 열린 패널 닫기 — 패널이 Phaser 키보드를 끄므로 document 레벨에서 처리
     this.escHandler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { if (this.closeTopPanel()) e.stopPropagation(); }
@@ -658,10 +903,32 @@ export class StreetScene extends Phaser.Scene {
 
     this.shop = new ShopPanel({
       buyEnabled: !!this.sb,
+      previewForItem: (itemId) => furnitureWorkshopPreview(this, itemId),
       onToggle: (open) => this.setGameKeysEnabled(!open),
-      onBuy: (itemId) => void this.handleBuy(itemId),
-      onSell: (itemId) => void this.handleSell(itemId),
+      onBuy: (itemId) => this.handleBuy(itemId),
+      onSell: (itemId) => this.handleSell(itemId),
+      onCraft: (recipeId) => this.handleFurnitureCraft(recipeId),
     });
+    this.neighborhoodMarket = new NeighborhoodMarketPanel(this.neighborhoodMarketStore, {
+      userId: this.peer.userId,
+      online: !!this.sb,
+      onToggle: (open) => this.setGameKeysEnabled(!open),
+      getInventory: () => this.shopCounts,
+      getCoins: () => this.coins,
+      loadListings: this.sb ? () => fetchMarketListings(this.sb!, this.peer.userId) : undefined,
+      loadSummary: this.sb ? () => fetchMarketSummary(this.sb!) : undefined,
+      createListing: (itemId, tier) => this.createNeighborhoodMarketListing(itemId, tier),
+      cancelListing: (listingId) => this.cancelNeighborhoodMarketListing(listingId),
+      buyListing: (listingId) => this.buyNeighborhoodMarketListing(listingId),
+      previewForItem: (itemId) => furnitureWorkshopPreview(this, itemId),
+      onChanged: (progress) => {
+        this.writeNeighborhoodMarketMetrics(progress);
+        this.refreshAchievementState(true);
+        this.refreshHearts();
+        this.refreshQuestTracker();
+      },
+    });
+    this.writeNeighborhoodMarketMetrics(this.neighborhoodMarket.progress());
     // 활동 패널 — 여는 동안 캐릭터가 그 행동을 연상시키는 모션을 한다
     this.cafe = new CafePanel({
       onToggle: (open) => {
@@ -690,9 +957,11 @@ export class StreetScene extends Phaser.Scene {
     });
     this.claw = new ClawPanel(this.peer.userId, {
       onToggle: (open) => this.setGameKeysEnabled(!open),
-      onWin: (prize) => {
+      onWin: (prize, ownedCount) => {
         this.showBubble(this.player, `${prize} 획득! 🎉`);
         this.motions?.play(this.player, 'win');
+        this.incQuest('claw_win');
+        this.setQuestMetric('dolls_owned', ownedCount);
         void this.awardActivity('claw');
       },
     });
@@ -704,21 +973,182 @@ export class StreetScene extends Phaser.Scene {
       onSell: (id) => void this.handleSellProperty(id),
       onPayRent: (id) => void this.handlePayRent(id),
     });
-    this.quests = new QuestPanel({
+    this.quests = new QuestPanel(this.peer.userId, {
       online: !!this.sb,
       onToggle: (open) => this.setGameKeysEnabled(!open),
       onClaim: (questId) => void this.handleQuestClaim(questId),
+      onEquipBadge: (badgeId) => this.handleEquipBadge(badgeId),
+      onFocus: (questId) => this.handleQuestFocus(questId),
+      requestBoard: this.requestBoardStore,
+      festivalArchive: this.festivalArchiveStore,
+      getQuestState: () => this.questStore.get(),
+      getAppearance: () => this.peer.appearance,
+      getPet: () => {
+        const speciesId = this.petStore.activeId();
+        return speciesId ? { speciesId, accessory: this.petStore.accessory(speciesId) } : null;
+      },
+      getResidentTrust: () => this.residents?.getTrust() ?? {},
+      onRequestChanged: (progress) => this.handleRequestBoardChanged(progress),
+      onFestivalChanged: () => {
+        this.syncFestivalMetrics();
+        this.refreshAchievementState(true);
+        this.refreshHearts();
+        this.refreshQuestTracker();
+      },
+      onChronicleChanged: (progress) => {
+        this.writeChronicleMetrics(progress);
+        this.refreshAchievementState(true);
+        this.refreshHearts();
+        this.refreshQuestTracker();
+      },
+      onLifeSpecialtyChanged: (progress) => {
+        this.writeLifeSpecialtyMetrics(progress);
+        this.refreshAchievementState(true);
+        this.refreshHearts();
+        this.refreshQuestTracker();
+      },
+      onDailyInvitationsChanged: (progress) => {
+        this.writeDailyInvitationMetrics(progress);
+        this.refreshAchievementState(true);
+        this.refreshHearts();
+        this.refreshQuestTracker();
+      },
+      onSessionPlannerChanged: (progress) => {
+        this.writeSessionPlannerMetrics(progress);
+        this.refreshAchievementState(true);
+        this.refreshHearts();
+        this.refreshQuestTracker();
+        this.showBubble(this.player, progress.archivedPages > 0
+          ? `오늘의 플레이 큐 기록 ${progress.archivedPages}장을 보존했어요.`
+          : `오늘의 플레이 큐 ${progress.slots}/3칸을 정리했어요.`);
+      },
+      onFanMerchChanged: (progress) => {
+        this.writeFanMerchMetrics(progress);
+        this.refreshAchievementState(true);
+        this.refreshHearts();
+        this.refreshQuestTracker();
+        this.showBubble(this.player, `최애 굿즈 ${progress.savedSlots}/12칸 · 디자인 ${progress.discoveries}종`);
+      },
+      onStarterCompassChanged: (progress) => {
+        this.questStore.setMetric('starter_keepsakes', progress.claimed);
+        this.questStore.setMetric('starter_featured_keepsake', progress.featured);
+        this.questStore.setMetric('starter_mentor_chapters', progress.mentorChapters);
+        this.questStore.setMetric('starter_mentor_routes', progress.mentorRoutes);
+        for (const route of STARTER_COMPASS_ROUTES) {
+          this.questStore.setMetric(`starter_mentor_${route.id}_complete`, Number(progress.mentorRouteIds.includes(route.id)));
+        }
+        this.questStore.setMetric('starter_mentor_featured', progress.featuredMentorScenes);
+        this.questStore.setMetric('starter_mentor_replays', progress.mentorReplays);
+        this.refreshAchievementState(true);
+        this.refreshHearts();
+        this.refreshQuestTracker();
+      },
+      onVillageLevelMemoriesChanged: (progress) => {
+        for (const [key, value] of Object.entries(villageLevelMemoryMetrics(progress))) {
+          this.questStore.setMetric(key, value);
+        }
+        this.refreshAchievementState(true);
+        this.refreshHearts();
+        this.refreshQuestTracker();
+        this.showBubble(this.player, '레벨업 장면을 앨범에 보존했어요.');
+      },
+      onRequestNavigate: (metric, title) => this.navigateClassicRequest(metric, title),
+      onOpenVillageReward: (target) => this.openVillageReward(target),
     });
-    this.petShop = new PetShopPanel({
+    this.writeChronicleMetrics(this.quests.chronicleProgress());
+    this.syncLifeSpecialtyMetrics();
+    this.syncDailyInvitationMetrics();
+    this.writeSessionPlannerMetrics(this.quests.sessionPlannerProgress());
+    this.writeFanMerchMetrics(this.quests.fanMerchProgress());
+    this.starterConcierge = new StarterConciergeDock(this.peer.userId, {
+      getQuestState: () => this.questStore.get(),
+      getSelectedRouteId: () => this.quests?.starterCompassSelectedRouteId() ?? null,
+      onSelectRoute: (routeId) => {
+        this.quests?.selectStarterCompassRoute(routeId);
+        this.starterConcierge?.refresh();
+      },
+      onNavigate: (metric, title) => this.navigateClassicRequest(metric, title),
+      onOpenJournal: () => this.openQuests(),
+    });
+    this.photoBooth = new PhotoBoothPanel(this.photoAlbum, {
+      onToggle: (open) => this.setGameKeysEnabled(!open),
+      onSaved: (record) => this.handlePhotoSaved(record),
+      onDeleted: () => this.syncPhotoMetrics(),
+      onCardsChanged: () => {
+        this.syncPhotoMetrics();
+        this.refreshAchievementState(true);
+        this.refreshHearts();
+        this.refreshQuestTracker();
+      },
+    });
+    this.gardenPanel = new GardenPanel(this.gardenStore, {
+      onToggle: (open) => this.setGameKeysEnabled(!open),
+      onChanged: () => {
+        this.syncGardenMetrics();
+        this.refreshAchievementState(true);
+        this.refreshHearts();
+        this.refreshQuestTracker();
+      },
+      onOpenKitchen: () => this.cookingPanel?.open(),
+    });
+    this.cookingPanel = new CookingPanel(this.cookingStore, this.gardenStore, {
+      onToggle: (open) => this.setGameKeysEnabled(!open),
+      onChanged: () => {
+        this.syncCookingMetrics();
+        this.refreshAchievementState(true);
+        this.refreshHearts();
+        this.refreshQuestTracker();
+      },
+      onOpenGarden: () => this.gardenPanel?.open(),
+    });
+    this.fishingPanel = new FishingPanel(this.fishingStore, {
+      onToggle: (open) => this.setGameKeysEnabled(!open),
+      onChanged: () => {
+        this.syncFishingMetrics();
+        this.refreshAchievementState(true);
+        this.refreshHearts();
+        this.refreshQuestTracker();
+      },
+    });
+    this.petStyleStudio = new PetStyleStudioPanel(this.petStyleStudioStore, {
+      onToggle: (open) => this.setGameKeysEnabled(!open),
+      onApply: (draft) => this.applyPetStyle(draft),
+      onChanged: (progress) => {
+        this.writePetStyleMetrics(progress);
+        this.syncVillageProfileMetrics();
+        this.refreshAchievementState(true);
+        this.refreshHearts();
+        this.refreshQuestTracker();
+      },
+    });
+    this.writePetStyleMetrics(this.petStyleStudioStore.progress());
+    this.petShop = new PetShopPanel(this.peer.userId, {
       onToggle: (open) => this.setGameKeysEnabled(!open),
       onAdopt: (petId) => void this.handleAdopt(petId),
       onSetActive: (petId) => this.handleSetActivePet(petId),
-      onFeed: (petId) => this.handleFeed(petId),
+      onFeed: (petId) => void this.handleFeed(petId),
+      onPlay: (petId) => void this.handlePlayPet(petId),
+      onTrain: (petId) => void this.handleTrainPet(petId),
+      onTrick: (petId, trickId) => this.handlePetTrick(petId, trickId),
+      onRename: (petId, nickname) => this.handlePetRename(petId, nickname),
+      onPersonality: (petId, personality) => this.handlePetPersonality(petId, personality),
+      onAccessory: (petId, accessory) => this.handlePetAccessory(petId, accessory),
+      onOpenStyleStudio: (petId) => {
+        this.petShop?.close();
+        this.petStyleStudio?.open(this.petStore, petId);
+      },
+      outings: this.petOutingStore,
+      homeMemories: (petId) => this.petHomeMemoryStore.views(petId),
+      onOutingChanged: (progress) => this.handlePetOutingChanged(progress),
+      onSignalsChanged: (progress) => this.handlePetSignalsChanged(progress),
+      onPerformanceChanged: (progress) => this.handlePetPerformanceChanged(progress),
     });
+    this.writePetSignalMetrics(this.petShop.signalProgress());
+    this.writePetPerformanceMetrics(this.petShop.performanceProgress());
     this.weaponShop = new WeaponShopPanel({
       onToggle: (open) => this.setGameKeysEnabled(!open),
       onBuy: (weaponId) => void this.handleBuyWeapon(weaponId),
-      onEquip: (weaponId) => { this.battleStore.equip(weaponId); this.refreshWeaponSprite(); },
+      onEquip: (weaponId) => this.handleEquipWeapon(weaponId),
     });
 
     // 활동 스팟 표시 — 통통 튀는 아이콘으로 "여기서 뭔가 된다"를 알린다
@@ -755,26 +1185,107 @@ export class StreetScene extends Phaser.Scene {
     this.idleBreath = new IdleBreath(this, this.player);
     this.residents = new ResidentNpcs(this, this.peer.userId, {
       onBubble: (s, t) => this.showBubble(s, t),
-      onGreet: (s) => this.motions!.play(s, 'greet'),
+      onGreet: (s) => {
+        this.motions!.play(s, 'greet');
+        this.questStore.bump('resident_greet');
+        this.syncResidentQuestMetrics();
+        this.refreshAchievementState(true);
+        this.refreshQuestTracker();
+      },
     });
 
     // 게임형 HUD (하트·코인·시계·하단 아이콘 바) + 패널들
     this.bag = new BagPanel({ online: !!this.sb, onToggle: (o) => this.setGameKeysEnabled(!o) });
-    this.dex = new CollectionPanel(this.peer.userId, { onToggle: (o) => this.setGameKeysEnabled(!o) });
+    this.dex = new CollectionPanel(this.peer.userId, {
+      onToggle: (open) => this.setGameKeysEnabled(!open),
+      getQuestState: () => this.questStore.get(),
+      getUnlockedBadgeIds: () => this.achievementStore.get().unlocked,
+      getOwnedPetIds: () => this.petStore.owned(),
+      onOpenTasteSet: (target, setId) => this.openTasteSetTarget(target, setId),
+      onTasteSetsChanged: (progress) => { this.writeTasteSetMetrics(progress); this.refreshAchievementState(true); },
+      onShelfChanged: (progress) => {
+        this.questStore.setMetric('collection_shelf_targets', progress.targets);
+        this.questStore.setMetric('collection_shelf_kinds', progress.targetKinds);
+        this.questStore.setMetric('collection_shelf_completed', progress.completed);
+        this.refreshAchievementState(true); this.refreshHearts(); this.refreshQuestTracker();
+      },
+    });
     this.mapPanel = new MapPanel({
       onToggle: (o) => this.setGameKeysEnabled(!o),
       getPlayerTile: () => worldToTile(this.player.x, this.player.y),
     });
-    this.residentsPanel = new ResidentsPanel(this.bakePortraits(), {
+    this.residentsPanel = new ResidentsPanel(this.peer.userId, this.bakePortraits(), {
       onToggle: (o) => this.setGameKeysEnabled(!o),
+      getQuestState: () => this.questStore.get(),
+      getPlayerAppearance: () => this.peer.appearance,
+      getActivePet: () => {
+        const id = this.petStore.activeId();
+        return id ? { speciesId: id, name: this.petStore.displayName(id), accessory: this.petStore.accessory(id) } : null;
+      },
+      onNavigate: (metric, title) => this.navigateClassicRequest(metric, title),
+      onRendezvousChanged: (progress) => { this.writeResidentRendezvousMetrics(progress); this.refreshAchievementState(true); },
+      onLettersChanged: (progress) => { this.writeResidentLetterMetrics(progress); this.refreshAchievementState(true); },
+      onFanbookChanged: (progress) => { this.writeResidentFanbookMetrics(progress); this.refreshAchievementState(true); this.refreshQuestTracker(); },
+      onRoomCareChanged: (progress) => { this.writeResidentRoomCareMetrics(progress); this.refreshAchievementState(true); this.refreshQuestTracker(); },
     });
+    this.writeResidentRoomCareMetrics(this.residentsPanel.roomCareProgress());
+    this.profilePanel = new VillageProfilePanel(this.peer.userId, {
+      onToggle: (open) => this.setGameKeysEnabled(!open),
+      online: !!this.adapter,
+      getSelfContext: () => this.villageProfileContext(),
+      onOpenAtelier: () => this.customize?.open(this.peer.appearance, 'closet'),
+      onOpenCharacterZine: () => this.customize?.open(this.peer.appearance, 'zine'),
+      onOpenSpecialties: () => this.openQuests('growth'),
+      onOpenPhotoBooth: () => this.openPhotoBooth(),
+      onOpenPetStyleStudio: () => {
+        const id = this.petStore.activeId() ?? this.petStore.owned()[0] ?? null;
+        if (id) this.petStyleStudio?.open(this.petStore, id);
+        else this.petShop?.open(this.petStore, this.coins, !!this.sb);
+      },
+      onViewPetStyleCards: () => this.incQuest('pet_style_profile_views'),
+      onSendNeighborCheer: (peer, kind) => this.sendNeighborCheer(peer, kind),
+      onSendPetMeet: (peer, kind) => this.sendPetMeet(peer, kind),
+      onVisitNeighborHome: (peer) => this.visitNeighborHome(peer),
+      onNeighborHomeTourChanged: (progress) => {
+        this.writeNeighborHomeTourMetrics(progress);
+        this.refreshAchievementState(true);
+        this.refreshQuestTracker();
+      },
+      onNeighborCheerChanged: (progress) => {
+        this.writeNeighborCheerMetrics(progress);
+        this.refreshAchievementState(true);
+        this.refreshQuestTracker();
+      },
+      onPetMeetChanged: (progress) => {
+        this.writePetMeetMetrics(progress);
+        this.refreshAchievementState(true);
+        this.refreshQuestTracker();
+      },
+      onChanged: (profile) => {
+        this.peer.profile = profile;
+        this.questStore.setMetric('village_profile_customized', 1);
+        this.questStore.setMetric('village_profile_badges', profile.showcasedBadges.length);
+        void this.adapter?.updateSelf(this.peer);
+        this.refreshAchievementState(true);
+      },
+    });
+    this.peer.profile = this.profilePanel.publicSnapshot();
+    this.syncNeighborCheerMetrics();
+    this.syncNeighborHomeTourMetrics();
+    this.syncPetMeetMetrics();
     this.rankingPanel = new RankingPanel({
       online: !!this.sb,
       myId: this.peer.userId,
       onToggle: (o) => this.setGameKeysEnabled(!o),
       fetchRows: () => fetchRanking(this.sb!),
     });
-    this.treasure = new TreasurePanel(this.treasureStore, { onToggle: (o) => this.setGameKeysEnabled(!o) });
+    this.treasure = new TreasurePanel(this.treasureStore, {
+      onToggle: (o) => this.setGameKeysEnabled(!o),
+      onCraft: () => {
+        this.incQuest('treasure_crafted');
+        this.setQuestMetric('treasures_owned', this.treasureStore.progress().owned);
+      },
+    });
     // HUD는 세션 싱글턴 (main 생성) — 거리 진입 시 액션 바만 장착
     this.hud = this.registry.get('hud') as GameHud;
     this.hud.mountActions({
@@ -782,14 +1293,21 @@ export class StreetScene extends Phaser.Scene {
       onDex: () => void this.openDex(),
       onMap: () => this.openMap(),
       onQuest: () => this.openQuests(),
+      onJourney: () => this.openQuests('journey'),
       onTreasure: () => this.openTreasure(),
+      onMarket: () => void this.openNeighborhoodMarket(),
+      onGarden: () => { if (!this.anyPanelOpen()) this.gardenPanel?.open(); },
+      onCooking: () => { if (!this.anyPanelOpen()) this.cookingPanel?.open(); },
+      onFishing: () => { if (!this.anyPanelOpen()) this.fishingPanel?.open(); },
       onResidents: () => this.openResidents(),
       onRanking: () => this.openRanking(),
       onCustomize: () => { if (!this.chat!.isOpen && !this.customize!.isOpen) this.customize!.open(this.peer.appearance); },
       onChat: () => { if (!this.chat!.isOpen) this.chat!.open(); },
       onEmote: () => { if (!this.chat!.isOpen) this.emotes!.toggle(); },
     });
+    this.syncQuestMetrics();
     this.refreshHearts();
+    this.refreshQuestTracker();
     void this.initCoins();
 
     // 모바일 터치 컨트롤 — D-패드만 (액션은 HUD 바로 통합)
@@ -798,36 +1316,48 @@ export class StreetScene extends Phaser.Scene {
     this.hint = document.createElement('div');
     this.hint.className = 'hv-hint';
     this.hint.textContent = isTouchDevice()
-      ? '패드로 이동 · 문을 밟으면 입장'
-      : 'WASD 이동 · Enter 채팅 · 문을 밟으면 입장';
+      ? '빈 곳을 누른 채 끌어 이동 · 문을 밟으면 입장 · 퀘스트에서 추천 길 확인'
+      : 'WASD 이동 · Q 모험 일지 · Enter 채팅 · 문을 밟으면 입장';
     document.body.appendChild(this.hint);
   }
 
   // --- HUD 패널 열기 (동시에 하나만) ---
 
   private anyPanelOpen(): boolean {
-    return (this.chat?.isOpen ?? false) || (this.customize?.isOpen ?? false)
+    return (this.chat?.isOpen ?? false) || (this.adventureRolePanel?.isOpen ?? false) || (this.customize?.isOpen ?? false)
       || (this.bag?.isOpen ?? false) || (this.dex?.isOpen ?? false)
       || (this.mapPanel?.isOpen ?? false) || (this.quests?.isOpen ?? false)
       || (this.shop?.isOpen ?? false) || (this.residentsPanel?.isOpen ?? false)
+      || (this.neighborhoodMarket?.isOpen ?? false)
+      || (this.profilePanel?.isOpen ?? false)
       || (this.rankingPanel?.isOpen ?? false) || (this.claw?.isOpen ?? false)
       || (this.realty?.isOpen ?? false) || (this.treasure?.isOpen ?? false)
-      || (this.petShop?.isOpen ?? false) || (this.weaponShop?.isOpen ?? false);
+      || (this.petShop?.isOpen ?? false) || (this.petStyleStudio?.isOpen ?? false) || (this.weaponShop?.isOpen ?? false)
+      || (this.photoBooth?.isOpen ?? false) || (this.gardenPanel?.isOpen ?? false)
+      || (this.cookingPanel?.isOpen ?? false) || (this.fishingPanel?.isOpen ?? false);
   }
 
   /** ESC — 열린 패널 중 하나를 닫는다. 닫았으면 true */
   private closeTopPanel(): boolean {
     const closers: Array<{ open: boolean; close: () => void }> = [
+      { open: this.adventureRolePanel?.isOpen ?? false, close: () => this.adventureRolePanel!.close() },
       { open: this.bag?.isOpen ?? false, close: () => this.bag!.close() },
       { open: this.dex?.isOpen ?? false, close: () => this.dex!.close() },
       { open: this.mapPanel?.isOpen ?? false, close: () => this.mapPanel!.close() },
       { open: this.residentsPanel?.isOpen ?? false, close: () => this.residentsPanel!.close() },
+      { open: this.profilePanel?.isOpen ?? false, close: () => this.profilePanel!.close() },
       { open: this.rankingPanel?.isOpen ?? false, close: () => this.rankingPanel!.close() },
       { open: this.quests?.isOpen ?? false, close: () => this.quests!.close() },
+      { open: this.photoBooth?.isOpen ?? false, close: () => this.photoBooth!.close() },
+      { open: this.gardenPanel?.isOpen ?? false, close: () => this.gardenPanel!.close() },
+      { open: this.cookingPanel?.isOpen ?? false, close: () => this.cookingPanel!.close() },
+      { open: this.fishingPanel?.isOpen ?? false, close: () => this.fishingPanel!.close() },
       { open: this.shop?.isOpen ?? false, close: () => this.shop!.close() },
+      { open: this.neighborhoodMarket?.isOpen ?? false, close: () => this.neighborhoodMarket!.close() },
       { open: this.claw?.isOpen ?? false, close: () => this.claw!.close() },
       { open: this.realty?.isOpen ?? false, close: () => this.realty!.close() },
       { open: this.petShop?.isOpen ?? false, close: () => this.petShop!.close() },
+      { open: this.petStyleStudio?.isOpen ?? false, close: () => this.petStyleStudio!.close() },
       { open: this.weaponShop?.isOpen ?? false, close: () => this.weaponShop!.close() },
       { open: this.treasure?.isOpen ?? false, close: () => this.treasure!.close() },
       { open: this.omok?.isOpen ?? false, close: () => this.omok!.close() },
@@ -840,18 +1370,52 @@ export class StreetScene extends Phaser.Scene {
     return false;
   }
 
-  /** 네컷 포토부스 — 갬성샷 + 소액 보상 */
+  /** 네컷 포토부스 — 현재 코디·동행 펫을 실제 픽셀 필름으로 보존한다. */
   private takePhoto(): void {
-    const lines = ['📸 인생네컷 찰칵!', '📸 갬성샷 득템~', '📸 최고의 한 컷 ✨'];
-    this.showBubble(this.player, lines[Math.floor(Date.now() / 1000) % lines.length]!);
+    this.openPhotoBooth();
+  }
+
+  private openPhotoBooth(): void {
+    if (!this.photoBooth || this.anyPanelOpen()) return;
+    const petId = this.petStore.activeId();
+    this.photoBooth.open({
+      appearance: this.peer.appearance,
+      nickname: this.peer.nickname,
+      pet: petId ? {
+        speciesId: petId, accessory: this.petStore.accessory(petId), name: this.petStore.nickname(petId),
+      } : null,
+    });
+  }
+
+  private handlePhotoSaved(record: PhotoRecord): void {
+    this.questStore.bump('photo_taken');
+    if (record.pet) this.questStore.bump('photo_with_pet');
+    this.syncPhotoMetrics();
+    this.refreshAchievementState(true);
+    this.refreshHearts();
+    this.refreshQuestTracker();
+    this.showBubble(this.player, record.pet ? '동행 친구와 네 컷을 앨범에 남겼어요.' : '오늘의 네 컷을 앨범에 남겼어요.');
     this.motions?.play(this.player, 'greet');
     audio.playSe('success');
     void this.awardActivity('photo');
   }
 
+  private syncPhotoMetrics(): void {
+    const progress = this.photoAlbum.progress();
+    this.questStore.setMetric('photo_album', progress.count);
+    this.questStore.setMetric('photo_frames', progress.framesUsed);
+    this.questStore.setMetric('photo_backdrops', progress.backdropsUsed);
+    this.questStore.setMetric('photo_cards_decorated', progress.decoratedCards);
+    this.questStore.setMetric('photo_card_stickers', progress.stickersUsed);
+    this.questStore.setMetric('photo_card_foils', progress.foilsUsed);
+    this.questStore.setMetric('photo_cards_featured', progress.featuredCards);
+    this.questStore.setMetric('photo_card_edits', progress.cardEdits);
+  }
+
   /** 붕어빵 포차 — 따끈한 간식 + 소액 보상 */
   private eatBungeo(): void {
     this.showBubble(this.player, '🐟 붕어빵 호호… 따끈해!');
+    this.incQuest('bungeo_eat');
     void this.awardActivity('bungeo');
   }
 
@@ -888,6 +1452,7 @@ export class StreetScene extends Phaser.Scene {
     if (spot && key !== this.lastSparkleTile) {
       const gained = this.treasureStore.collect(spot);
       if (gained > 0) {
+        this.incQuest('sparkle_collect');
         this.showBubble(this.player, `✨ 반짝이는 걸 발견! 조각 +${gained} 💠`);
         this.motions?.play(this.player, 'win');
         audio.playSe('success');
@@ -925,20 +1490,66 @@ export class StreetScene extends Phaser.Scene {
     this.petShop!.open(this.petStore, this.coins, !!this.sb);
   }
 
-  /** 입양 — 온라인이면 서버 코인 차감(가격 SSOT=서버). 미적용/오프라인/희귀는 무료 코스메틱 폴백 */
+  /** 서버 성장 스냅샷을 로컬 표현 캐시에 반영한다. 0013 미적용 서버는 보유 목록만 병합한다. */
+  private async syncServerPetProgress(): Promise<void> {
+    if (!this.sb) return;
+    const rows = await fetchPetProgress(this.sb, this.peer.userId);
+    if (rows) this.petStore.mergeServerProgress(rows);
+    else this.petStore.merge(await fetchOwnedPets(this.sb, this.peer.userId));
+    const activeId = this.petStore.activeId();
+    this.pet?.setSpecies(activeId, activeId ? this.petStore.accessory(activeId) : 'none', activeId ? this.petStore.nickname(activeId) : null);
+    this.refreshPetStage();
+    this.setQuestMetric('pets_owned', this.petStore.owned().length);
+    this.petShop?.refresh(this.coins);
+  }
+
+  /** DB가 직접 증명한 집·펫 진행과 배지를 로컬 일지에 안전하게 합친다. */
+  private async syncVerifiedProgress(announce: boolean): Promise<void> {
+    if (!this.sb) return;
+    const verified = await refreshVerifiedProgress(this.sb);
+    if (!verified) return;
+    for (const [key, value] of Object.entries(verified.metrics)) {
+      if (typeof value === 'number') this.questStore.setMetric(key, value);
+    }
+    const newly = this.achievementStore.mergeVerified(verified.badges);
+    this.refreshAchievementState(false);
+    this.refreshHearts();
+    this.refreshQuestTracker();
+    if (announce && newly.length) {
+      const badge = BADGE_BY_ID.get(newly[newly.length - 1]!);
+      if (badge) {
+        this.showBubble(this.player, `◆ 서버 검증 배지 「${badge.name}」 획득!`);
+        this.motions?.play(this.player, 'win');
+        audio.playSe('success');
+      }
+    }
+  }
+
+  /** 입양 — 기본 펫 가격과 히든 펫 조건 모두 온라인에서는 서버가 최종 검증한다. */
   private async handleAdopt(petId: string): Promise<void> {
     const s = petById(petId);
     if (!s || this.petStore.isOwned(petId)) return;
-    // 희귀(히든) 펫은 발견 보상 — 서버 청구 없이 로컬 무료 입양
-    if (!s.rare && this.sb) {
+    if (s.rare && this.sb) {
+      const rare = await claimRarePet(this.sb, petId);
+      if (rare === 'locked') {
+        this.showBubble(this.player, '서버 기록에서 아직 발견 조건이 확인되지 않았어요. 조금 더 함께해 봐요!');
+        return;
+      }
+      if (rare === 'ok') await this.syncServerPetProgress();
+      else this.petStore.adopt(petId); // 0013 미적용 전환기
+    } else if (!s.rare && this.sb) {
       const res = await adoptPet(this.sb, petId);
       if (res.ok) {
         this.setCoins(res.balance);
         this.petStore.adopt(petId);
+        await this.syncServerPetProgress();
         this.motions?.play(this.player, 'coin');
       } else if (res.reason === 'no-coins') {
         this.showBubble(this.player, '코인이 부족해요 😢');
         this.petShop?.refresh(this.coins);
+        return;
+      } else if (res.reason === 'error') {
+        this.showBubble(this.player, '입양 기록을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.');
         return;
       } else {
         this.petStore.adopt(petId); // 서버 미적용(no-rpc)/에러 → 무료 폴백
@@ -948,15 +1559,18 @@ export class StreetScene extends Phaser.Scene {
     }
     // 처음 들인 펫은 바로 데리고 다닌다
     if (!this.petStore.activeId()) this.handleSetActivePet(petId);
+    this.incQuest('pet_adopt');
+    this.setQuestMetric('pets_owned', this.petStore.owned().length);
     this.showBubble(this.player, `${s.emoji} ${s.name} 입양 완료! 🎉`);
     audio.playSe('success');
     this.announceUnlocks();
+    void this.syncVerifiedProgress(true);
     this.petShop?.refresh(this.coins);
   }
 
   private handleSetActivePet(petId: string | null): void {
     this.petStore.setActive(petId);
-    this.pet?.setSpecies(petId);
+    this.pet?.setSpecies(petId, petId ? this.petStore.accessory(petId) : 'none', petId ? this.petStore.nickname(petId) : null);
     this.refreshPetStage();
     this.syncSelfMeta(); // 상대에게도 내 펫 반영
   }
@@ -964,36 +1578,207 @@ export class StreetScene extends Phaser.Scene {
   /** 내 펫·레벨 상태를 presence로 전파 (상대 화면에 반영) */
   private syncSelfMeta(): void {
     this.peer.pet = this.petStore.activeId();
+    const activeId = this.petStore.activeId();
+    this.peer.petAccessory = activeId ? this.petStore.accessory(activeId) : 'none';
+    this.peer.petName = activeId ? this.petStore.nickname(activeId) : null;
     this.peer.level = this.battleStore.level;
+    this.peer.badge = this.achievementStore.equipped()?.name ?? null;
     void this.adapter?.updateSelf(this.peer);
   }
 
-  /** 먹이 주기 — 하루 1회, 친밀도 상승 + 히든 해금 체크 */
-  private handleFeed(petId: string): void {
+  private petCareMessage(result: Exclude<PetCareResult, { ok: true }>, action: 'feed' | 'play' | 'pet' | 'train'): string {
+    if (result.reason === 'daily' && action === 'feed') return '오늘은 이미 배불러요 🍚';
+    if (result.reason === 'daily' && action === 'play') return '오늘은 신나게 놀았어요! 내일 또 만나요 🧶';
+    if (result.reason === 'daily' && action === 'train') return '오늘 연습은 완료했어요. 푹 쉬고 내일 또 해요!';
+    if (result.reason === 'daily-cap') return '오늘 쓰담쓰담은 충분해요. 내일도 반갑게 만나요 💛';
+    if (result.reason === 'affinity') return `다음 트릭은 친밀도 ${result.required ?? '?'}부터 배울 수 있어요.`;
+    if (result.reason === 'done') return '모든 트릭을 마스터한 천재 펫이에요! ✨';
+    if (result.reason === 'not-owned') return '먼저 이 친구를 입양해 주세요.';
+    return '서버 기록을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.';
+  }
+
+  /** 먹이 주기 — 온라인에서는 서버가 KST 하루 1회를 원자 검증한다. */
+  private async handleFeed(petId: string): Promise<void> {
     const s = petById(petId);
-    const aff = this.petStore.feed(petId);
+    const server = this.sb ? await carePet(this.sb, petId, 'feed') : null;
+    if (server && !server.ok && server.reason !== 'no-rpc') {
+      this.showBubble(this.player, this.petCareMessage(server, 'feed')); return;
+    }
+    const aff = server?.ok ? server.affinity : this.petStore.feed(petId);
     if (aff < 0) { this.showBubble(this.player, '오늘은 이미 배불러요 🍚'); return; }
+    if (server?.ok) await this.syncServerPetProgress();
     if (s) this.showBubble(this.player, `${s.emoji} 냠냠! 친밀도 ${aff} 💛`);
+    this.incQuest('pet_feed');
+    this.setQuestMetric('max_pet_affinity', aff);
     audio.playSe('success');
     this.refreshPetStage();
     this.announceUnlocks();
+    void this.syncVerifiedProgress(true);
     this.petShop?.refresh(this.coins);
   }
 
+  /** 같이 놀기 — 놓친 날의 감점 없이 하루 한 번 추억과 친밀도를 쌓는다. */
+  private async handlePlayPet(petId: string): Promise<void> {
+    const s = petById(petId);
+    const server = this.sb ? await carePet(this.sb, petId, 'play') : null;
+    if (server && !server.ok && server.reason !== 'no-rpc') {
+      this.showBubble(this.player, this.petCareMessage(server, 'play')); return;
+    }
+    const aff = server?.ok ? server.affinity : this.petStore.play(petId);
+    if (aff < 0) { this.showBubble(this.player, '오늘은 신나게 놀았어요! 내일 또 만나요 🧶'); return; }
+    if (server?.ok) await this.syncServerPetProgress();
+    if (this.petStore.activeId() !== petId) this.handleSetActivePet(petId);
+    this.pet?.trickFx('play');
+    this.showBubble(this.player, `${s?.emoji ?? '🐾'} 같이 놀기 성공! 친밀도 ${aff} 💛`);
+    this.incQuest('pet_play');
+    this.setQuestMetric('max_pet_affinity', aff);
+    this.setQuestMetric('pet_memories', this.petStore.memories(petId).filter((m) => m.unlocked).length);
+    audio.playSe('success');
+    this.refreshPetStage();
+    this.announceUnlocks();
+    void this.syncVerifiedProgress(true);
+    this.petShop?.refresh(this.coins);
+  }
+
+  /** 하루 한 번 다음 트릭을 배운다. 친밀도가 부족하면 정확한 다음 목표를 알려 준다. */
+  private async handleTrainPet(petId: string): Promise<void> {
+    const server = this.sb ? await carePet(this.sb, petId, 'train') : null;
+    if (server && !server.ok && server.reason !== 'no-rpc') {
+      this.showBubble(this.player, this.petCareMessage(server, 'train')); return;
+    }
+    const result = server?.ok
+      ? { ok: true as const, trick: this.petStore.nextTrick(petId), affinity: server.affinity, serverTrick: server.trick }
+      : this.petStore.train(petId);
+    if (!result.ok) {
+      const next = this.petStore.nextTrick(petId);
+      const message = result.reason === 'daily' ? '오늘 연습은 완료했어요. 푹 쉬고 내일 또 해요!'
+        : result.reason === 'affinity' && next ? `${next.name}은 친밀도 ${next.minAffinity}부터 배울 수 있어요.`
+          : result.reason === 'done' ? '모든 트릭을 마스터한 천재 펫이에요! ✨' : '먼저 가족이 되어 주세요.';
+      this.showBubble(this.player, message);
+      return;
+    }
+    if (server?.ok) await this.syncServerPetProgress();
+    const learned = server?.ok
+      ? this.petStore.learnedTricks(petId).find((trick) => trick.id === server.trick)
+      : result.trick;
+    if (!learned) return;
+    if (this.petStore.activeId() !== petId) this.handleSetActivePet(petId);
+    this.pet?.trickFx(learned.id);
+    this.showBubble(this.player, `${learned.emoji} 「${learned.name}」 습득! ${learned.praise}`);
+    this.incQuest('pet_train');
+    this.setQuestMetric('pet_tricks', this.petStore.learnedTricks(petId).length);
+    this.setQuestMetric('pet_memories', this.petStore.memories(petId).filter((m) => m.unlocked).length);
+    this.setQuestMetric('max_pet_affinity', result.affinity);
+    this.motions?.play(this.player, 'win');
+    audio.playSe('success');
+    this.refreshPetStage();
+    void this.syncVerifiedProgress(true);
+    this.petShop?.refresh(this.coins);
+  }
+
+  /** 배운 트릭은 펫 카드에서 언제든 다시 보여 달라고 할 수 있다. */
+  private handlePetTrick(petId: string, trickId: string): void {
+    const trick = this.petStore.learnedTricks(petId).find((item) => item.id === trickId);
+    if (!trick) return;
+    if (this.petStore.activeId() !== petId) this.handleSetActivePet(petId);
+    this.pet?.trickFx(trick.id);
+    this.showBubble(this.player, `${trick.emoji} ${trick.praise}`);
+    this.incQuest('pet_trick_perform');
+    audio.playSe('pop');
+  }
+
+  private handlePetRename(petId: string, nickname: string): void {
+    if (!this.petStore.setNickname(petId, nickname)) { this.petShop?.refresh(this.coins); return; }
+    this.afterPetProfileChange(petId, 'pet_profile_edit');
+    this.showBubble(this.player, `${this.petStore.displayName(petId)}의 새 이름을 기록했어요.`);
+  }
+
+  private handlePetPersonality(petId: string, personality: PetPersonalityId): void {
+    if (!this.petStore.setPersonality(petId, personality)) return;
+    this.afterPetProfileChange(petId, 'pet_profile_edit');
+    this.showBubble(this.player, `${this.petStore.displayName(petId)}의 성격 기록을 바꿨어요.`);
+  }
+
+  private handlePetAccessory(petId: string, accessory: PetAccessoryId): void {
+    if (!this.petStore.equipAccessory(petId, accessory)) return;
+    this.afterPetProfileChange(petId, accessory === 'none' ? 'pet_profile_edit' : 'pet_accessory_equip');
+    this.showBubble(this.player, `${this.petStore.displayName(petId)}에게 새 장식이 잘 어울려요.`);
+  }
+
+  private applyPetStyle(draft: PetStyleDraft): boolean {
+    if (!this.petStore.isOwned(draft.petId)) return false;
+    const accessory = this.petStore.accessoryViews(draft.petId)
+      .find((item) => item.id === draft.accessoryId);
+    if (!accessory?.unlocked) return false;
+    const personalityChanged = this.petStore.personality(draft.petId) !== draft.personalityId;
+    const accessoryChanged = this.petStore.accessory(draft.petId) !== draft.accessoryId;
+    if (personalityChanged && !this.petStore.setPersonality(draft.petId, draft.personalityId)) return false;
+    if (accessoryChanged && !this.petStore.equipAccessory(draft.petId, draft.accessoryId)) return false;
+    this.petStore.setActive(draft.petId);
+    this.pet?.setSpecies(draft.petId, draft.accessoryId, this.petStore.nickname(draft.petId));
+    this.refreshPetStage();
+    this.syncSelfMeta();
+    this.incQuest('pet_profile_edit');
+    if (accessoryChanged && draft.accessoryId !== 'none') this.incQuest('pet_accessory_equip');
+    this.setQuestMetric('pet_profiles_customized', this.petStore.customizedCount());
+    this.setQuestMetric('pet_accessories', this.petStore.unlockedAccessoryCount());
+    this.setQuestMetric('pet_personalities', this.petStore.personalityVariety());
+    this.petShop?.refresh(this.coins);
+    this.petStyleStudio?.refresh();
+    this.showBubble(this.player, `${draft.petName}의 코디를 동행에게 적용했어요${personalityChanged ? ' · 성격 기록도 함께 바뀌었어요.' : '.'}`);
+    return true;
+  }
+
+  private afterPetProfileChange(petId: string, registryKey: 'pet_profile_edit' | 'pet_accessory_equip'): void {
+    this.incQuest('pet_profile_edit');
+    if (registryKey === 'pet_accessory_equip') this.incQuest('pet_accessory_equip');
+    this.setQuestMetric('pet_profiles_customized', this.petStore.customizedCount());
+    this.setQuestMetric('pet_accessories', this.petStore.unlockedAccessoryCount());
+    this.setQuestMetric('pet_personalities', this.petStore.personalityVariety());
+    if (this.petStore.activeId() === petId) {
+      this.pet?.setSpecies(petId, this.petStore.accessory(petId), this.petStore.nickname(petId));
+      this.syncSelfMeta();
+    }
+    this.petShop?.refresh(this.coins);
+  }
+
+  private writePetStyleMetrics(progress: PetStyleStudioProgress): void {
+    this.setQuestMetric('pet_style_cards', progress.savedCards);
+    this.setQuestMetric('pet_style_captures', progress.totalCaptures);
+    this.setQuestMetric('pet_style_discoveries', progress.discoveries);
+    this.setQuestMetric('pet_style_pets', progress.pets);
+    this.setQuestMetric('pet_style_personalities', progress.personalities);
+    this.setQuestMetric('pet_style_accessories', progress.accessories);
+    this.setQuestMetric('pet_style_backdrops', progress.backdrops);
+    this.setQuestMetric('pet_style_poses', progress.poses);
+    this.setQuestMetric('pet_style_featured', progress.featured);
+    this.setQuestMetric('pet_style_applies', progress.applies);
+  }
+
   /** 동행 펫 쓰다듬기 — 하트 연출 + 소량 친밀도 (3초 쿨다운) */
-  private pettingActivePet(): void {
+  private async pettingActivePet(): Promise<void> {
     const id = this.petStore.activeId();
     if (!id) return;
     const now = this.time.now;
     if (now - this.lastPetAt < 3000) { this.pet?.petFx(); return; }
     this.lastPetAt = now;
-    const aff = this.petStore.pet(id);
+    const server = this.sb ? await carePet(this.sb, id, 'pet') : null;
+    if (server && !server.ok && server.reason !== 'no-rpc') {
+      this.pet?.petFx();
+      this.showBubble(this.player, this.petCareMessage(server, 'pet'));
+      return;
+    }
+    const aff = server?.ok ? server.affinity : this.petStore.pet(id);
+    if (server?.ok) await this.syncServerPetProgress();
+    this.incQuest('pet_pet');
+    this.setQuestMetric('max_pet_affinity', aff);
     this.pet?.petFx();
     audio.playSe('pop');
     const s = petById(id);
     this.showBubble(this.player, `${s?.emoji ?? '🐾'} 쓰담쓰담~ 🥰 (친밀도 ${aff})`);
     this.refreshPetStage();
     this.announceUnlocks();
+    void this.syncVerifiedProgress(true);
   }
 
   /** 데리고 걷다 보면 펫이 가끔 보물 조각을 물어다 준다 (친밀도↑ → 자주·후하게) */
@@ -1015,6 +1800,11 @@ export class StreetScene extends Phaser.Scene {
   private refreshPetStage(): void {
     const id = this.petStore.activeId();
     this.pet?.setStage(id ? this.petStore.stage(id) : 0);
+    this.questStore.setMetric('pet_profiles_customized', this.petStore.customizedCount());
+    this.questStore.setMetric('pet_accessories', this.petStore.unlockedAccessoryCount());
+    this.questStore.setMetric('pet_personalities', this.petStore.personalityVariety());
+    this.writePetOutingMetrics(this.petOutingStore.progress());
+    this.writeRequestBoardMetrics(this.requestBoardStore.progress(this.questStore.get()));
   }
 
   // --- 전투/레벨업 ---
@@ -1024,8 +1814,9 @@ export class StreetScene extends Phaser.Scene {
   /** 이름표 = ● 닉 Lv.N + 위에 호칭 */
   private refreshNameTag(): void {
     const lv = this.battleStore.level;
+    const badge = this.achievementStore.equipped();
     this.playerLabel.setText(`● ${this.peer.nickname}  Lv.${lv}`);
-    this.playerTitle.setText(`〈${titleForLevel(lv)}〉`);
+    this.playerTitle.setText(`〈${titleForLevel(lv)}〉${badge ? `  ◆ ${badge.name}` : ''}`);
   }
 
   /** 장착 무기 스프라이트 생성/교체 (맨손이면 숨김) */
@@ -1049,7 +1840,8 @@ export class StreetScene extends Phaser.Scene {
     w.setFlipX(sideLeft);
     w.setDepth(f === 3 ? 9 : 11); // 위를 보면 캐릭터 뒤
     const dx = sideLeft ? -9 : 9;
-    w.setPosition(this.player.x + dx, this.player.y - (f === 3 ? 12 : 6));
+    // 32×48 캐릭터의 손 중심(발 기준 약 13px 위)에 손잡이를 맞춘다.
+    w.setPosition(this.player.x + dx, this.player.y - (f === 3 ? 18 : 14));
     if (!w.getData('swinging')) w.setAngle(sideLeft ? -25 : 25);
   }
 
@@ -1081,6 +1873,7 @@ export class StreetScene extends Phaser.Scene {
       xp: this.battleStore.xp, xpNext: xpToNext(this.battleStore.level),
       tier: this.battleStore.tier, kills: this.battleStore.killsInTier, quota: this.battleStore.quota,
       weapon: `${w.emoji} ${w.name}`, fatigued: this.isFatigued(),
+      role: `${this.adventureRoleStore.role().mark} ${this.adventureRoleStore.role().name}`,
     });
   }
 
@@ -1089,7 +1882,7 @@ export class StreetScene extends Phaser.Scene {
     if (this.playerHp <= 0) return;
     this.playerHp -= dmg;
     this.lastHitMs = this.time.now;
-    this.cameras.main.shake(90, 0.004);
+    if (!playComfort.reducedMotion()) this.cameras.main.shake(90, 0.004);
     this.player.setTintFill(0xff5a5a);
     this.time.delayedCall(80, () => this.player.clearTint());
     if (this.playerHp <= 0) this.playerDie();
@@ -1098,6 +1891,7 @@ export class StreetScene extends Phaser.Scene {
   /** 사망 → 경험치 감소 + 마을 부활 + 피로 상태 */
   private playerDie(): void {
     this.battleStore.onDeath();
+    this.dex?.breakMonsterStreak();
     this.playerHp = maxHpForLevel(this.battleStore.level);
     this.fatigueUntil = this.time.now + FATIGUE_MS;
     const spawn = tileToWorld(SPAWN_TILE.tx, SPAWN_TILE.ty);
@@ -1109,8 +1903,26 @@ export class StreetScene extends Phaser.Scene {
   /** 몬스터 처치 → 경험치·조각·레벨업·티어 전진 */
   private onMonsterDefeat(species: MonsterSpecies): void {
     const before = this.battleStore.level;
-    const r = this.battleStore.onKill(species.xp);
-    if (species.shard > 0 && Math.random() < 0.5) this.treasureStore.addShards(species.shard);
+    const roleModifier = this.adventureRoleStore.modifier();
+    const r = this.battleStore.onKill(Math.max(1, Math.round(species.xp * roleModifier.xpMultiplier)));
+    if (roleModifier.healOnKillPct > 0) {
+      const maxHp = maxHpForLevel(this.battleStore.level);
+      this.playerHp = Math.min(maxHp, this.playerHp + Math.max(1, Math.round(maxHp * roleModifier.healOnKillPct)));
+    }
+    const record = this.dex?.recordMonster(species.id);
+    this.incQuest('monster_kill');
+    this.setQuestMetric('player_level', this.battleStore.level);
+    this.setQuestMetric('battle_tier', this.battleStore.tier);
+    if (record) {
+      this.setQuestMetric('monster_species', record.discovered);
+      this.setQuestMetric('monster_streak', record.bestStreak);
+    }
+    if (species.shard > 0 && Math.random() < 0.5) {
+      this.treasureStore.addShards(species.shard);
+      this.dex?.addMonsterShards(species.shard);
+      this.incQuest('monster_shard', species.shard);
+    }
+    this.syncMonsterResearchMetrics();
     audio.playSe('success');
     if (r.leveledUp > 0) {
       this.playerHp = maxHpForLevel(this.battleStore.level); // 레벨업 완전 회복
@@ -1119,7 +1931,7 @@ export class StreetScene extends Phaser.Scene {
       this.syncSelfMeta();                              // 상대에게 레벨 전파
       this.showBubble(this.player, `🎉 레벨 업! Lv.${this.battleStore.level}`);
       this.motions?.play(this.player, 'win');
-      this.cameras.main.flash(160, 255, 240, 180);
+      if (!playComfort.reducedMotion()) this.cameras.main.flash(160, 255, 240, 180);
       // 새 호칭 승격 알림
       for (let l = before + 1; l <= this.battleStore.level; l++) {
         if (isTitleUpAt(l)) this.showBubble(this.player, `🏅 새 호칭 「${titleForLevel(l)}」 획득!`);
@@ -1135,9 +1947,15 @@ export class StreetScene extends Phaser.Scene {
     this.weaponShop!.open(this.battleStore, this.coins, !!this.sb);
   }
 
+  private handleEquipWeapon(weaponId: string): void {
+    this.battleStore.equip(weaponId);
+    this.refreshWeaponSprite();
+    this.incQuest('weapon_equip');
+  }
+
   /** 무기 구매 — 온라인이면 서버 코인 차감(가격 SSOT=서버), 미적용/오프라인은 무료 폴백 */
   private async handleBuyWeapon(weaponId: string): Promise<void> {
-    if (this.battleStore.isWeaponOwned(weaponId)) { this.battleStore.equip(weaponId); this.refreshWeaponSprite(); this.weaponShop?.refresh(this.coins); return; }
+    if (this.battleStore.isWeaponOwned(weaponId)) { this.handleEquipWeapon(weaponId); this.weaponShop?.refresh(this.coins); return; }
     if (this.sb) {
       const res = await buyWeapon(this.sb, weaponId);
       if (res.ok) { this.setCoins(res.balance); this.battleStore.buyWeapon(weaponId); }
@@ -1146,8 +1964,9 @@ export class StreetScene extends Phaser.Scene {
     } else {
       this.battleStore.buyWeapon(weaponId);
     }
-    this.battleStore.equip(weaponId);
-    this.refreshWeaponSprite();
+    this.incQuest('weapon_buy');
+    this.setQuestMetric('weapons_owned', this.battleStore.weaponsOwned().length);
+    this.handleEquipWeapon(weaponId);
     audio.playSe('success');
     this.motions?.play(this.player, 'coin');
     this.weaponShop?.refresh(this.coins);
@@ -1235,10 +2054,10 @@ export class StreetScene extends Phaser.Scene {
       const src = this.textures.get(key).getSourceImage();
       if (!(src instanceof HTMLCanvasElement) && !(src instanceof HTMLImageElement)) continue;
       const c = document.createElement('canvas');
-      c.width = 48; c.height = 64;
+      c.width = 48; c.height = 72;
       const ctx = c.getContext('2d')!;
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(src, 0, 0, 24, 32, 0, 0, 48, 64);
+      ctx.drawImage(src, 0, 0, CHAR_W, CHAR_H, 0, 0, 48, 72);
       out[def.id] = c.toDataURL();
     }
     return out;
@@ -1254,16 +2073,85 @@ export class StreetScene extends Phaser.Scene {
     if (this.anyPanelOpen()) return;
     if (this.sb) this.shopCounts = await fetchInventory(this.sb, this.peer.userId);
     this.dex!.open(this.shopCounts);
+    this.setQuestMetric('items_discovered', this.dex!.foundCount);
   }
 
   private openMap(): void {
     if (this.anyPanelOpen()) return;
+    this.incQuest('open_map');
     this.mapPanel!.open();
   }
 
-  private openQuests(): void {
+  private openQuests(initialTab?: 'requests' | 'journey' | 'growth' | 'daily' | 'fanwork'): void {
     if (this.anyPanelOpen()) return;
-    this.quests!.open(this.questStore.progress(), this.questStore.get().claimed);
+    this.incQuest('open_quest');
+    this.quests!.open(
+      this.questStore.views(), this.achievementStore.views(), lifeMasteryViews(this.questStore.get()),
+      this.questStore.focusedQuestId(),
+      initialTab,
+    );
+  }
+
+  private openVillageReward(target: 'outfit' | 'pet' | 'home'): void {
+    this.quests?.close();
+    if (target === 'outfit') this.customize?.open(this.peer.appearance, 'closet');
+    else if (target === 'pet') this.petShop?.open(this.petStore, this.coins, !!this.sb);
+    else this.showBubble(this.player, '내 집 인테리어 수첩에서 리폼 공방을 열면 명찰·이야기 전용 레시피가 보여요.');
+  }
+
+  private openTasteSetTarget(target: 'outfit' | 'pet' | 'home', setId: string): void {
+    const set = TASTE_SET_BY_ID.get(setId);
+    if (!set || !this.achievementStore.get().unlocked.includes(set.badgeId)) return;
+    if (target === 'outfit') {
+      this.customize?.openPreset(this.peer.appearance, set.outfit.id);
+      return;
+    }
+    if (target === 'pet') {
+      const petId = this.petStore.activeId();
+      if (!petId) {
+        this.petShop?.open(this.petStore, this.coins, !!this.sb);
+        this.showBubble(this.player, '먼저 함께 걷는 동행을 골라 주세요. 세트 장식은 사라지지 않아요.');
+        return;
+      }
+      this.handlePetAccessory(petId, set.petAccessory.id);
+      this.petShop?.openProfile(this.petStore, this.coins, !!this.sb, petId);
+      return;
+    }
+    this.openVillageReward('home');
+  }
+
+  /** 구형 정면 월드에서도 의뢰 안내 버튼이 막히지 않도록 가장 가까운 수첩·활동을 연다. */
+  private navigateClassicRequest(metric: string, title: string): void {
+    const destination = villageRequestDestinationForMetric(metric);
+    this.quests?.close();
+    if (destination === 'residents') this.residentsPanel?.open(
+      this.residents?.getTrust() ?? {},
+      metric.startsWith('resident_room_care_')
+        ? 'room-care'
+        : metric.startsWith('resident_fan_') ? 'fanbook' : 'stories',
+    );
+    else if (destination === 'adventure-kit') this.adventureRolePanel?.open();
+    else if (destination === 'profile') this.profilePanel?.openSelf();
+    else if (destination === 'treasure') this.treasure?.open();
+    else if (destination === 'petshop') this.petShop?.open(this.petStore, this.coins, !!this.sb);
+    else if (destination === 'atelier') this.customize?.open(this.peer.appearance);
+    else if (destination === 'garden') this.gardenPanel?.open();
+    else if (destination === 'kitchen') this.cookingPanel?.open();
+    else if (destination === 'fishing') this.fishingPanel?.open();
+    else if (destination === 'photo') this.openPhotoBooth();
+    else if (destination === 'cafe') this.cafe?.open();
+    else if (destination === 'busking') this.busking?.open();
+    else if (destination === 'chat') this.chat?.open();
+    else if (destination === 'emote') this.emotes?.toggle();
+    else if (destination === 'map') this.openMap();
+    else if (destination === 'quest') this.openQuests('requests');
+    const guidance = destination === 'hunt'
+      ? '동쪽 외곽 사냥터로 이동하면 이어갈 수 있어요. 안전 구역에서는 공격받지 않습니다.'
+      : destination === 'home'
+        ? '주택가의 내 집 문으로 들어가면 이어갈 수 있어요.'
+        : '해당 활동을 열었어요. 이전 기록은 그대로 남아 있습니다.';
+    this.showBubble(this.player, `「${title}」 · ${guidance}`);
+    if (this.hint) this.hint.textContent = `의뢰 길 안내 · ${title}`;
   }
 
   private questDoneCount(): number {
@@ -1293,10 +2181,16 @@ export class StreetScene extends Phaser.Scene {
   }
 
   private shopCounts = new Map<string, number>();
+  private furnitureCraftHistory = new Map<string, number>();
+  private weeklyFurnitureHistory = new Set<string>();
 
   private async openShop(): Promise<void> {
-    if (this.sb) this.shopCounts = await fetchInventory(this.sb, this.peer.userId);
-    this.shop!.open(this.coins, this.shopCounts);
+    if (this.sb) [this.shopCounts, this.furnitureCraftHistory, this.weeklyFurnitureHistory] = await Promise.all([
+      fetchInventory(this.sb, this.peer.userId), fetchFurnitureCraftHistory(this.sb, this.peer.userId),
+      fetchWeeklyFurniturePurchaseHistory(this.sb, this.peer.userId),
+    ]);
+    this.setQuestMetric('weekly_furniture_unique', this.weeklyFurnitureHistory.size);
+    this.shop!.open(this.coins, this.shopCounts, undefined, this.furnitureCraftHistory, this.weeklyFurnitureHistory);
   }
 
   private async handleBuy(itemId: string): Promise<void> {
@@ -1306,11 +2200,50 @@ export class StreetScene extends Phaser.Scene {
       this.setCoins(res.balance);
       this.shopCounts.set(itemId, (this.shopCounts.get(itemId) ?? 0) + 1);
       this.shop?.setCounts(this.shopCounts);
+      this.dex?.absorb(this.shopCounts);
+      this.setQuestMetric('items_discovered', this.dex?.foundCount ?? 0);
+      this.incQuest('shop_purchase');
+      if (furnitureAcquisitionChannel(itemId) === 'weekly') {
+        this.weeklyFurnitureHistory.add(itemId);
+        this.shop?.setWeeklyHistory(this.weeklyFurnitureHistory);
+        this.setQuestMetric('weekly_furniture_unique', this.weeklyFurnitureHistory.size);
+        this.incQuest('weekly_furniture_bought');
+      }
     } else if (res.reason === 'no-coins') {
       this.showBubble(this.player, '코인이 부족해요 😢');
     } else {
-      this.showBubble(this.player, '구매에 실패했어요');
+      const itemName = CATALOG_BY_ID.get(itemId)?.name ?? '이 가구';
+      this.shop?.setStatus(res.reason === 'diy-only' ? `${itemName}은(는) DIY 작업대에서만 만들 수 있어요.`
+        : res.reason === 'not-in-rotation' ? `${itemName}은(는) 이번 주 진열이 아니에요. 순환 수첩에서 돌아오는 주를 확인해 주세요.`
+          : '구매 기록을 확인하지 못했어요. 코인은 차감되지 않았습니다.');
     }
+  }
+
+  private async handleFurnitureCraft(recipeId: string): Promise<void> {
+    const recipe = FURNITURE_RECIPE_BY_ID.get(recipeId);
+    if (!this.sb || !recipe) {
+      this.shop?.setStatus('접속하면 재료 차감과 결과 지급을 한 번에 안전하게 처리할 수 있어요.');
+      return;
+    }
+    const result = await craftFurniture(this.sb, recipeId);
+    if (!result.ok) {
+      this.shop?.setStatus(result.reason === 'missing-materials' ? '재료가 조금 부족해요. 보유 수량을 다시 확인해 주세요.'
+        : result.reason === 'no-coins' ? `제작 공임 ${recipe.fee} 코인이 필요해요.`
+          : '작업대 서버를 확인하지 못했어요. 재료와 코인은 그대로입니다.');
+      return;
+    }
+    [this.shopCounts, this.furnitureCraftHistory] = await Promise.all([
+      fetchInventory(this.sb, this.peer.userId), fetchFurnitureCraftHistory(this.sb, this.peer.userId),
+    ]);
+    this.setCoins(result.balance);
+    this.shop?.setCounts(this.shopCounts);
+    this.shop?.setCraftHistory(this.furnitureCraftHistory);
+    this.dex?.absorb(this.shopCounts);
+    this.setQuestMetric('items_discovered', this.dex?.foundCount ?? 0);
+    this.setQuestMetric('furniture_craft_recipes', this.furnitureCraftHistory.size);
+    this.incQuest('furniture_craft_total');
+    this.shop?.setStatus(`${CATALOG_BY_ID.get(recipe.outputItemId)?.name ?? '새 가구'} 제작 완료! 가이드북에도 기록했어요.`);
+    this.shop?.celebrateCraft(recipe.outputItemId);
   }
 
   private async handleSell(itemId: string): Promise<void> {
@@ -1325,6 +2258,66 @@ export class StreetScene extends Phaser.Scene {
     this.shop?.setCounts(this.shopCounts);
   }
 
+  private async openNeighborhoodMarket(tab: 'browse' | 'sell' | 'collection' = 'browse'): Promise<void> {
+    if (this.anyPanelOpen()) return;
+    if (this.sb) await this.refreshNeighborhoodMarketEconomy();
+    if (this.anyPanelOpen()) return;
+    this.neighborhoodMarket?.open(tab);
+    this.syncNeighborhoodMarketMetrics();
+    this.refreshAchievementState(false);
+    this.refreshQuestTracker();
+  }
+
+  private async refreshNeighborhoodMarketEconomy(): Promise<void> {
+    if (!this.sb) return;
+    const [coins, inventory] = await Promise.all([
+      fetchCoins(this.sb, this.peer.userId),
+      fetchInventory(this.sb, this.peer.userId),
+    ]);
+    this.setCoins(coins);
+    this.shopCounts = inventory;
+    this.shop?.setCounts(inventory);
+    this.dex?.absorb(inventory);
+    this.setQuestMetric('items_discovered', this.dex?.foundCount ?? 0);
+  }
+
+  private async createNeighborhoodMarketListing(itemId: string, tier: MarketPriceTier) {
+    if (!this.sb) return { ok: false as const, reason: 'error' as const };
+    const result = await createMarketListing(this.sb, itemId, tier);
+    if (result.ok) await this.refreshNeighborhoodMarketEconomy();
+    return result;
+  }
+
+  private async cancelNeighborhoodMarketListing(listingId: string) {
+    if (!this.sb) return { ok: false as const, reason: 'error' as const };
+    const result = await cancelMarketListing(this.sb, listingId);
+    if (result.ok) await this.refreshNeighborhoodMarketEconomy();
+    return result;
+  }
+
+  private async buyNeighborhoodMarketListing(listingId: string) {
+    if (!this.sb) return { ok: false as const, reason: 'error' as const };
+    const result = await buyMarketListing(this.sb, listingId);
+    if (result.ok) await this.refreshNeighborhoodMarketEconomy();
+    return result;
+  }
+
+  private syncNeighborhoodMarketMetrics(): void {
+    if (!this.neighborhoodMarket) return;
+    this.writeNeighborhoodMarketMetrics(this.neighborhoodMarket.progress());
+  }
+
+  private writeNeighborhoodMarketMetrics(progress: NeighborhoodMarketProgress): void {
+    this.questStore.setMetric('market_visits', progress.visits);
+    this.questStore.setMetric('market_favorites', progress.favorites);
+    this.questStore.setMetric('market_listings_created', progress.listingsCreated);
+    this.questStore.setMetric('market_purchases', progress.purchases);
+    this.questStore.setMetric('market_sales', progress.sales);
+    this.questStore.setMetric('market_exchanges', progress.exchanges);
+    this.questStore.setMetric('market_unique_items', progress.uniqueItems);
+    this.questStore.setMetric('market_categories', progress.categoryKinds);
+  }
+
   private applyTimeOfDay(): void {
     const phase = phaseForHour(seoulHour());
     this.tintOverlay?.setFillStyle(phase.color, phase.alpha);
@@ -1334,28 +2327,626 @@ export class StreetScene extends Phaser.Scene {
 
   private incQuest(key: string, by = 1): void {
     this.questStore.bump(key, by); // localStorage 지속 (KST 자정 리셋, P2-3)
-    this.quests?.refresh(this.questStore.progress());
+    if (this.sb && (key === 'q_forest' || key === 'q_emote')) {
+      // 서버 시간 간격과 일일 상한으로 검증되는 월드 행동.
+      void recordDailyProgress(this.sb, key);
+    }
+    this.refreshAchievementState(true);
     this.refreshHearts();
+    this.refreshQuestTracker();
+  }
+
+  private setQuestMetric(key: string, value: number): void {
+    this.questStore.setMetric(key, value);
+    this.refreshAchievementState(true);
+    this.refreshQuestTracker();
+  }
+
+  private refreshQuestTracker(): void {
+    const views = this.questStore.views();
+    const guide = selectQuestGuide(views, this.questStore.focusedQuestId());
+    this.hud?.setQuestTarget(guide ? {
+      id: guide.quest.id, name: guide.quest.name, location: guide.quest.location,
+      label: guide.label, action: guide.action, tone: guide.tone, manual: guide.manual,
+      progress: guide.quest.progress, goal: guide.quest.goal,
+    } : null);
+    this.starterConcierge?.refresh();
+  }
+
+  private handleQuestFocus(questId: string | null): void {
+    if (!this.questStore.focusQuest(questId)) return;
+    this.refreshQuestTracker();
+    this.quests?.refresh(
+      this.questStore.views(), this.achievementStore.views(), lifeMasteryViews(this.questStore.get()),
+      this.questStore.focusedQuestId(),
+    );
+    const quest = questId ? QUEST_BY_ID.get(questId) : null;
+    this.showBubble(this.player, quest ? `「${quest.name}」 목표를 따라가 볼게요.` : '자동 길잡이로 돌아왔어요.');
+  }
+
+  /** 다른 저장소의 현재값을 모험 일지에 안전하게 합친다. */
+  private syncQuestMetrics(): void {
+    this.questStore.setMetric('player_level', this.battleStore.level);
+    this.questStore.setMetric('battle_tier', this.battleStore.tier);
+    this.questStore.setMetric('monster_kill', this.battleStore.totalKills);
+    this.questStore.setMetric('pets_owned', this.petStore.owned().length);
+    this.questStore.setMetric('max_pet_affinity', Math.max(0, ...this.petStore.owned().map((id) => this.petStore.affinity(id))));
+    this.questStore.setMetric('pet_tricks', Math.max(0, ...this.petStore.owned().map((id) => this.petStore.learnedTricks(id).length)));
+    this.questStore.setMetric('pet_memories', Math.max(0, ...this.petStore.owned().map((id) => this.petStore.memories(id).filter((m) => m.unlocked).length)));
+    this.questStore.setMetric('pet_profiles_customized', this.petStore.customizedCount());
+    this.questStore.setMetric('pet_accessories', this.petStore.unlockedAccessoryCount());
+    this.questStore.setMetric('pet_personalities', this.petStore.personalityVariety());
+    this.questStore.setMetric('weapons_owned', this.battleStore.weaponsOwned().length);
+    this.questStore.setMetric('treasures_owned', this.treasureStore.progress().owned);
+    this.questStore.setMetric('dolls_owned', this.claw?.ownedCount ?? 0);
+    this.syncClosetMetrics();
+    this.syncCharacterZineMetrics();
+    this.syncMonsterResearchMetrics();
+    this.syncPhotoMetrics();
+    this.syncGardenMetrics();
+    this.syncCookingMetrics();
+    this.syncFishingMetrics();
+    this.syncAquariumMetrics();
+    this.syncFurnitureReformMetrics();
+    this.syncLookbookMetrics();
+    this.syncResidentQuestMetrics();
+    this.syncFestivalMetrics();
+    this.syncNeighborhoodMarketMetrics();
+    this.refreshAchievementState(false);
+  }
+
+  private syncFestivalMetrics(): void {
+    const progress = this.festivalArchiveStore.progress(this.questStore.get());
+    this.questStore.setMetric('festival_postcards', progress.postcards);
+    this.questStore.setMetric('festival_clues', progress.clues);
+  }
+
+  private syncMonsterResearchMetrics(): void {
+    if (!this.dex) return;
+    const research = this.dex.monsterResearchProgress();
+    const legacy = this.dex.monsterProgress();
+    this.questStore.setMetric('monster_species', research.discovered);
+    this.questStore.setMetric('monster_research_stamps', research.stamps);
+    this.questStore.setMetric('monster_research_pages', research.pages);
+    this.questStore.setMetric('monster_mastered_species', research.masteredSpecies);
+    this.questStore.setMetric('monster_streak', legacy.bestStreak);
+    this.questStore.setMetric('monster_shard', legacy.totalShards);
+  }
+
+  private syncClosetMetrics(): void {
+    const progress = this.closetStore.progress();
+    this.questStore.setMetric('closet_saved_slots', progress.saved);
+    this.questStore.setMetric('closet_featured_slots', progress.featured);
+    this.questStore.setMetric('closet_style_identities', progress.identities);
+    this.questStore.setMetric('closet_featured_identities', progress.featuredIdentities);
+    this.refreshAchievementState(false);
+    this.refreshQuestTracker();
+  }
+
+  private syncCharacterZineMetrics(): void {
+    const progress = this.characterZineStore.progress();
+    this.questStore.setMetric('character_zine_saved', progress.saved);
+    this.questStore.setMetric('character_zine_featured', progress.featured);
+    this.questStore.setMetric('character_zine_roles', progress.roles);
+    this.questStore.setMetric('character_zine_motifs', progress.motifs);
+    this.questStore.setMetric('character_zine_bonds', progress.bonds);
+    this.questStore.setMetric('character_zine_bond_kinds', progress.bondKinds);
+    this.questStore.setMetric('character_zine_memory_scenes', progress.memoryScenes);
+    this.questStore.setMetric('character_episode_archived', progress.episodes);
+    this.questStore.setMetric('character_episode_kinds', progress.episodeKinds);
+    this.questStore.setMetric('character_episode_characters', progress.episodeCharacters);
+    this.questStore.setMetric('character_episode_featured', progress.featuredEpisodes);
+    this.questStore.setMetric('character_episode_replays', progress.episodeReplays);
+    this.refreshAchievementState(false);
+    this.refreshQuestTracker();
+  }
+
+  private syncResidentQuestMetrics(): void {
+    const trust = this.residents?.getTrust() ?? {};
+    const values = Object.values(trust).map((entry) => entry.v);
+    this.questStore.setMetric('residents_met', metCount(trust));
+    this.questStore.setMetric('resident_trust_max', Math.max(0, ...values));
+    for (const [key, value] of Object.entries(residentTrustMetrics(trust))) this.questStore.setMetric(key, value);
+    if (this.residentsPanel) {
+      this.writeResidentRendezvousMetrics(this.residentsPanel.rendezvousProgress());
+      this.writeResidentLetterMetrics(this.residentsPanel.lettersProgress());
+      this.writeResidentFanbookMetrics(this.residentsPanel.fanbookProgress());
+    }
+  }
+
+  private refreshAchievementState(announce: boolean): void {
+    this.syncAdventureRoleMetrics();
+    this.syncVillageProfileMetrics();
+    this.syncNeighborCheerMetrics();
+    this.syncLifeMasteryMetrics();
+    this.syncLifeSpecialtyMetrics();
+    this.syncDailyInvitationMetrics();
+    this.syncVillageJourneyMetrics();
+    this.syncCollectionShelfMetrics();
+    for (const [key, value] of Object.entries(adventurePathMetrics(this.questStore.views()))) {
+      this.questStore.setMetric(key, value);
+    }
+    const levelMemoryProgress = this.quests?.villageLevelMemoryProgress();
+    if (levelMemoryProgress) {
+      for (const [key, value] of Object.entries(villageLevelMemoryMetrics(levelMemoryProgress))) {
+        this.questStore.setMetric(key, value);
+      }
+    }
+    const firstNewly = this.achievementStore.sync(this.questStore.views());
+    this.syncTasteSetMetrics();
+    this.syncVillageProfileMetrics();
+    this.questStore.setMetric('rare_styles', rareStyleUnlockCount(this.achievementStore.get().unlocked));
+    this.syncLifeMasteryMetrics();
+    this.syncLifeSpecialtyMetrics();
+    this.syncVillageJourneyMetrics();
+    this.syncCollectionShelfMetrics();
+    const secondNewly = this.achievementStore.sync(this.questStore.views());
+    const newly = [...new Set([...firstNewly, ...secondNewly])];
+    const views = this.questStore.views();
+    this.quests?.refresh(
+      views, this.achievementStore.views(), lifeMasteryViews(this.questStore.get()),
+      this.questStore.focusedQuestId(),
+    );
+    this.refreshNameTag();
+    this.peer.badge = this.achievementStore.equipped()?.name ?? null;
+    if (newly.length) {
+      this.syncSelfMeta();
+      if (announce) {
+        const badge = BADGE_BY_ID.get(newly[newly.length - 1]!);
+        if (badge) this.time.delayedCall(280, () => {
+          this.showBubble(this.player, `◆ 새 배지 「${badge.name}」 획득!`);
+          this.motions?.play(this.player, 'win');
+          audio.playSe('success');
+        });
+      }
+    }
+  }
+
+  private writeTasteSetMetrics(progress: TasteSetProgress): void {
+    this.questStore.setMetric('taste_sets_unlocked', progress.unlockedSets);
+    this.questStore.setMetric('taste_set_pieces', progress.unlockedPieces);
+    this.questStore.setMetric('taste_sets_village', progress.villageSets);
+    this.questStore.setMetric('taste_sets_story', progress.storySets);
+    this.questStore.setMetric('taste_sets_journey', progress.journeySets);
+    this.questStore.setMetric('taste_sets_mentor', progress.mentorSets);
+    this.questStore.setMetric('taste_sets_featured', progress.featuredSets);
+  }
+
+  private syncTasteSetMetrics(): void {
+    if (this.dex) this.writeTasteSetMetrics(this.dex.tasteSetProgress());
+  }
+
+  private syncCollectionShelfMetrics(): void {
+    if (!this.dex) return;
+    const progress = this.dex.shelfProgress();
+    this.questStore.setMetric('collection_shelf_targets', progress.targets);
+    this.questStore.setMetric('collection_shelf_kinds', progress.targetKinds);
+    this.questStore.setMetric('collection_shelf_completed', progress.completed);
+  }
+
+  private writeAdventureRoleMetrics(progress: AdventureRoleProgress): void {
+    this.questStore.setMetric('adventure_roles_tried', progress.rolesTried);
+    this.questStore.setMetric('adventure_charms_unlocked', progress.charmsUnlocked);
+    this.questStore.setMetric('adventure_charms_equipped', progress.charmsEquipped);
+    this.questStore.setMetric('adventure_kits_saved', progress.kitsSaved);
+    this.questStore.setMetric('adventure_role_switches', progress.switches);
+  }
+
+  private syncAdventureRoleMetrics(): void {
+    if (this.adventureRolePanel) this.writeAdventureRoleMetrics(this.adventureRolePanel.progress());
+  }
+
+  private writeResidentRendezvousMetrics(progress: ResidentRendezvousProgress): void {
+    this.questStore.setMetric('resident_rendezvous_scenes', progress.recorded);
+    this.questStore.setMetric('resident_rendezvous_residents', progress.startedResidents);
+    this.questStore.setMetric('resident_rendezvous_completed', progress.completedResidents);
+    this.questStore.setMetric('resident_rendezvous_keepsakes', progress.keepsakes);
+  }
+
+  private writeResidentLetterMetrics(progress: ResidentLetterProgress): void {
+    this.questStore.setMetric('resident_letters', progress.replied);
+    this.questStore.setMetric('resident_letter_correspondents', progress.correspondents);
+    this.questStore.setMetric('resident_letter_completed', progress.completedResidents);
+    this.questStore.setMetric('resident_letter_tones', progress.tonesUsed);
+    this.questStore.setMetric('resident_letter_featured', progress.featured);
+  }
+
+  private writeResidentFanbookMetrics(progress: ResidentFanbookProgress): void {
+    this.questStore.setMetric('resident_fan_favorites', progress.favorites);
+    this.questStore.setMetric('resident_fan_ribbons', progress.ribbons);
+    this.questStore.setMetric('resident_fan_residents', progress.ribbonResidents);
+    this.questStore.setMetric('resident_fan_completed', progress.completedResidents);
+  }
+
+  private writeResidentRoomCareMetrics(progress: ResidentRoomCareProgress): void {
+    this.questStore.setMetric('resident_room_care_items', progress.sortedItems);
+    this.questStore.setMetric('resident_room_care_rooms', progress.completedRooms);
+    this.questStore.setMetric('resident_room_care_featured', progress.featuredRooms);
+  }
+
+  private villageProfileContext(): VillageProfileSelfContext {
+    const quests = this.questStore.get();
+    const level = villageJourneySummary(this.questStore.views(), lifeMasteryViews(quests)).level.level;
+    const counts = quests.lifetimeCounts ?? {};
+    const photoRecords = new Map(this.photoAlbum.records().map((record) => [record.id, record]));
+    const photoCards = this.photoAlbum.featuredIds().flatMap((id) => {
+      const record = photoRecords.get(id);
+      if (!record) return [];
+      const decoration = this.photoAlbum.decorationFor(id);
+      return [{
+        frameId: record.frameId, backdropId: record.backdropId, poseId: record.poseId,
+        appearance: { ...record.appearance },
+        pet: record.pet ? { speciesId: record.pet.speciesId, accessory: record.pet.accessory } : null,
+        foilId: decoration.foilId, stickerIds: [...decoration.stickerIds],
+      }];
+    });
+    return {
+      peer: this.peer, quests, villageLevel: level,
+      signatureLooks: this.closetStore.featuredLooks(),
+      characterCards: this.characterZineStore.featuredCards(),
+      unlockedBadgeIds: this.achievementStore.get().unlocked,
+      tasteSets: this.dex?.tasteSetProgress().unlockedSets ?? Math.min(28, counts.taste_sets_unlocked ?? 0),
+      rendezvous: this.residentsPanel?.rendezvousProgress().recorded ?? Math.min(30, counts.resident_rendezvous_scenes ?? 0),
+      residentsMet: metCount(this.residents?.getTrust() ?? {}),
+      petsOwned: this.petStore.owned().length,
+      homeLabel: `집 취향 ${Math.min(9, counts.home_categories ?? 0)}분야`,
+      specialtyIds: this.quests?.featuredLifeSpecialtyIds(lifeMasteryViews(quests)) ?? [],
+      photoCards,
+      homeCards: new HomeStudioCardStore(this.peer.userId).featuredCards(),
+      petStyleCards: this.petStyleStudioStore.featuredCards(),
+    };
+  }
+
+  private syncVillageProfileMetrics(): void {
+    if (!this.profilePanel) return;
+    const progress = this.profilePanel.progress();
+    this.questStore.setMetric('village_profile_customized', progress.customized);
+    this.questStore.setMetric('village_profile_badges', progress.badges);
+    this.questStore.setMetric('village_profile_frames', progress.frames);
+    this.questStore.setMetric('village_profile_specialties', progress.specialties);
+    this.questStore.setMetric('village_profile_photo_cards', progress.photoCards);
+    this.questStore.setMetric('village_profile_pet_styles', progress.petStyleCards);
+    this.questStore.setMetric('village_profile_showcase_slots', progress.showcaseSlots);
+    this.questStore.setMetric('village_profile_showcase_complete', progress.showcaseComplete);
+    const profile = this.profilePanel.publicSnapshot();
+    if (JSON.stringify(profile) !== JSON.stringify(this.peer.profile)) {
+      this.peer.profile = profile; void this.adapter?.updateSelf(this.peer);
+    }
+  }
+
+  private sendNeighborCheer(peer: PeerState, kind: NeighborCheerKind): boolean {
+    if (!this.adapter) return false;
+    this.adapter.sendNeighborCheer({ to: peer.userId, k: kind });
+    return true;
+  }
+
+  private sendPetMeet(peer: PeerState, kind: PetMeetKind): boolean {
+    if (!this.adapter) return false;
+    this.adapter.sendPetMeet({ to: peer.userId, k: kind });
+    return true;
+  }
+
+  private async visitNeighborHome(peer: PeerState): Promise<'entered' | 'no-home' | 'private' | 'offline' | 'error'> {
+    if (!this.sb) return 'offline';
+    try {
+      const property = await fetchPropertyForHolder(this.sb, peer.userId);
+      if (!property) return 'no-home';
+      if (!property.isPublic) return 'private';
+      const here = worldToTile(this.player.x, this.player.y);
+      this.entering = true;
+      this.scene.start('room', {
+        roomId: property.id, isOwner: false, peer: this.peer, adapter: this.adapter,
+        houseType: property.houseType, floorSeed: property.floorSeed, dealType: property.dealType,
+        isPublic: property.isPublic,
+        visitOwner: { userId: peer.userId, nickname: peer.nickname },
+        returnScene: 'street', returnSpawnTile: here,
+      });
+      return 'entered';
+    } catch { return 'error'; }
+  }
+
+  private writeNeighborCheerMetrics(progress: NeighborCheerProgress): void {
+    this.questStore.setMetric('neighbor_cheers_sent', progress.sent);
+    this.questStore.setMetric('neighbor_cheers_received', progress.received);
+    this.questStore.setMetric('neighbor_cheer_total', progress.exchanges);
+    this.questStore.setMetric('neighbor_cheer_kinds', progress.kinds);
+    this.questStore.setMetric('neighbor_cheer_neighbors', progress.neighbors);
+  }
+
+  private syncNeighborCheerMetrics(): void {
+    if (this.profilePanel) this.writeNeighborCheerMetrics(this.profilePanel.neighborCheerProgress());
+  }
+
+  private writePetMeetMetrics(progress: ReturnType<VillageProfilePanel['petMeetProgress']>): void {
+    this.questStore.setMetric('pet_meet_sent', progress.sent);
+    this.questStore.setMetric('pet_meet_received', progress.received);
+    this.questStore.setMetric('pet_meet_total', progress.total);
+    this.questStore.setMetric('pet_meet_scenes', progress.scenes);
+    this.questStore.setMetric('pet_meet_neighbors', progress.neighbors);
+    this.questStore.setMetric('pet_meet_species', progress.species);
+    this.questStore.setMetric('pet_meet_pairs', progress.pairs);
+  }
+
+  private syncPetMeetMetrics(): void {
+    if (this.profilePanel) this.writePetMeetMetrics(this.profilePanel.petMeetProgress());
+  }
+
+  private syncNeighborHomeTourMetrics(): void {
+    if (!this.profilePanel) return;
+    this.writeNeighborHomeTourMetrics(this.profilePanel.neighborHomeTourProgress());
+  }
+
+  private writeNeighborHomeTourMetrics(progress: ReturnType<VillageProfilePanel['neighborHomeTourProgress']>): void {
+    this.questStore.setMetric('neighbor_home_tours', progress.tours);
+    this.questStore.setMetric('neighbor_homes_visited', progress.neighbors);
+    this.questStore.setMetric('neighbor_home_themes', progress.themes);
+    this.questStore.setMetric('neighbor_home_grades', progress.grades);
+    this.questStore.setMetric('neighbor_home_types', progress.houseTypes);
+    this.questStore.setMetric('neighbor_home_favorites', progress.favorites);
+  }
+
+  private syncLifeMasteryMetrics(): void {
+    const metrics = lifeMasteryQuestMetrics(this.questStore.get());
+    for (const [key, value] of Object.entries(metrics)) this.questStore.setMetric(key, value);
+  }
+
+  private writeLifeSpecialtyMetrics(progress: LifeSpecialtyProgress): void {
+    this.questStore.setMetric('life_specialty_cards', progress.unlockedCards);
+    this.questStore.setMetric('life_specialty_featured', progress.featuredCards);
+    this.questStore.setMetric('life_specialty_featured_domains', progress.featuredDomains);
+    this.questStore.setMetric('life_specialty_mastered_domains', progress.masteredDomains);
+    this.questStore.setMetric('life_specialty_edits', progress.edits);
+  }
+
+  private syncLifeSpecialtyMetrics(): void {
+    if (!this.quests) return;
+    this.writeLifeSpecialtyMetrics(this.quests.lifeSpecialtyProgress(lifeMasteryViews(this.questStore.get())));
+  }
+
+  private writeDailyInvitationMetrics(progress: DailyInvitationProgress): void {
+    this.questStore.setMetric('daily_invitations_claimed', progress.totalClaims);
+    this.questStore.setMetric('daily_invitation_stamps', progress.uniqueStamps);
+    this.questStore.setMetric('daily_invitation_domains', progress.stampedDomains);
+    this.questStore.setMetric('daily_invitation_rerolls', progress.rerolls);
+  }
+
+  private syncDailyInvitationMetrics(): void {
+    if (!this.quests) return;
+    this.writeDailyInvitationMetrics(this.quests.dailyInvitationProgress(lifeMasteryViews(this.questStore.get())));
+  }
+
+  private writeSessionPlannerMetrics(progress: SessionPlannerProgress): void {
+    this.questStore.setMetric('session_plan_slots', progress.slots);
+    this.questStore.setMetric('session_plan_pages', progress.archivedPages);
+    this.questStore.setMetric('session_plan_quests', progress.archivedQuests);
+    this.questStore.setMetric('session_plan_categories', progress.archivedCategories);
+    this.questStore.setMetric('session_plan_featured', progress.featured);
+  }
+
+  private writeFanMerchMetrics(progress: FanMerchWorkshopProgress): void {
+    this.questStore.setMetric('fan_merch_created', progress.totalCreated);
+    this.questStore.setMetric('fan_merch_discoveries', progress.discoveries);
+    this.questStore.setMetric('fan_merch_subjects', progress.subjects);
+    this.questStore.setMetric('fan_merch_subject_kinds', progress.subjectKinds);
+    this.questStore.setMetric('fan_merch_formats', progress.formats);
+    this.questStore.setMetric('fan_merch_motifs', progress.motifs);
+    this.questStore.setMetric('fan_merch_featured', progress.featured);
+  }
+
+  private syncVillageJourneyMetrics(): void {
+    const views = this.questStore.views();
+    const masteries = lifeMasteryViews(this.questStore.get());
+    const metrics = villageJourneyMetrics(views, masteries);
+    for (const [key, value] of Object.entries(metrics)) this.questStore.setMetric(key, value);
+    for (const [key, value] of Object.entries(starterCompassMetrics(this.questStore.get()))) {
+      this.questStore.setMetric(key, value);
+    }
+    const starterKeepsakes = this.quests?.starterCompassProgress();
+    if (starterKeepsakes) {
+      this.questStore.setMetric('starter_keepsakes', starterKeepsakes.claimed);
+      this.questStore.setMetric('starter_featured_keepsake', starterKeepsakes.featured);
+      this.questStore.setMetric('starter_mentor_chapters', starterKeepsakes.mentorChapters);
+      this.questStore.setMetric('starter_mentor_routes', starterKeepsakes.mentorRoutes);
+      for (const route of STARTER_COMPASS_ROUTES) {
+        this.questStore.setMetric(`starter_mentor_${route.id}_complete`, Number(starterKeepsakes.mentorRouteIds.includes(route.id)));
+      }
+      this.questStore.setMetric('starter_mentor_featured', starterKeepsakes.featuredMentorScenes);
+      this.questStore.setMetric('starter_mentor_replays', starterKeepsakes.mentorReplays);
+    }
+    const speciesId = this.petStore.activeId();
+    this.hud?.setVillageLevel(
+      villageJourneySummary(this.questStore.views(), lifeMasteryViews(this.questStore.get())).level,
+      {
+        appearance: this.peer.appearance,
+        pet: speciesId ? { speciesId, accessory: this.petStore.accessory(speciesId) } : null,
+      },
+    );
+  }
+
+  private handlePetOutingChanged(progress: PetOutingProgress): void {
+    this.writePetOutingMetrics(progress);
+    this.refreshAchievementState(true);
+    this.refreshHearts();
+    this.refreshQuestTracker();
+    this.showBubble(this.player, `산책 도장 ${progress.souvenirStamps}/${progress.totalSouvenirs} · ${progress.routesVisited}개 골목 기록`);
+  }
+
+  private writePetOutingMetrics(progress: PetOutingProgress): void {
+    this.questStore.setMetric('pet_outings_total', progress.totalWalks);
+    this.questStore.setMetric('pet_outing_routes', progress.routesVisited);
+    this.questStore.setMetric('pet_outing_stamps', progress.souvenirStamps);
+    this.questStore.setMetric('pet_outing_complete', progress.completedRoutes);
+    this.questStore.setMetric('pet_outing_partners', progress.petPartners);
+    this.questStore.setMetric('pet_outing_pairings', progress.pairings);
+  }
+
+  private handlePetSignalsChanged(progress: PetSignalProgress): void {
+    this.writePetSignalMetrics(progress);
+    this.refreshAchievementState(true);
+    this.refreshHearts();
+    this.refreshQuestTracker();
+    this.showBubble(this.player, `마음 번역 ${progress.recorded}개 · ${progress.personalities}/6 성격 기록`);
+  }
+
+  private writePetSignalMetrics(progress: PetSignalProgress): void {
+    this.questStore.setMetric('pet_signals', progress.recorded);
+    this.questStore.setMetric('pet_signal_personalities', progress.personalities);
+    this.questStore.setMetric('pet_signal_chapters', progress.completedChapters);
+    this.questStore.setMetric('pet_signal_partners', progress.petPartners);
+    this.questStore.setMetric('pet_signal_responses', progress.responseStyles);
+    this.questStore.setMetric('pet_signal_featured', progress.featured);
+  }
+
+  private handlePetPerformanceChanged(progress: PetPerformanceProgress): void {
+    this.writePetPerformanceMetrics(progress);
+    this.refreshAchievementState(true);
+    this.refreshHearts();
+    this.refreshQuestTracker();
+    this.showBubble(this.player, `트릭 소극장 ${progress.stamps}장 · ${progress.repertoireTricks}/5 레퍼토리 기록`);
+  }
+
+  private writePetPerformanceMetrics(progress: PetPerformanceProgress): void {
+    this.questStore.setMetric('pet_performance_rehearsals', progress.totalRehearsals);
+    this.questStore.setMetric('pet_performance_stamps', progress.stamps);
+    this.questStore.setMetric('pet_performance_tricks', progress.repertoireTricks);
+    this.questStore.setMetric('pet_performance_complete', progress.completedPerformances);
+    this.questStore.setMetric('pet_performance_partners', progress.petPartners);
+    this.questStore.setMetric('pet_performance_featured', progress.featured);
+  }
+
+  private writeChronicleMetrics(progress: ChronicleProgress): void {
+    this.questStore.setMetric('chronicle_pages', progress.pages);
+    this.questStore.setMetric('chronicle_routes', progress.routesChosen);
+    this.questStore.setMetric('chronicle_motifs', progress.motifs);
+    this.questStore.setMetric('chronicle_featured', progress.featured);
+  }
+
+  private handleRequestBoardChanged(progress: VillageRequestProgress): void {
+    this.writeRequestBoardMetrics(progress);
+    this.refreshAchievementState(true);
+    this.refreshHearts();
+    this.refreshQuestTracker();
+  }
+
+  private writeRequestBoardMetrics(progress: VillageRequestProgress): void {
+    this.questStore.setMetric('village_requests_total', progress.totalCompleted);
+    this.questStore.setMetric('village_request_stamps', progress.uniqueStamps);
+    this.questStore.setMetric('village_request_categories', progress.categoryStamps);
+    this.questStore.setMetric('village_request_rank', progress.rank);
+    this.questStore.setMetric('village_request_story_chapters', progress.storyChapters);
+    this.questStore.setMetric('village_request_story_routes', progress.storyRoutes);
+    this.questStore.setMetric('village_request_story_clues', progress.storyClues);
+    this.questStore.setMetric('village_request_story_ready', progress.storyReady);
+    const completed = new Set(progress.storyCompletedIds);
+    for (const reward of REQUEST_STORY_REWARDS) {
+      this.questStore.setMetric(requestStoryMetricKey(reward.storyId), completed.has(reward.storyId) ? 1 : 0);
+    }
+  }
+
+  private syncGardenMetrics(): void {
+    if (!this.gardenStore) return;
+    const progress = this.gardenStore.progress();
+    this.questStore.setMetric('garden_planted', progress.totalPlanted);
+    this.questStore.setMetric('garden_tend', progress.totalTends);
+    this.questStore.setMetric('garden_harvest', progress.totalHarvests);
+    this.questStore.setMetric('garden_species', progress.speciesDiscovered);
+    this.questStore.setMetric('garden_specimens', progress.specimensDiscovered);
+  }
+
+  private syncCookingMetrics(): void {
+    if (!this.cookingStore) return;
+    const progress = this.cookingStore.progress();
+    this.questStore.setMetric('cooking_total', progress.totalCooked);
+    this.questStore.setMetric('cooking_recipes', progress.recipesDiscovered);
+    this.questStore.setMetric('cooking_plates', progress.platesDiscovered);
+    this.questStore.setMetric('cooking_favorites', progress.favorites);
+  }
+
+  private syncFishingMetrics(): void {
+    if (!this.fishingStore) return;
+    const progress = this.fishingStore.progress();
+    this.questStore.setMetric('fishing_total', progress.totalCatches);
+    this.questStore.setMetric('fishing_species', progress.speciesDiscovered);
+    this.questStore.setMetric('fishing_stamps', progress.recordStamps);
+    this.questStore.setMetric('fishing_gold_records', progress.goldRecords);
+  }
+
+  private syncAquariumMetrics(): void {
+    if (!this.homeAquariumStore || !this.fishingStore) return;
+    const progress = this.homeAquariumStore.progress(this.fishingStore);
+    this.questStore.setMetric('aquarium_saves', progress.saveCount);
+    this.questStore.setMetric('aquarium_displayed', progress.displayedFish);
+    this.questStore.setMetric('aquarium_frames', progress.framesUnlocked);
+    this.questStore.setMetric('aquarium_substrates', progress.substratesUnlocked);
+    this.questStore.setMetric('aquarium_ornaments', progress.ornamentsUnlocked);
+  }
+
+  private syncFurnitureReformMetrics(): void {
+    if (!this.furnitureReformStore) return;
+    const progress = this.furnitureReformStore.progress();
+    this.questStore.setMetric('furniture_reform_saves', progress.saves);
+    this.questStore.setMetric('furniture_reform_combos', progress.combinations);
+    this.questStore.setMetric('furniture_reform_finishes', progress.finishes);
+    this.questStore.setMetric('furniture_reform_colors', progress.colors);
+    this.questStore.setMetric('furniture_reformed_items', progress.styledPlacements);
+  }
+
+  private handleLookbookChanged(progress: LookbookProgress): void {
+    this.writeLookbookMetrics(progress);
+    this.refreshAchievementState(true);
+    this.refreshHearts();
+    this.refreshQuestTracker();
+    this.showBubble(this.player, `룩북 ${progress.stars}/${progress.totalStars}별 · ${progress.entries}장 기록`);
+  }
+
+  private syncLookbookMetrics(): void {
+    if (!this.lookbookStore || !this.achievementStore) return;
+    this.writeLookbookMetrics(this.lookbookStore.progress(this.achievementStore.get().unlocked));
+  }
+
+  private writeLookbookMetrics(progress: LookbookProgress): void {
+    this.questStore.setMetric('lookbook_submissions', progress.submissions);
+    this.questStore.setMetric('lookbook_entries', progress.entries);
+    this.questStore.setMetric('lookbook_stars', progress.stars);
+    this.questStore.setMetric('lookbook_perfect', progress.perfect);
+    this.questStore.setMetric('lookbook_unique', progress.uniqueLooks);
+  }
+
+  private handleEquipBadge(badgeId: string): void {
+    if (!this.achievementStore.equip(badgeId)) return;
+    this.refreshNameTag();
+    this.syncSelfMeta();
+    this.quests?.refresh(
+      this.questStore.views(), this.achievementStore.views(), lifeMasteryViews(this.questStore.get()),
+      this.questStore.focusedQuestId(),
+    );
+    const badge = BADGE_BY_ID.get(badgeId);
+    if (badge) this.showBubble(this.player, `◆ 「${badge.name}」 배지 장착!`);
   }
 
   private async handleQuestClaim(questId: string): Promise<void> {
     if (!this.sb) return;
-    const { data } = await this.sb.rpc('earn_activity', { p_kind: questId });
-    if (typeof data === 'number' && data >= 0) {
-      this.setCoins(data);
+    const result = await claimDailyQuest(this.sb, questId);
+    if (result.ok) {
+      this.setCoins(result.balance);
       this.questStore.claim(questId);
       this.quests?.markClaimed(questId);
       this.showBubble(this.player, '퀘스트 보상 +40 🪙');
       this.motions?.play(this.player, 'coin');
-    } else if (data === -3) {
+    } else if (result.reason === 'claimed') {
       this.questStore.claim(questId);
       this.quests?.markClaimed(questId); // 오늘 이미 수령
+    } else if (result.reason === 'not-ready') {
+      this.showBubble(this.player, '서버 기록이 아직 목표에 조금 모자라요. 안내 행동을 한 번 더 천천히 해 보세요.');
+    } else if (result.reason === 'no-rpc') {
+      this.showBubble(this.player, '보상 서버를 업데이트한 뒤 다시 시도해 주세요. 진행 기록은 그대로 보관돼요.');
     } else {
       this.showBubble(this.player, '보상 수령에 실패했어요');
     }
   }
 
   private async handleOmokWin(): Promise<void> {
+    this.incQuest('omok_win');
     if (!this.sb) {
       this.showBubble(this.player, '오목 승리! (오프라인 — 보상은 접속 후에)');
       return;
@@ -1371,11 +2962,11 @@ export class StreetScene extends Phaser.Scene {
   }
 
   private async handleBuskingComplete(): Promise<void> {
+    this.incQuest('q_busking');
     if (!this.sb) {
       this.showBubble(this.player, '멋진 연주! (오프라인 — 보상은 접속 후에)');
       return;
     }
-    this.incQuest('q_busking');
     const { data } = await this.sb.rpc('earn_activity', { p_kind: 'busking' });
     if (typeof data === 'number' && data >= 0) {
       this.setCoins(data);
@@ -1414,6 +3005,7 @@ export class StreetScene extends Phaser.Scene {
     this.player.stop();
     this.player.setTexture(this.charKey, this.facing * FRAMES_PER_DIR);
     if (!persist) return;
+    this.incQuest('customize_save');
     if (this.sb) void saveAppearance(this.sb, this.peer.userId, a);
     void this.adapter?.updateSelf(this.peer);
   }
@@ -1454,7 +3046,7 @@ export class StreetScene extends Phaser.Scene {
     bg.fillStyle(st.fill, 1).fillRoundedRect(-w / 2, -h / 2, w, h, 7);
     bg.fillStyle(st.border, 1).fillTriangle(-4, h / 2 + 4.5, 5, h / 2 + 4.5, 0.5, h / 2 - 2);
     bg.fillStyle(st.fill, 1).fillTriangle(-2.5, h / 2 + 3, 3.5, h / 2 + 3, 0.5, h / 2 - 2);
-    const c = this.add.container(owner.x, owner.y - 32, [bg, t]).setDepth(20);
+    const c = this.add.container(owner.x, owner.y - 48, [bg, t]).setDepth(20);
     // 뿅 하고 등장
     c.setScale(0.6);
     this.tweens.add({ targets: c, scale: 1, duration: 160, ease: 'Back.easeOut' });
@@ -1470,18 +3062,27 @@ export class StreetScene extends Phaser.Scene {
     this.emotes?.destroy();
     this.customize?.destroy();
     this.shop?.destroy();
+    this.neighborhoodMarket?.destroy();
     this.cafe?.destroy();
     this.busking?.destroy();
     this.omok?.destroy();
     this.claw?.destroy();
     this.realty?.destroy();
     this.petShop?.destroy();
+    this.petStyleStudio?.destroy();
+    this.photoBooth?.destroy();
+    this.gardenPanel?.destroy();
+    this.cookingPanel?.destroy();
+    this.fishingPanel?.destroy();
     this.weaponShop?.destroy();
+    this.adventureRolePanel?.destroy();
     this.hunt?.destroy();
     this.battleHud?.destroy();
     this.playerAura?.destroy();
     this.pet?.destroy();
     this.treasure?.destroy();
+    this.starterConcierge?.destroy();
+    this.starterConcierge = null;
     this.quests?.destroy();
     this.npcs?.destroy();
     this.residents?.destroy();
@@ -1493,6 +3094,7 @@ export class StreetScene extends Phaser.Scene {
     this.dex?.destroy();
     this.mapPanel?.destroy();
     this.residentsPanel?.destroy();
+    this.profilePanel?.destroy();
     this.rankingPanel?.destroy();
     if (this.escHandler) document.removeEventListener('keydown', this.escHandler);
     this.hint?.remove();

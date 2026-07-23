@@ -1,11 +1,15 @@
 import type { MoveInput } from '../game/entities/playerMotion';
 
 export function isTouchDevice(): boolean {
-  return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  const preview = import.meta.env.DEV
+    && typeof location !== 'undefined'
+    && new URLSearchParams(location.search).has('touch-preview');
+  return preview || 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 }
 
 const DEAD_ZONE = 12;   // px — 이 안쪽은 정지 (탭과 구분)
 const KNOB_MAX = 34;    // 노브 최대 이동 반경
+const GUIDE_STORAGE_KEY = 'hv-touch-guide-v1';
 
 export interface ActionDef { emoji: string; label: string; onTap: () => void }
 
@@ -20,6 +24,8 @@ export class TouchControls {
   private base: HTMLDivElement;
   private knob: HTMLDivElement;
   private actionsEl: HTMLDivElement | null = null;
+  private guideEl: HTMLDivElement | null = null;
+  private guideTimer: number | null = null;
   private state: MoveInput = { up: false, down: false, left: false, right: false };
   private pointerId: number | null = null;
   private origin = { x: 0, y: 0 };
@@ -40,12 +46,13 @@ export class TouchControls {
       this.actionsEl = document.createElement('div');
       this.actionsEl.className = 'hv-actions';
       this.actionsEl.innerHTML = actions
-        .map((a, i) => `<button data-act="${i}" title="${a.label}">${a.emoji}</button>`).join('');
+        .map((a, i) => `<button data-act="${i}" title="${a.label}" aria-label="${a.label}">${a.emoji}</button>`).join('');
       document.body.appendChild(this.actionsEl);
       this.actionsEl.querySelectorAll<HTMLButtonElement>('[data-act]').forEach((b) => {
         b.addEventListener('click', () => actions[Number(b.dataset.act)]!.onTap());
       });
     }
+    this.mountGuide();
 
     this.onDown = (e) => {
       // 게임 캔버스 위 터치만 — DOM UI(버튼·패널)는 그대로 동작
@@ -74,6 +81,7 @@ export class TouchControls {
         left: dx < -t, right: dx > t,
         up: dy < -t, down: dy > t,
       };
+      this.dismissGuide(true);
     };
     this.onUp = (e) => {
       if (e.pointerId !== this.pointerId) return;
@@ -91,11 +99,42 @@ export class TouchControls {
   /** 현재 방향 (키보드 입력과 OR로 합쳐 쓴다) */
   getInput(): MoveInput { return { ...this.state }; }
 
+  private mountGuide(): void {
+    const forcePreview = import.meta.env.DEV
+      && typeof location !== 'undefined'
+      && new URLSearchParams(location.search).has('touch-preview');
+    if (!forcePreview && localStorage.getItem(GUIDE_STORAGE_KEY) === '1') return;
+    this.guideEl = document.createElement('div');
+    this.guideEl.className = 'hv-touch-guide';
+    this.guideEl.setAttribute('role', 'status');
+    this.guideEl.innerHTML = `
+      <i aria-hidden="true">이동</i>
+      <div><b>빈 곳을 누른 채 끌어 이동</b><span>조이스틱은 손가락을 놓은 자리에 나타나요.</span></div>
+      <button type="button" aria-label="이동 안내 닫기">알겠어요</button>
+    `;
+    document.body.appendChild(this.guideEl);
+    this.guideEl.querySelector('button')?.addEventListener('click', () => this.dismissGuide(true));
+    this.guideTimer = window.setTimeout(() => this.dismissGuide(true), 6_500);
+  }
+
+  private dismissGuide(remember: boolean): void {
+    if (!this.guideEl) return;
+    if (remember) localStorage.setItem(GUIDE_STORAGE_KEY, '1');
+    this.guideEl.classList.add('is-leaving');
+    const guide = this.guideEl;
+    this.guideEl = null;
+    window.setTimeout(() => guide.remove(), 180);
+    if (this.guideTimer !== null) window.clearTimeout(this.guideTimer);
+    this.guideTimer = null;
+  }
+
   destroy(): void {
     window.removeEventListener('pointerdown', this.onDown);
     window.removeEventListener('pointermove', this.onMove);
     window.removeEventListener('pointerup', this.onUp);
     window.removeEventListener('pointercancel', this.onUp);
+    if (this.guideTimer !== null) window.clearTimeout(this.guideTimer);
+    this.guideEl?.remove();
     this.actionsEl?.remove();
     this.root.remove();
   }

@@ -6,12 +6,14 @@ import { CATALOG_BY_ID } from '../../items/catalog';
 import { makeTexture, seeded, type Px } from './pixelCanvas';
 import { furnitureAssetKey } from './assetManifest';
 import type { FloorPlan } from '../realestate/realEstate';
+import type { Rot } from '../entities/placement';
+import { furniturePlacementMeta, sourceRotation } from '../home/furniturePlacementMeta';
 
 const T = TILE;
 
 /** 부동산 평면 기반 방 배경 — 가변 크기 + 내부 칸막이 + 창문·문 (유형별 구조) */
 export function makeRoomBackgroundPlan(scene: Phaser.Scene, plan: FloorPlan, seed: number): string {
-  const key = `room-bg-${plan.w}x${plan.h}-${seed}`;
+  const key = `room-diorama-bg-v2-${plan.w}x${plan.h}-${seed}`;
   if (scene.textures.exists(key)) return key;
   const W = plan.w * T, H = plan.h * T;
   makeTexture(scene, key, W, H, (d) => {
@@ -29,6 +31,8 @@ export function makeRoomBackgroundPlan(scene: Phaser.Scene, plan: FloorPlan, see
     const wallRect = (x: number, y: number, w: number, h: number) => {
       d.rect(x, y, w, h, ROOM_PAL.wallPaper);
       for (let i = 0; i < w; i += 8) d.rect(x + i, y, 1, h, ROOM_PAL.wallPaperShade, 0.4);
+      d.rect(x, y, w, 4, ROOM_PAL.wallBase, 0.72);
+      d.rect(x + 2, y + 4, Math.max(0, w - 4), 2, ROOM_PAL.wallPaperShade, 0.55);
       d.rect(x, y + h - 3, w, 3, ROOM_PAL.wallBase);
     };
     // 테두리 벽
@@ -60,6 +64,32 @@ export function makeRoomBackgroundPlan(scene: Phaser.Scene, plan: FloorPlan, see
     d.rect(dx + 2, dy, T - 4, T, PAL.doorDark);
     d.rect(dx + 4, dy + 2, T - 8, T - 2, PAL.doorWood);
     d.rect(dx + T - 10, dy + T / 2, 3, 3, PAL.signText);
+    // 열린 인형집처럼 읽히는 안쪽 모서리와 얕은 벽 그림자
+    d.rect(T, T, W - T * 2, 3, PAL.shadow, 0.22);
+    d.rect(T, T, 3, H - T * 2, PAL.shadow, 0.16);
+    d.rect(W - T - 3, T, 3, H - T * 2, PAL.shadow, 0.24);
+  });
+  return key;
+}
+
+/** 남쪽 벽의 높이 면. 캐릭터가 현관에 다가가면 RoomScene에서 부드럽게 투명해진다. */
+export function makeRoomForegroundPlan(scene: Phaser.Scene, plan: FloorPlan, seed: number): string {
+  const key = `room-diorama-front-v1-${plan.w}x${plan.h}-${seed}`;
+  if (scene.textures.exists(key)) return key;
+  const W = plan.w * T; const H = T + 6;
+  makeTexture(scene, key, W, H, (d) => {
+    for (let tx = 0; tx < plan.w; tx += 1) {
+      if (tx === plan.door.tx) continue;
+      const x = tx * T;
+      d.rect(x, 0, T, 6, ROOM_PAL.wallBase);
+      d.rect(x + 2, 1, T - 4, 2, ROOM_PAL.wallPaperShade, .8);
+      d.rect(x, 6, T, T, ROOM_PAL.wallPaper);
+      d.rect(x, 6, 1, T, ROOM_PAL.wallPaperShade, .55);
+      d.rect(x, T + 2, T, 4, ROOM_PAL.wallBase);
+    }
+    const left = plan.door.tx * T;
+    d.rect(left - 3, 3, 3, H - 3, PAL.doorDark);
+    d.rect(left + T, 3, 3, H - 3, PAL.doorDark);
   });
   return key;
 }
@@ -428,8 +458,7 @@ const DRAWERS: Record<string, (c: Ctx) => void> = {
   },
 };
 
-/** 가구 텍스처 — AI 스프라이트 우선, 없으면 프로시저럴 아키타입 드로어 */
-export function ensureFurniture(scene: Phaser.Scene, itemId: string, rot: 0 | 1): string {
+function ensureFurnitureSource(scene: Phaser.Scene, itemId: string, rot: 0 | 1): string {
   const aiKey = furnitureAssetKey(itemId, rot);
   if (scene.textures.exists(aiKey)) return aiKey;
   // 정사각형 아이템은 rot 1도 rot 0 텍스처 재사용
@@ -439,10 +468,12 @@ export function ensureFurniture(scene: Phaser.Scene, itemId: string, rot: 0 | 1)
   }
   const def = def0;
   const key = `furn-${itemId}-${rot}`;
+  if (scene.textures.exists(key)) return key;
   if (!def) return key;
   const wall = def.category === 'wall';
   const w = ((rot === 0 || wall) ? def.w : def.h) * T;
-  const h = ((rot === 0 || wall) ? def.h : def.w) * T;
+  const footprintH = ((rot === 0 || wall) ? def.h : def.w) * T;
+  const h = footprintH + (furniturePlacementMeta(itemId)?.risePx ?? 0);
   makeTexture(scene, key, w, h, (d) => {
     const base = parseInt(def.color, 16);
     const c: Ctx = {
@@ -453,5 +484,22 @@ export function ensureFurniture(scene: Phaser.Scene, itemId: string, rot: 0 | 1)
     };
     (DRAWERS[def.arch] ?? DRAWERS.deco!)(c);
   });
+  return key;
+}
+
+/** 가구 텍스처 — 기존 0/1 자산을 보존하고 2/3은 픽셀 좌우 반전으로 확장한다. */
+export function ensureFurniture(scene: Phaser.Scene, itemId: string, rot: Rot): string {
+  const direction = sourceRotation(rot);
+  const sourceKey = ensureFurnitureSource(scene, itemId, direction.source);
+  if (!direction.mirror || !scene.textures.exists(sourceKey)) return sourceKey;
+  const key = `furn-${itemId}-${rot}`;
+  if (scene.textures.exists(key)) return key;
+  const source = scene.textures.get(sourceKey).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+  const canvas = document.createElement('canvas');
+  canvas.width = source.width; canvas.height = source.height;
+  const ctx = canvas.getContext('2d')!;
+  ctx.imageSmoothingEnabled = false;
+  ctx.translate(canvas.width, 0); ctx.scale(-1, 1); ctx.drawImage(source, 0, 0);
+  scene.textures.addCanvas(key, canvas);
   return key;
 }

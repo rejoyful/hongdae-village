@@ -14,7 +14,7 @@ export class ClawPanel {
 
   constructor(userId: string, private readonly opts: {
     onToggle: (open: boolean) => void;
-    onWin: (prize: string) => void;
+    onWin: (prize: string, ownedCount: number) => void;
   }) {
     this.storeKey = `hv-dolls-${userId}`;
     try {
@@ -30,6 +30,7 @@ export class ClawPanel {
   }
 
   get isOpen(): boolean { return this.opened; }
+  get ownedCount(): number { return this.collection.length; }
 
   open(): void {
     if (this.opened) return;
@@ -67,7 +68,7 @@ export class ClawPanel {
         this.collection.push(this.state.prize);
         try { localStorage.setItem(this.storeKey, JSON.stringify(this.collection)); } catch { /* ignore */ }
       }
-      this.opts.onWin(this.state.prize);
+      this.opts.onWin(this.state.prize, this.collection.length);
     } else {
       audio.playSe('pop');
     }

@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 import { TILE } from '../config';
 import { tileToWorld, worldToTile, type CollisionGrid, type Vec2 } from '../world/grid';
 import { stepPlayer, type MoveInput } from './playerMotion';
-import { ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
+import { CHAR_ORIGIN_Y, ensureCharacter, FRAMES_PER_DIR } from '../art/characterArt';
 import { randomAppearance } from '../art/appearance';
 import { seeded } from '../art/pixelCanvas';
 import { pickLine, cohortForIndex, slotForHour, type Cohort } from './npcChatter';
@@ -83,7 +83,7 @@ export class NpcCrowd {
     const charKey = ensureCharacter(this.scene, appearance);
     const w = tileToWorld(tile.tx, tile.ty);
     const sprite = this.scene.add.sprite(w.x + TILE / 2, w.y + TILE / 2, charKey, 0)
-      .setOrigin(0.5, 0.66).setDepth(9); // 플레이어(10)보다 살짝 아래
+      .setOrigin(0.5, CHAR_ORIGIN_Y).setDepth(9); // 플레이어(10)보다 살짝 아래
     this.npcs.push({
       sprite, charKey, target: null,
       waitUntil: this.scene.time.now + this.rnd() * 3000,

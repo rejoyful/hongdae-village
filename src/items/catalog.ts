@@ -55,4 +55,5 @@ export const STARTER_ITEMS: Array<{ itemId: string; qty: number }> = [
   { itemId: 'poster_band', qty: 1 }, { itemId: 'wall_clock', qty: 1 },
   { itemId: 'moving_box', qty: 2 }, { itemId: 'book_pile', qty: 1 },
   { itemId: 'flower_vase', qty: 1 }, { itemId: 'bear_doll', qty: 1 },
+  { itemId: 'fish_tank', qty: 1 },
 ];

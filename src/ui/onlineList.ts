@@ -3,10 +3,10 @@ export class OnlineList {
   private root: HTMLDivElement;
   private myNick: string;
 
-  constructor(myNick: string) {
+  constructor(myNick: string, variantClass = '', private readonly onOpenSelf?: () => void) {
     this.myNick = myNick;
     this.root = document.createElement('div');
-    this.root.className = 'hv-online';
+    this.root.className = `hv-online ${variantClass}`.trim();
     document.body.appendChild(this.root);
     this.render([]);
   }
@@ -16,8 +16,9 @@ export class OnlineList {
     const total = remoteNicks.length + 1;
     this.root.innerHTML = `
       <div class="online-head"><span class="dot"></span>접속 ${total}</div>
-      <div class="online-me">${escapeHtml(this.myNick)} <em>나</em></div>
+      <button class="online-me" data-online-self title="내 마을 명함 열기">${escapeHtml(this.myNick)} <em>나</em><i>명함</i></button>
       ${remoteNicks.map((n) => `<div class="online-user">${escapeHtml(n)}</div>`).join('')}`;
+    this.root.querySelector('[data-online-self]')?.addEventListener('click', () => this.onOpenSelf?.());
   }
 
   setMyNick(nick: string, remoteNicks: string[]): void {

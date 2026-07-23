@@ -2,7 +2,9 @@ import { gainXp, deathPenalty, type Progress } from './combat';
 import { tierQuota, MAX_TIER } from './monsters';
 
 /** 전투 진행 저장 (로컬 SSOT): 레벨·경험치·티어·처치수·무기 */
-const KEY = 'hv-battle-v1';
+const LEGACY_KEY = 'hv-battle-v1';
+const KEY_PREFIX = 'hv-battle-v1-';
+const MIGRATION_OWNER_KEY = 'hv-battle-v1-migration-owner';
 
 interface BattleState {
   level: number;
@@ -14,28 +16,45 @@ interface BattleState {
   equipped: string;    // 장착 무기 id
 }
 
-function load(): BattleState {
-  const base: BattleState = {
-    level: 1, xp: 0, tier: 1, killsInTier: 0, totalKills: 0, weapons: ['fist'], equipped: 'fist',
+function normalize(raw: unknown): BattleState {
+  const r = (raw ?? {}) as Partial<BattleState>;
+  return {
+    level: Number.isFinite(r.level) && r.level! >= 1 ? Math.floor(r.level!) : 1,
+    xp: Number.isFinite(r.xp) && r.xp! >= 0 ? Math.floor(r.xp!) : 0,
+    tier: Number.isFinite(r.tier) && r.tier! >= 1 ? Math.min(Math.floor(r.tier!), MAX_TIER) : 1,
+    killsInTier: Number.isFinite(r.killsInTier) && r.killsInTier! >= 0 ? Math.floor(r.killsInTier!) : 0,
+    totalKills: Number.isFinite(r.totalKills) && r.totalKills! >= 0 ? Math.floor(r.totalKills!) : 0,
+    weapons: Array.isArray(r.weapons) && r.weapons.length ? r.weapons.filter((x): x is string => typeof x === 'string') : ['fist'],
+    equipped: typeof r.equipped === 'string' ? r.equipped : 'fist',
   };
+}
+
+function loadForUser(storeKey: string, userId: string): BattleState {
   try {
-    const r = JSON.parse(localStorage.getItem(KEY) ?? '{}');
-    return {
-      level: Number.isFinite(r.level) && r.level >= 1 ? r.level : 1,
-      xp: Number.isFinite(r.xp) && r.xp >= 0 ? r.xp : 0,
-      tier: Number.isFinite(r.tier) && r.tier >= 1 ? Math.min(r.tier, MAX_TIER) : 1,
-      killsInTier: Number.isFinite(r.killsInTier) && r.killsInTier >= 0 ? r.killsInTier : 0,
-      totalKills: Number.isFinite(r.totalKills) ? r.totalKills : 0,
-      weapons: Array.isArray(r.weapons) && r.weapons.length ? r.weapons.filter((x: unknown) => typeof x === 'string') : ['fist'],
-      equipped: typeof r.equipped === 'string' ? r.equipped : 'fist',
-    };
-  } catch { return base; }
+    const current = localStorage.getItem(storeKey);
+    if (current) return normalize(JSON.parse(current));
+    const legacy = localStorage.getItem(LEGACY_KEY);
+    const migrationOwner = localStorage.getItem(MIGRATION_OWNER_KEY);
+    if (legacy && (!migrationOwner || migrationOwner === userId)) {
+      const migrated = normalize(JSON.parse(legacy));
+      localStorage.setItem(storeKey, JSON.stringify(migrated));
+      localStorage.setItem(MIGRATION_OWNER_KEY, userId);
+      return migrated;
+    }
+  } catch { /* 손상 저장·저장소 차단은 새 진행으로 복구 */ }
+  return normalize(null);
 }
 
 export class BattleStore {
-  private s: BattleState = load();
+  private s: BattleState;
+  private readonly storeKey: string;
 
-  private save(): void { try { localStorage.setItem(KEY, JSON.stringify(this.s)); } catch { /* 무시 */ } }
+  constructor(userId = 'offline') {
+    this.storeKey = KEY_PREFIX + userId;
+    this.s = loadForUser(this.storeKey, userId);
+  }
+
+  private save(): void { try { localStorage.setItem(this.storeKey, JSON.stringify(this.s)); } catch { /* 무시 */ } }
 
   progress(): Progress { return { level: this.s.level, xp: this.s.xp }; }
   get level(): number { return this.s.level; }

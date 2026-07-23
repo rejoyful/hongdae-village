@@ -1,9 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import {
   xpToNext, maxHpForLevel, baseAtkForLevel, totalAtk, gainXp, deathPenalty, FATIGUE_MS,
 } from '../src/game/battle/combat';
 import { MONSTERS, monstersOfTier, tierQuota, MAX_TIER } from '../src/game/battle/monsters';
 import { WEAPONS, weaponById } from '../src/game/battle/weapons';
+import { MonsterDexStore, normalizeMonsterDex } from '../src/game/battle/monsterDex';
+import { BattleStore } from '../src/game/battle/battleStore';
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe('전투·성장 곡선', () => {
   it('경험치 곡선은 가파르게 증가한다 (너무 쉽지 않게)', () => {
@@ -42,6 +46,30 @@ describe('전투·성장 곡선', () => {
   });
 });
 
+describe('계정별 전투 진행 저장', () => {
+  it('기존 단일 저장은 첫 사용자에게만 이전하고 다른 계정과 레벨을 섞지 않는다', () => {
+    const values = new Map<string, string>();
+    values.set('hv-battle-v1', JSON.stringify({
+      level: 4, xp: 7, tier: 2, killsInTier: 3, totalKills: 24, weapons: ['fist'], equipped: 'fist',
+    }));
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value); },
+      removeItem: (key: string) => { values.delete(key); },
+    });
+
+    const alice = new BattleStore('alice');
+    const bob = new BattleStore('bob');
+    expect(alice.progress()).toEqual({ level: 4, xp: 7 });
+    expect(bob.progress()).toEqual({ level: 1, xp: 0 });
+    expect(values.get('hv-battle-v1-migration-owner')).toBe('alice');
+
+    bob.onKill(40);
+    expect(new BattleStore('bob').level).toBe(2);
+    expect(new BattleStore('alice').level).toBe(4);
+  });
+});
+
 describe('몬스터·무기 데이터', () => {
   it('30종 6티어, 티어당 5종', () => {
     expect(MONSTERS).toHaveLength(30);
@@ -74,6 +102,32 @@ describe('몬스터·무기 데이터', () => {
       expect(paid[i]!.atk).toBeGreaterThan(paid[i - 1]!.atk);
       expect(paid[i]!.price).toBeGreaterThan(paid[i - 1]!.price);
     }
+  });
+});
+
+describe('몬스터 연구 노트', () => {
+  it('알 수 없는 종과 잘못된 수치를 제거해 안전하게 복원한다', () => {
+    const state = normalizeMonsterDex({
+      kills: { slime_g: 3.8, unknown: 99, acornbug: -2 },
+      bestStreak: 7.9,
+      totalShards: Number.NaN,
+    });
+    expect(state.kills).toEqual({ slime_g: 3, acornbug: 0 });
+    expect(state.bestStreak).toBe(7);
+    expect(state.totalShards).toBe(0);
+  });
+
+  it('첫 발견·종별 처치·연속 처치 최고 기록을 함께 센다', () => {
+    const dex = new MonsterDexStore('combat-test');
+    const first = dex.recordKill('slime_g')!;
+    const second = dex.recordKill('slime_g')!;
+    expect(first.firstDiscovery).toBe(true);
+    expect(second.firstDiscovery).toBe(false);
+    expect(second.speciesKills).toBe(2);
+    expect(second.currentStreak).toBe(2);
+    dex.breakStreak();
+    expect(dex.recordKill('acornbug')?.discovered).toBe(2);
+    expect(dex.views()).toHaveLength(MONSTERS.length);
   });
 });
 

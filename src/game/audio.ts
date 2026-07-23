@@ -80,8 +80,8 @@ class AudioEngine {
   setVib(on: boolean): void { this.prefs.vib = on; this.persist(); }
 
   /** 진동 (모바일, 설정 On일 때만) */
-  vibrate(ms = 30): void {
-    if (this.prefs.vib && 'vibrate' in navigator) navigator.vibrate(ms);
+  vibrate(pattern: number | number[] = 30): void {
+    if (this.prefs.vib && 'vibrate' in navigator) navigator.vibrate(pattern);
   }
 
   private persist(): void {

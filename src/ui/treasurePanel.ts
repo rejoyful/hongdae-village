@@ -9,7 +9,10 @@ export class TreasurePanel {
   private tab: 'collection' | 'hints' = 'collection';
   private selected: string | null = null;
 
-  constructor(private readonly store: TreasureStore, private readonly opts: { onToggle: (open: boolean) => void }) {
+  constructor(private readonly store: TreasureStore, private readonly opts: {
+    onToggle: (open: boolean) => void;
+    onCraft?: (treasureId: string) => void;
+  }) {
     this.root = document.createElement('div');
     this.root.className = 'hv-wood-modal hv-treasure';
     this.root.style.display = 'none';
@@ -58,7 +61,10 @@ export class TreasurePanel {
     });
     this.root.querySelectorAll<HTMLButtonElement>('[data-craft]').forEach((b) => {
       b.addEventListener('click', () => {
-        if (this.store.craft(b.dataset.craft!)) this.selected = b.dataset.craft!;
+        if (this.store.craft(b.dataset.craft!)) {
+          this.selected = b.dataset.craft!;
+          this.opts.onCraft?.(b.dataset.craft!);
+        }
         this.render();
       });
     });

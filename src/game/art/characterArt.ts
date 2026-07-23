@@ -4,22 +4,26 @@ import { makeSheet, px, type Px } from './pixelCanvas';
 import {
   type Appearance, appearanceKey, SKIN_TONES, HAIR_COLORS, PANTS_COLORS,
 } from './appearance';
+import {
+  drawCharacterHd, HD_CHAR_H, HD_CHAR_ORIGIN_Y, HD_CHAR_W,
+} from './characterArtHd';
 
 /**
- * 캐릭터 스프라이트시트 (24×32, 프레임 16개 = 방향 4 × 걷기 4프레임).
+ * 캐릭터 스프라이트시트 (32×48, 프레임 16개 = 방향 4 × 걷기 4프레임).
  * 프레임: dir*4 + step. dir: 0 하 / 1 우 / 2 좌 / 3 상.
  * 걷기 사이클: 0 접지 → 1 왼발 앞 → 2 교차(몸 1px 위) → 3 오른발 앞.
  */
-export const CHAR_W = 24;
-export const CHAR_H = 32;
+export const CHAR_W = HD_CHAR_W;
+export const CHAR_H = HD_CHAR_H;
+export const CHAR_ORIGIN_Y = HD_CHAR_ORIGIN_Y;
 export const FRAMES_PER_DIR = 4;
 
 export function ensureCharacter(scene: Phaser.Scene, a: Appearance): string {
-  const key = appearanceKey(a);
+  const key = `${appearanceKey(a)}-hd32x48`;
   makeSheet(scene, key, CHAR_W, CHAR_H, 4 * FRAMES_PER_DIR, (d, frame, ox) => {
     const dir = Math.floor(frame / FRAMES_PER_DIR) as 0 | 1 | 2 | 3;
     const step = frame % FRAMES_PER_DIR;
-    drawChar(d, ox, dir, step, a);
+    drawCharacterHd(d, ox, dir, step, a);
   });
   for (let dir = 0; dir < 4; dir++) {
     const animKey = `${key}-walk-${dir}`;
@@ -51,6 +55,17 @@ function drawChar(d: Px, ox: number, dir: 0 | 1 | 2 | 3, step: number, a: Appear
   const shirtLite = shade(shirt, 1.15);
   const pants = PANTS_COLORS[a.pants]!;
   const pantsDark = shade(pants, 0.75);
+  const accent = parseInt(a.accent ?? 'f2ead8', 16);
+  const accentDark = shade(accent, 0.72);
+  const topStyle = a.topStyle ?? 0;
+  const bottomStyle = a.bottomStyle ?? 0;
+  const shoeStyle = a.shoeStyle ?? 0;
+  const backStyle = a.back ?? 0;
+  const eyeStyle = a.eyeStyle ?? 0;
+  const mouthStyle = a.mouthStyle ?? 0;
+  const faceDetail = a.faceDetail ?? 0;
+  const topPattern = a.topPattern ?? 0;
+  const sockStyle = a.sockStyle ?? 0;
   const OUT = PAL.outline;
 
   // 걷기 포즈 파라미터
@@ -65,22 +80,76 @@ function drawChar(d: Px, ox: number, dir: 0 | 1 | 2 | 3, step: number, a: Appear
   d.rect(ox + 6, 29, 12, 2, PAL.shadow);
   d.rect(ox + 7, 30, 10, 1, PAL.shadow);
 
+  // 등 장식은 몸·다리보다 먼저 그려 자연스럽게 뒤로 들어간다.
+  if (backStyle > 0) drawBackAccessory(d, ox, dir, y0, backStyle, accent, accentDark, OUT);
+
   // ── 다리 (아웃라인 → 바지 → 밑단 → 신발)
   const leg = (lx: number, phase: number) => {
     const top = 21 - bob;
     const h = 8 + Math.min(0, phase);               // 뒤로 간 다리는 짧아 보임
-    d.rect(ox + lx - 1, top - 1, 6, h + 2, OUT, 0.55);
-    d.rect(ox + lx, top, 4, h, pants);
-    d.rect(ox + lx, top, 1, h, pantsDark);          // 안쪽 음영
-    d.rect(ox + lx, top + h - 2, 4, 2, pantsDark);  // 밑단
+    const wide = bottomStyle === 1 || bottomStyle === 4;
+    const legX = lx - (wide ? 1 : 0), legW = wide ? 6 : 4;
+    d.rect(ox + legX - 1, top - 1, legW + 2, h + 2, OUT, 0.55);
+    if (bottomStyle === 2) {                         // 쇼츠 + 맨다리
+      d.rect(ox + legX, top, legW, 3, pants);
+      d.rect(ox + legX, top + 2, legW, 1, pantsDark);
+      d.rect(ox + lx, top + 3, 4, Math.max(1, h - 3), skin);
+      d.rect(ox + lx, top + 3, 1, Math.max(1, h - 3), skinDark);
+    } else if (bottomStyle === 3 || bottomStyle === 5) { // 스커트 아래 다리
+      d.rect(ox + lx, top, 4, h, skin);
+      d.rect(ox + lx, top, 1, h, skinDark);
+    } else {
+      d.rect(ox + legX, top, legW, h, pants);
+      d.rect(ox + legX, top, 1, h, pantsDark);
+      d.rect(ox + legX, top + h - 2, legW, 2, pantsDark);
+      if (bottomStyle === 4) {                       // 카고 포켓
+        d.rect(ox + legX + (lx < 10 ? 0 : legW - 2), top + 3, 2, 3, accentDark, 0.8);
+      }
+    }
     const sy = top + h;
-    d.rect(ox + lx - 1, sy, 6, 3, OUT, 0.7);
-    d.rect(ox + lx, sy, 4 + (phase > 0 ? 1 : 0), 2, PAL.shoes);
-    d.rect(ox + lx, sy, 4, 1, shade(PAL.shoes, 1.5));
+    if (sockStyle > 0) {
+      const exposed = bottomStyle === 2 || bottomStyle === 3 || bottomStyle === 5;
+      const sockH = sockStyle === 3 && exposed ? 5 : sockStyle === 4 ? 4 : exposed ? 3 : 2;
+      const sockX = lx - (sockStyle === 4 ? 1 : 0);
+      const sockW = sockStyle === 4 ? 6 : 4;
+      const sock = sockStyle === 4 ? accent : 0xf4ead8;
+      d.rect(ox + sockX - 1, sy - sockH - 1, sockW + 2, sockH + 2, OUT, 0.55);
+      d.rect(ox + sockX, sy - sockH, sockW, sockH + 1, sock);
+      if (sockStyle === 2) {
+        d.rect(ox + sockX, sy - sockH + 1, sockW, 1, accent);
+        d.rect(ox + sockX, sy - 1, sockW, 1, accentDark);
+      } else if (sockStyle === 3) {
+        d.rect(ox + sockX, sy - sockH, sockW, 1, accent);
+      } else if (sockStyle === 4) {
+        d.rect(ox + sockX, sy - sockH, sockW, 1, shade(accent, 1.25));
+        d.rect(ox + sockX + 1, sy - sockH + 2, sockW - 2, 1, accentDark, 0.7);
+      }
+    }
+    const shoe = shoeStyle === 2 ? 0x5a3a24 : shoeStyle === 4 ? accent : PAL.shoes;
+    const shoeH = shoeStyle === 1 ? 4 : shoeStyle === 3 ? 3 : 2;
+    d.rect(ox + lx - 1, sy - (shoeH - 2), 6, shoeH + 1, OUT, 0.75);
+    d.rect(ox + lx, sy - (shoeH - 2), 4 + (phase > 0 ? 1 : 0), shoeH, shoe);
+    d.rect(ox + lx, sy - (shoeH - 2), 4, 1, shoeStyle === 4 ? shade(accent, 1.28) : shade(shoe, 1.5));
+    if (shoeStyle === 3) d.rect(ox + lx + 1, sy - 1, 2, 1, accent, 0.9);
   };
   if (dir === 1) { leg(9 + legB, legB); leg(12 + legA, legA); }
   else if (dir === 2) { leg(8 + legA, legA); leg(11 + legB, legB); }
   else { leg(7, legA); leg(13, legB); }
+
+  // 스커트 실루엣은 다리 위에 얹는다.
+  const by = 19 - bob;
+  if (bottomStyle === 3) {
+    d.rect(ox + 5, by - 1, 14, 7, OUT, 0.6);
+    d.rect(ox + 6, by, 12, 5, pants);
+    d.rect(ox + 6, by + 4, 12, 1, pantsDark);
+    for (const x of [8, 11, 14, 17]) d.rect(ox + x, by + 1, 1, 3, x % 2 ? pantsDark : accentDark, 0.55);
+  } else if (bottomStyle === 5) {
+    d.rect(ox + 5, by - 1, 14, 11, OUT, 0.6);
+    d.rect(ox + 6, by, 12, 9, pants);
+    d.rect(ox + 5, by + 7, 14, 2, pants);
+    d.rect(ox + 5, by + 9, 14, 1, pantsDark);
+    d.rect(ox + (dir === 2 ? 7 : 15), by + 1, 2, 7, pantsDark, 0.55);
+  }
 
   // ── 몸통 (셔츠)
   const ty = 13 + y0 - 2; // = 13 - bob
@@ -91,6 +160,8 @@ function drawChar(d: Px, ox: number, dir: 0 | 1 | 2 | 3, step: number, a: Appear
   d.rect(ox + 8, ty, 8, 1, shirtLite);              // 어깨 하이라이트
   d.rect(ox + 7, ty + 7, 10, 2, shirtDark);         // 밑단
   if (dir === 0) d.rect(ox + 11, ty, 2, 2, shirtDark); // 카라 파임
+  drawTopPattern(d, ox, dir, ty, topPattern, accent, accentDark, shirtLite);
+  drawTopDetails(d, ox, dir, ty, topStyle, shirt, shirtDark, shirtLite, pants, accent, accentDark, OUT);
 
   // ── 팔 (셔츠 소매 + 손)
   const arm = (axx: number, phase: number, mirror: boolean) => {
@@ -110,28 +181,96 @@ function drawChar(d: Px, ox: number, dir: 0 | 1 | 2 | 3, step: number, a: Appear
   d.rect(ox + 6, hy + 10, 12, 2, skinDark);         // 턱 음영
   d.rect(ox + 6, hy, 1, 12, skinDark);
 
-  if (dir !== 3) {
-    const eye = (ex: number) => {
-      d.rect(ox + ex, hy + 6, 2, 3, 0x2a2420);       // 눈동자
-      d.rect(ox + ex, hy + 6, 1, 1, 0xffffff, 0.9);  // 하이라이트
-    };
-    if (dir === 0) {
-      eye(8); eye(14);
-      d.rect(ox + 11, hy + 10, 2, 1, 0xc97a6e);      // 입
-      d.rect(ox + 7, hy + 9, 1, 1, 0xe8a08c, 0.6);   // 볼터치
-      d.rect(ox + 16, hy + 9, 1, 1, 0xe8a08c, 0.6);
-    } else if (dir === 1) {
-      eye(14);
-      d.rect(ox + 17, hy + 7, 1, 3, skinDark);       // 콧선
-    } else {
-      eye(8);
-      d.rect(ox + 6, hy + 7, 1, 3, skinDark);
-    }
-  }
+  drawFace(d, ox, hy, dir, eyeStyle, mouthStyle, faceDetail, skinDark, accent, accentDark);
 
   drawHair(d, ox, hy, dir, a.hair, hairC, hairDark, hairLite);
   if ((a.glasses ?? 0) > 0) drawGlasses(d, ox, hy, dir, a.glasses!);
   if ((a.hat ?? 0) > 0) drawHat(d, ox, hy, dir, a.hat!);
+}
+
+/** 눈·입·얼굴 포인트는 헤어·안경과 독립된 조합 레이어다. */
+function drawFace(
+  d: Px, ox: number, hy: number, dir: 0 | 1 | 2 | 3,
+  eyeStyle: number, mouthStyle: number, detail: number,
+  skinDark: number, accent: number, accentDark: number,
+): void {
+  if (dir === 3) return;
+  const ink = 0x2a2420;
+  const eye = (ex: number, mirror = false) => {
+    const y = hy + 6;
+    switch (eyeStyle) {
+      case 1: // 초롱 눈
+        d.rect(ox + ex, y, 3, 3, ink);
+        d.rect(ox + ex, y, 1, 1, 0xffffff);
+        d.rect(ox + ex + 2, y + 2, 1, 1, 0x8ecfe0, 0.9);
+        break;
+      case 2: // 반달 눈
+        d.rect(ox + ex, y + 1, 3, 1, ink);
+        d.rect(ox + ex + (mirror ? 0 : 2), y, 1, 1, ink);
+        break;
+      case 3: // 졸린 눈
+        d.rect(ox + ex, y, 3, 1, ink);
+        d.rect(ox + ex + (mirror ? 0 : 2), y + 1, 1, 1, ink, 0.8);
+        break;
+      case 4: // 날카로운 눈
+        d.rect(ox + ex, y + (mirror ? 0 : 1), 3, 1, ink);
+        d.rect(ox + ex + (mirror ? 2 : 0), y + 1, 2, 1, ink);
+        break;
+      case 5: // 별빛 눈
+        d.rect(ox + ex + 1, y - 1, 1, 4, ink);
+        d.rect(ox + ex, y, 3, 2, ink);
+        d.rect(ox + ex + 1, y, 1, 1, 0xffffff);
+        break;
+      default:
+        d.rect(ox + ex, y, 2, 3, ink);
+        d.rect(ox + ex, y, 1, 1, 0xffffff, 0.9);
+    }
+  };
+
+  if (dir === 0) {
+    eye(8); eye(14, true);
+    switch (mouthStyle) {
+      case 1: d.rect(ox + 12, hy + 10, 1, 1, 0xb76562); break;
+      case 2:
+        d.rect(ox + 10, hy + 10, 2, 1, 0xb76562);
+        d.rect(ox + 13, hy + 10, 2, 1, 0xb76562);
+        d.rect(ox + 12, hy + 9, 1, 1, 0xb76562);
+        break;
+      case 3: d.rect(ox + 11, hy + 10, 3, 1, skinDark); break;
+      case 4:
+        d.rect(ox + 11, hy + 10, 3, 2, 0xb75f62);
+        d.rect(ox + 12, hy + 10, 2, 1, 0xffffff, 0.9);
+        break;
+      default:
+        d.rect(ox + 11, hy + 10, 3, 1, 0xc97a6e);
+        d.rect(ox + 12, hy + 11, 1, 1, 0xc97a6e, 0.8);
+    }
+
+    if (detail === 1) { // 주근깨
+      for (const x of [7, 9, 15, 17]) d.rect(ox + x, hy + 9, 1, 1, 0xa86e58, 0.75);
+    } else if (detail === 2) { // 볼터치
+      d.rect(ox + 7, hy + 9, 2, 1, 0xe88f8a, 0.72);
+      d.rect(ox + 16, hy + 9, 2, 1, 0xe88f8a, 0.72);
+    } else if (detail === 3) { // 매력점
+      d.rect(ox + 16, hy + 10, 1, 1, 0x5a3a32);
+    } else if (detail === 4) { // 반창고
+      d.rect(ox + 15, hy + 8, 4, 2, 0xd8b890);
+      d.rect(ox + 16, hy + 8, 1, 2, 0xf2d8ae);
+    } else if (detail === 5) { // 페이스 페인트
+      d.rect(ox + 6, hy + 8, 3, 1, accent);
+      d.rect(ox + 7, hy + 9, 3, 1, accentDark);
+    }
+  } else if (dir === 1) {
+    eye(14, true);
+    d.rect(ox + 17, hy + 7, 1, 3, skinDark);
+    if (detail === 4) d.rect(ox + 14, hy + 9, 4, 2, 0xd8b890);
+    else if (detail === 2) d.rect(ox + 15, hy + 9, 2, 1, 0xe88f8a, 0.72);
+  } else {
+    eye(8);
+    d.rect(ox + 6, hy + 7, 1, 3, skinDark);
+    if (detail === 5) d.rect(ox + 6, hy + 9, 3, 1, accent);
+    else if (detail === 2) d.rect(ox + 7, hy + 9, 2, 1, 0xe88f8a, 0.72);
+  }
 }
 
 /** 안경 5종 — 얼굴 눈 위에 올린다 (뒤통수 dir 3 제외). 얇은 테 + 렌즈 사이 간격 */
@@ -232,16 +371,181 @@ function drawHat(d: Px, ox: number, hy: number, dir: 0 | 1 | 2 | 3, style: numbe
 
 /**
  * DOM 캔버스에 캐릭터 한 프레임을 그린다 (커스터마이즈 미리보기용, Phaser 불필요).
- * 캔버스는 24×32 픽셀 그대로 — CSS image-rendering:pixelated로 확대해 선명하게 본다.
+ * 캔버스는 32×48 픽셀 그대로 — CSS image-rendering:pixelated로 확대해 선명하게 본다.
  */
 export function paintCharacterFrame(
   ctx: CanvasRenderingContext2D, a: Appearance, dir: 0 | 1 | 2 | 3 = 0, step = 0,
 ): void {
   ctx.clearRect(0, 0, CHAR_W, CHAR_H);
-  drawChar(px(ctx), 0, dir, step, a);
+  drawCharacterHd(px(ctx), 0, dir, step, a);
 }
 
-/** 헤어스타일 6종 — 24×32 캔버스 기준, 하이라이트 밴드 포함 */
+/** 상의 실루엣과 별개로 염색 가능한 6종 패턴을 겹친다. */
+function drawTopPattern(
+  d: Px, ox: number, dir: 0 | 1 | 2 | 3, ty: number, pattern: number,
+  accent: number, accentDark: number, lite: number,
+): void {
+  if (pattern === 0) return;
+  const x0 = dir === 2 ? 8 : 9;
+  const width = dir === 0 || dir === 3 ? 7 : 6;
+  switch (pattern) {
+    case 1: // 스트라이프
+      d.rect(ox + x0, ty + 3, width, 1, accent, 0.88);
+      d.rect(ox + x0, ty + 5, width, 1, accentDark, 0.76);
+      break;
+    case 2: // 체커
+      for (let row = 0; row < 2; row++) {
+        for (let col = 0; col < 3; col++) {
+          d.rect(ox + x0 + col * 2, ty + 2 + row * 2, 2, 2, (row + col) % 2 ? accentDark : accent, 0.8);
+        }
+      }
+      break;
+    case 3: // 하트
+      if (dir !== 3) {
+        d.rect(ox + 10, ty + 3, 2, 2, accent);
+        d.rect(ox + 13, ty + 3, 2, 2, accent);
+        d.rect(ox + 11, ty + 4, 3, 3, accent);
+        d.rect(ox + 12, ty + 7, 1, 1, accentDark);
+      }
+      break;
+    case 4: // 별
+      if (dir !== 3) {
+        d.rect(ox + 12, ty + 2, 1, 6, accent);
+        d.rect(ox + 10, ty + 4, 5, 2, accent);
+        d.rect(ox + 12, ty + 4, 1, 1, lite);
+      }
+      break;
+    default: // 꽃자수
+      if (dir !== 3) {
+        d.rect(ox + 11, ty + 3, 2, 2, accent);
+        d.rect(ox + 14, ty + 3, 2, 2, accent);
+        d.rect(ox + 12, ty + 2, 2, 1, accent);
+        d.rect(ox + 12, ty + 5, 2, 2, accent);
+        d.rect(ox + 13, ty + 4, 1, 1, lite);
+      } else d.rect(ox + 10, ty + 4, 5, 2, accent, 0.72);
+  }
+}
+
+/** 상의 8종의 작은 실루엣·봉제 디테일. 24px에서도 정면 식별점이 남도록 단순화한다. */
+function drawTopDetails(
+  d: Px, ox: number, dir: 0 | 1 | 2 | 3, ty: number, style: number,
+  shirt: number, dark: number, lite: number, pants: number, accent: number, accentDark: number, out: number,
+): void {
+  const back = dir === 3;
+  switch (style) {
+    case 1: // 후드 — 목 뒤 후드 + 앞주머니/끈
+      d.rect(ox + 8, ty - 2, 8, 3, out, 0.55);
+      d.rect(ox + 9, ty - 1, 6, 3, shirt);
+      if (back) {
+        d.rect(ox + 8, ty, 8, 5, dark, 0.85);
+        d.rect(ox + 9, ty + 1, 6, 3, shirt);
+      } else {
+        d.rect(ox + 10, ty + 1, 1, 4, accentDark);
+        d.rect(ox + 14, ty + 1, 1, 4, accentDark);
+        d.rect(ox + 9, ty + 5, 6, 3, dark);
+        d.rect(ox + 10, ty + 5, 4, 1, lite);
+      }
+      break;
+    case 2: // 블레이저 — 라펠·단추
+      if (!back) {
+        d.rect(ox + 8, ty + 1, 3, 4, lite);
+        d.rect(ox + 14, ty + 1, 3, 4, dark);
+        d.rect(ox + 11, ty + 1, 3, 5, accent);
+        d.rect(ox + 12, ty + 6, 1, 1, accentDark);
+        d.rect(ox + 14, ty + 6, 1, 1, accentDark);
+      } else d.rect(ox + 11, ty + 1, 2, 7, dark, 0.7);
+      break;
+    case 3: // 가디건 — 앞여밈과 작은 단추
+      d.rect(ox + 11, ty, 2, 8, accent);
+      d.rect(ox + 12, ty, 1, 8, accentDark);
+      if (!back) for (const y of [ty + 2, ty + 5]) d.rect(ox + 13, y, 1, 1, lite);
+      break;
+    case 4: // 오버롤 — 바지색 턱받이와 멜빵
+      d.rect(ox + 9, ty, 2, 5, pants);
+      d.rect(ox + 14, ty, 2, 5, pants);
+      d.rect(ox + 9, ty + 3, 7, 6, pants);
+      d.rect(ox + 10, ty + 4, 5, 3, accentDark, 0.7);
+      if (!back) { d.rect(ox + 10, ty + 1, 1, 1, accent); d.rect(ox + 15, ty + 1, 1, 1, accent); }
+      break;
+    case 5: // 크롭 재킷 — 짧은 재킷과 이중 밑단
+      d.rect(ox + 7, ty + 5, 10, 2, accent);
+      d.rect(ox + 8, ty + 7, 8, 2, dark);
+      if (!back) { d.rect(ox + 11, ty + 1, 2, 5, accentDark); d.rect(ox + 9, ty + 2, 2, 1, lite); }
+      break;
+    case 6: // 세일러 — 넓은 카라와 포인트 타이
+      d.rect(ox + 7, ty, 10, 3, accent);
+      d.rect(ox + 9, ty + 2, 6, 2, shirt);
+      if (!back) {
+        d.rect(ox + 11, ty + 2, 2, 5, accentDark);
+        d.rect(ox + 10, ty + 6, 4, 2, accent);
+      } else d.rect(ox + 9, ty + 1, 6, 3, accentDark, 0.7);
+      break;
+    case 7: // 한복 저고리 — 사선 깃·고름
+      d.rect(ox + 7, ty + 6, 10, 3, accent);
+      if (!back) {
+        for (let i = 0; i < 5; i++) d.rect(ox + 9 + i, ty + i, 2, 1, accentDark);
+        d.rect(ox + 13, ty + 4, 4, 2, accent);
+        d.rect(ox + 15, ty + 5, 2, 3, accentDark);
+      } else d.rect(ox + 8, ty + 1, 8, 1, lite, 0.7);
+      break;
+    default: // 베이직 티 — 포인트 자수 한 픽셀
+      if (!back) d.rect(ox + 12, ty + 3, 2, 2, accent, 0.85);
+  }
+}
+
+/** 등 장식 5종. 방향별로 몸 뒤에서 읽히는 핵심 실루엣만 그린다. */
+function drawBackAccessory(
+  d: Px, ox: number, dir: 0 | 1 | 2 | 3, y0: number, style: number,
+  accent: number, dark: number, out: number,
+): void {
+  const ty = 13 + y0 - 2;
+  switch (style) {
+    case 1: { // 미니 백팩
+      const x = dir === 1 ? 4 : dir === 2 ? 15 : 7;
+      d.rect(ox + x - 1, ty, 11, 10, out, 0.65);
+      d.rect(ox + x, ty + 1, 9, 8, accent);
+      d.rect(ox + x + 1, ty + 5, 7, 3, dark);
+      d.rect(ox + x + 3, ty, 3, 1, dark);
+      break;
+    }
+    case 2: // 기타 케이스 — 길쭉한 사선 실루엣
+      for (let i = 0; i < 15; i++) {
+        const x = dir === 2 ? 17 - Math.floor(i / 3) : 3 + Math.floor(i / 3);
+        d.rect(ox + x, ty - 4 + i, 4, 2, out, 0.7);
+        d.rect(ox + x + 1, ty - 4 + i, 2, 2, dark);
+      }
+      d.rect(ox + (dir === 2 ? 13 : 7), ty + 8, 7, 6, out, 0.65);
+      d.rect(ox + (dir === 2 ? 14 : 8), ty + 9, 5, 4, accent);
+      break;
+    case 3: // 픽셀 윙 — 좌우 대칭 반투명 날개
+      for (const sx of [-1, 1]) {
+        const base = sx < 0 ? 1 : 17;
+        d.rect(ox + base, ty - 1, 6, 3, accent, 0.75);
+        d.rect(ox + base + (sx < 0 ? -1 : 1), ty + 2, 6, 4, accent, 0.62);
+        d.rect(ox + base + (sx < 0 ? 1 : 0), ty + 6, 4, 4, accent, 0.5);
+        d.rect(ox + base + 2, ty, 2, 1, 0xffffff, 0.75);
+      }
+      break;
+    case 4: { // 토트백 — 한쪽으로 내려오는 가방
+      const x = dir === 2 ? 2 : 17;
+      d.rect(ox + x, ty + 4, 6, 9, out, 0.6);
+      d.rect(ox + x + 1, ty + 5, 4, 7, accent);
+      d.rect(ox + x + 2, ty + 2, 2, 4, dark);
+      break;
+    }
+    default: { // 고양이 꼬리 — 몸 뒤로 휘는 픽셀 곡선
+      const right = dir !== 2;
+      const bx = right ? 18 : 4;
+      for (let i = 0; i < 7; i++) {
+        const x = bx + (right ? Math.floor(i / 3) : -Math.floor(i / 3));
+        d.rect(ox + x, ty + 7 + i, 3, 2, i % 2 ? accent : dark);
+      }
+      d.rect(ox + (right ? 18 : 3), ty + 13, 4, 3, accent);
+    }
+  }
+}
+
+/** 레거시 24×32 렌더러용 헤어스타일 6종. 저장 호환 참고를 위해 남겨 둔다. */
 function drawHair(
   d: Px, ox: number, hy: number, dir: 0 | 1 | 2 | 3,
   style: number, c: number, dark: number, lite: number,

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   petStage, evalUnlocks, PET_STAGES, AFFINITY_MAX, BASE_SPECIES, RARE_SPECIES,
+  PET_TRICKS,
 } from '../src/game/pets/pets';
 import { petTarget, PET_REST } from '../src/game/pets/petFollowMath';
 import { giftIntervalMs, giftShards, giftEmoji, GIFT_EMOJIS } from '../src/game/pets/petGift';
@@ -133,5 +134,61 @@ describe('PetStore (localStorage shim)', () => {
     for (let i = 0; i < 50; i++) s.pet('fox'); // 10 + 2*50 → 100 클램프
     expect(s.affinity('fox')).toBe(AFFINITY_MAX);
     expect(s.checkUnlocks()).toContain('goldcat');
+  });
+
+  it('같이 놀기는 하루 한 번이며 친밀도와 추억 진행을 올린다', async () => {
+    const { PetStore } = await import('../src/game/pets/petStore');
+    const s = new PetStore();
+    s.adopt('rabbit');
+    expect(s.canPlay('rabbit')).toBe(true);
+    expect(s.play('rabbit')).toBe(16);
+    expect(s.playCount('rabbit')).toBe(1);
+    expect(s.play('rabbit')).toBe(-1);
+    expect(s.memories('rabbit').filter((m) => m.unlocked).map((m) => m.id)).toEqual(['family']);
+  });
+
+  it('트릭은 친밀도 순서대로 하루 한 번 배우고 영구 기록된다', async () => {
+    const { PetStore } = await import('../src/game/pets/petStore');
+    const s = new PetStore();
+    s.adopt('dog'); // 친밀도 10 → 첫 트릭 즉시 연습 가능
+    expect(PET_TRICKS[0]!.id).toBe('hello');
+    expect(s.nextTrick('dog')?.id).toBe('hello');
+    const result = s.train('dog');
+    expect(result.ok).toBe(true);
+    expect(s.learnedTricks('dog').map((t) => t.id)).toEqual(['hello']);
+    expect(s.train('dog')).toEqual({ ok: false, reason: 'daily' });
+
+    const restored = new PetStore();
+    expect(restored.learnedTricks('dog').map((t) => t.id)).toEqual(['hello']);
+  });
+
+  it('다음 트릭의 친밀도가 부족하면 정확히 거부한다', async () => {
+    const { PetStore } = await import('../src/game/pets/petStore');
+    (globalThis as unknown as { localStorage: MemStorage }).localStorage.setItem('hv-pets-v1', JSON.stringify({
+      owned: ['cat'], active: 'cat', affinity: { cat: 10 }, tricks: { cat: ['hello'] },
+      fedDay: {}, feeds: 0, unlocked: [], trainedDay: {}, playedDay: {}, plays: {}, trainings: {},
+    }));
+    const s = new PetStore();
+    expect(s.nextTrick('cat')?.minAffinity).toBe(25);
+    expect(s.canTrain('cat')).toBe(false);
+    expect(s.train('cat')).toEqual({ ok: false, reason: 'affinity' });
+  });
+
+  it('서버 스냅샷은 온라인 친밀도·행동·트릭의 권위값으로 반영된다', async () => {
+    const { PetStore } = await import('../src/game/pets/petStore');
+    const s = new PetStore();
+    s.adopt('dog');
+    for (let i = 0; i < 10; i++) s.pet('dog');
+    expect(s.affinity('dog')).toBe(30);
+    s.mergeServerProgress([{
+      petId: 'dog', affinity: 17, feeds: 2, plays: 4, trainings: 1,
+      tricks: ['hello', 'hacked'], lastFedDay: '2026-07-22',
+      lastPlayedDay: '2026-07-22', lastTrainedDay: '2026-07-22',
+    }]);
+    expect(s.affinity('dog')).toBe(17);
+    expect(s.totalFeeds()).toBe(2);
+    expect(s.feedCount('dog')).toBe(2);
+    expect(s.playCount('dog')).toBe(4);
+    expect(s.learnedTricks('dog').map((t) => t.id)).toEqual(['hello']);
   });
 });

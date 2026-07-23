@@ -33,6 +33,31 @@ export function petStage(affinity: number): number {
 /** 최대 친밀도 */
 export const AFFINITY_MAX = 100;
 
+/** 친밀도에 따라 차례로 배울 수 있는 트릭. 하루 한 번 연습해 부담 없는 장기 성장으로 만든다. */
+export interface PetTrick {
+  id: string;
+  name: string;
+  emoji: string;
+  minAffinity: number;
+  praise: string;
+}
+
+export const PET_TRICKS: readonly PetTrick[] = [
+  { id: 'hello', name: '꾸벅 인사', emoji: '👋', minAffinity: 10, praise: '처음 만난 친구에게 인사했어요!' },
+  { id: 'paw', name: '손!', emoji: '🐾', minAffinity: 25, praise: '작은 발을 조심스레 내밀었어요!' },
+  { id: 'spin', name: '빙글빙글', emoji: '🌀', minAffinity: 50, praise: '신나게 한 바퀴 돌았어요!' },
+  { id: 'dance', name: '골목 댄스', emoji: '🎵', minAffinity: 80, praise: '홍대 리듬에 맞춰 춤췄어요!' },
+  { id: 'pose', name: '최애 포즈', emoji: '✨', minAffinity: 100, praise: '둘만의 완벽한 포즈를 보여 줬어요!' },
+];
+
+export interface PetMemory {
+  id: string;
+  name: string;
+  emoji: string;
+  hint: string;
+  unlocked: boolean;
+}
+
 export const PET_SPECIES: PetSpecies[] = [
   { id: 'dog', name: '강아지', emoji: '🐶', price: 120,
     body: 0xb98a5c, belly: 0xe6d2ac, dark: 0x8a6a44, ear: 0x7a5636,

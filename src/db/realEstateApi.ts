@@ -8,25 +8,35 @@ export interface Property {
   holderId: string | null;     // 현재 세입자/소유자
   rentDue: number;             // 미납 월세
   floorSeed: number;
+  isPublic: boolean;
 }
 
 /** 매물 + 소유 상태 조회 (properties + rooms.owner_id 병합) */
 export async function fetchProperties(sb: SupabaseClient): Promise<Property[]> {
   const [props, rooms] = await Promise.all([
     sb.from('properties').select('id,house_type,deal_type,rent_due,floor_seed').order('id'),
-    sb.from('rooms').select('id,owner_id'),
+    sb.from('rooms').select('id,owner_id,is_public'),
   ]);
   if (props.error || !props.data) return [];
-  const owner = new Map<number, string | null>();
-  for (const r of rooms.data ?? []) owner.set(r.id as number, (r.owner_id as string | null) ?? null);
+  const owner = new Map<number, { id: string | null; isPublic: boolean }>();
+  for (const r of rooms.data ?? []) owner.set(r.id as number, {
+    id: (r.owner_id as string | null) ?? null, isPublic: r.is_public === true,
+  });
   return props.data.map((p) => ({
     id: p.id as number,
     houseType: p.house_type as HouseType,
     dealType: (p.deal_type as DealType | null) ?? null,
-    holderId: owner.get(p.id as number) ?? null,
+    holderId: owner.get(p.id as number)?.id ?? null,
     rentDue: (p.rent_due as number | null) ?? 0,
     floorSeed: (p.floor_seed as number | null) ?? p.id as number,
+    isPublic: owner.get(p.id as number)?.isPublic ?? false,
   }));
+}
+
+/** 공개 명함에서 특정 이웃의 현재 집을 찾는다. 방이 없으면 null. */
+export async function fetchPropertyForHolder(sb: SupabaseClient, holderId: string): Promise<Property | null> {
+  if (!holderId) return null;
+  return (await fetchProperties(sb)).find((property) => property.holderId === holderId) ?? null;
 }
 
 export type LeaseResult =
@@ -74,7 +84,7 @@ const OFFLINE_TYPES: HouseType[] = [
 ];
 export function offlineProperties(): Property[] {
   return OFFLINE_TYPES.map((t, i) => ({
-    id: i + 1, houseType: t, dealType: null, holderId: null, rentDue: 0, floorSeed: 100 + i + 1,
+    id: i + 1, houseType: t, dealType: null, holderId: null, rentDue: 0, floorSeed: 100 + i + 1, isPublic: false,
   }));
 }
 
