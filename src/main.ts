@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import './ui/overlay.css';
+import './ui/designerLogin.css';
 import { installAudioUnlock } from './game/audio';
 import { RoomScene } from './game/scenes/RoomScene';
 import { createSupabase } from './supabaseClient';
