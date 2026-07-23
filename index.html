@@ -2,21 +2,18 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
-    <meta name="theme-color" content="#1b1f21" />
-    <meta name="description" content="디자이너의 제안과 커밋으로 자라는 아이소메트릭 멀티플레이 세계" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <meta name="theme-color" content="#15191b" />
+    <meta
+      name="description"
+      content="빈 바닥에서 디자이너와 함께 하나씩 만들어가는 아이소메트릭 세계"
+    />
     <title>디자이너가 만드는 세상</title>
     <link rel="preload" as="image" href="/assets/ui/designer-world-login-v1.png" type="image/png" />
-    <style>
-      /* 페이지 자체는 절대 스크롤되지 않게 — 모바일 좌우/상하 넘침 방지 */
-      html, body {
-        margin: 0; padding: 0; background: #1a1713; height: 100%;
-        overflow: hidden; overscroll-behavior: none; position: fixed; inset: 0; width: 100%;
-        touch-action: none; -webkit-text-size-adjust: 100%;
-      }
-      #game { width: 100%; height: 100%; overflow: hidden; }
-      canvas { image-rendering: pixelated; touch-action: none; display: block; }
-    </style>
+    <link rel="preload" as="image" href="/assets/characters/designer-01-idle-v1.png" type="image/png" />
   </head>
   <body>
     <div id="game"></div>
