@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
 import './ui/overlay.css';
 import './ui/designerLogin.css';
+import './ui/liquidGlass.css';
 import { installAudioUnlock } from './game/audio';
 import { RoomScene } from './game/scenes/RoomScene';
 import { createSupabase } from './supabaseClient';
 import { ensureProfile, showLoginPreview } from './ui/loginPanel';
+import { showDesignSystemPreview } from './ui/designSystemPreview';
 import { SupabaseAdapter } from './net/SupabaseAdapter';
 import type { NetworkAdapter, PeerState } from './net/NetworkAdapter';
 import { GameHud } from './ui/gameHud';
@@ -31,6 +33,10 @@ export function createGame(parent: string): Phaser.Game {
 }
 
 async function boot(): Promise<void> {
+  document.documentElement.classList.add('dw-liquid-ui');
+  const params = new URLSearchParams(location.search);
+  if (params.has('style-guide')) { showDesignSystemPreview(); return; }
+
   installAudioUnlock(); // 첫 입력에서 BGM·효과음 시작 (오토플레이 정책)
   const game = createGame('game');
 
@@ -39,7 +45,6 @@ async function boot(): Promise<void> {
     (window as unknown as { __game?: Phaser.Game }).__game = game;
   }
 
-  const params = new URLSearchParams(location.search);
   if (import.meta.env.DEV && params.has('title-preview')) { showLoginPreview(); return; }
   let peer: PeerState;
   let adapter: NetworkAdapter | null = null;
